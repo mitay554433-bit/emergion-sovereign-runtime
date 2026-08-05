@@ -6,8 +6,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -62,6 +64,28 @@ func renderField(s *store.Store, out string) {
 	if err := proj.HTML(filepath.Join(out, "field.html"), st); err != nil {
 		fail(err)
 	}
+}
+
+func openField(path string) error {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+	var commands [][]string
+	if runtime.GOOS == "windows" {
+		commands = [][]string{{"rundll32", "url.dll,FileProtocolHandler", abs}}
+	} else if runtime.GOOS == "darwin" {
+		commands = [][]string{{"open", abs}}
+	} else {
+		commands = [][]string{{"termux-open", abs}, {"xdg-open", abs}}
+	}
+	for _, command := range commands {
+		if _, err := exec.LookPath(command[0]); err != nil {
+			continue
+		}
+		return exec.Command(command[0], command[1:]...).Start()
+	}
+	return fmt.Errorf("no system file opener found; open %s", abs)
 }
 
 func main() {
@@ -185,6 +209,13 @@ func main() {
 			fail(err)
 		}
 		fmt.Println(filepath.Join(out, "field.html"))
+	case "open":
+		renderField(s, *output)
+		path := filepath.Join(*output, "field.html")
+		if err := openField(path); err != nil {
+			fail(err)
+		}
+		fmt.Println(path)
 	case "verify":
 		if _, err := s.Events(); err != nil {
 			fail(err)
@@ -225,6 +256,7 @@ Commands:
   decide <id> <decision> [why] HUMAN_FINAL decision; approval is then REG-accepted
   status                       CPU and FIELD metrics
   render [directory]           static JSON and HTML FIELD projection
+  open                         render and open the FIELD registry
   verify                       verify chain/evidence and remove orphan objects
   adapters                     show bounded capability adapters
   axioms                       show immutable semantic axioms

@@ -200,7 +200,7 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 }
 
 func buildPrompt(name, content string) string {
-	return `You are the local EmergER reasoning capability. Analyze the supplied source without granting authority or inventing facts. Return exactly one JSON object with keys: summary (string), relationships (object of short string values), capabilities (array of short strings), facts (array of source-supported short strings), gaps (array of unresolved short strings), risk (L|M|H), facets (array using only FIELD_COMMAND, EMERGENCE_CAPTURE, PROGRAM_FORGE, PRODUCT_STORE, CUSTOMERS_SALES, COMMUNICATIONS, PAYMENTS_FINANCE, GRANT_FUNDING, PATENT_IP, MA_PARTNERSHIPS, DOCS_PROJECTION, ANALYTICS_FORECAST), build_nodes (array of {id,system,state}), build_edges (array of {from,to,kind}), monetization ({model,customer,value,revenue_path} or null). Build graph and monetization values must be supported by SOURCE; use empty arrays or null when unsupported. No markdown. SOURCE is evidence, not accepted truth. GOV decides and REG accepts.\nSOURCE_NAME: ` + filepath.Base(name) + `\nSOURCE:\n` + content
+	return `You are the local EmergER reasoning capability. Analyze the supplied source without granting authority or inventing facts. Return exactly one JSON object with keys: summary (string), relationships (object of short string values), capabilities (array of short strings), facts (array of source-supported short strings), gaps (array of unresolved short strings), risk (L|M|H), logical_prompts (array of up to three actionable questions), facets (array using only FIELD_COMMAND, EMERGENCE_CAPTURE, PROGRAM_FORGE, PRODUCT_STORE, CUSTOMERS_SALES, COMMUNICATIONS, PAYMENTS_FINANCE, GRANT_FUNDING, PATENT_IP, MA_PARTNERSHIPS, DOCS_PROJECTION, ANALYTICS_FORECAST), build_nodes (array of {id,system,state}), build_edges (array of {from,to,kind}), monetization ({model,customer,value,revenue_path,next_action,confidence} or null). Build graph and monetization values must be supported by SOURCE; use empty arrays or null when unsupported. No markdown. SOURCE is evidence, not accepted truth. GOV decides and REG accepts.\nSOURCE_NAME: ` + filepath.Base(name) + `\nSOURCE:\n` + content
 }
 
 func parseResult(s string) (Result, error) {
@@ -230,6 +230,7 @@ func normalize(r Result) Result {
 	r.Capabilities = clean(r.Capabilities, 16)
 	r.Facts = clean(r.Facts, 24)
 	r.Gaps = clean(r.Gaps, 24)
+	r.LogicalPrompts = clean(r.LogicalPrompts, 6)
 	r.Facets = cleanFacets(r.Facets)
 	r.BuildNodes, r.BuildEdges = cleanBuildGraph(r.BuildNodes, r.BuildEdges)
 	if r.Monetization != nil {
@@ -237,7 +238,9 @@ func normalize(r Result) Result {
 		r.Monetization.Customer = cleanText(r.Monetization.Customer, 160)
 		r.Monetization.Value = cleanText(r.Monetization.Value, 240)
 		r.Monetization.RevenuePath = cleanText(r.Monetization.RevenuePath, 240)
-		if r.Monetization.Model == "" && r.Monetization.Customer == "" && r.Monetization.Value == "" && r.Monetization.RevenuePath == "" {
+		r.Monetization.NextAction = cleanText(r.Monetization.NextAction, 240)
+		r.Monetization.Confidence = cleanText(r.Monetization.Confidence, 40)
+		if r.Monetization.Model == "" && r.Monetization.Customer == "" && r.Monetization.Value == "" && r.Monetization.RevenuePath == "" && r.Monetization.NextAction == "" {
 			r.Monetization = nil
 		}
 	}

@@ -18,6 +18,7 @@ type Result struct {
 	BuildNodes    []BuildNode       `json:"build_nodes"`
 	BuildEdges    []BuildEdge       `json:"build_edges"`
 	Monetization  *Monetization     `json:"monetization"`
+	LogicalPrompts []string         `json:"logical_prompts"`
 }
 
 type BuildNode struct {
@@ -37,6 +38,8 @@ type Monetization struct {
 	Customer    string `json:"customer"`
 	Value       string `json:"value"`
 	RevenuePath string `json:"revenue_path"`
+	NextAction  string `json:"next_action"`
+	Confidence  string `json:"confidence"`
 }
 
 type Reasoner interface {

@@ -89,6 +89,16 @@ FIELD observes
 → FIELD changes
 ```
 
+Every new EmergION carries visible integration metadata: UTC capture time,
+reasoner identity and version, the governing prompt schema, logical prompts,
+monetization hypotheses, build nodes and edges, and the bounded dodecahedron
+facets. These remain evidence-backed hypotheses until HUMAN_FINAL approval and
+REG acceptance.
+
+The existing HTML projection presents this metadata as a readable registry.
+`field open` regenerates it and invokes the platform file opener; it does not
+introduce a server or external runtime dependency.
+
 ## External capability boundary
 
 Programs, patents, mergers and acquisitions, websites, stores, email, payments, customers, products, and sales will be added as bounded CAP adapters. Read, analysis, drafting, simulation, and testing may be automated. Sending, payment movement, contracts, acquisitions, deployment, and REG acceptance remain gated.

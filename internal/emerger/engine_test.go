@@ -23,4 +23,7 @@ func TestEmerge(t *testing.T) {
 	if em.EVO.Metadata.Topology != core.TopologyDodecahedronV1 {
 		t.Fatalf("bad topology: %q", em.EVO.Metadata.Topology)
 	}
+	if len(em.EVO.Metadata.Facets) != 12 || len(em.EVO.Metadata.LogicalPrompts) != 3 || em.EVO.Metadata.Monetization == nil {
+		t.Fatalf("missing visible registry metadata: %#v", em.EVO.Metadata)
+	}
 }

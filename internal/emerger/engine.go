@@ -66,6 +66,7 @@ func metadata(result reason.Result, aiIntegrated bool) *core.Metadata {
 		CapturedAt:   time.Now().UTC(),
 		AIIntegrated: aiIntegrated,
 		PromptSchema: "EMERGER_LOGICAL_V2",
+		LogicalPrompts: result.LogicalPrompts,
 	}
 	for _, facet := range result.Facets {
 		m.Facets = append(m.Facets, core.Facet(facet))
@@ -77,7 +78,7 @@ func metadata(result reason.Result, aiIntegrated bool) *core.Metadata {
 		m.BuildEdges = append(m.BuildEdges, core.BuildEdge{From: edge.From, To: edge.To, Kind: edge.Kind})
 	}
 	if result.Monetization != nil {
-		m.Monetization = &core.Monetization{Model: result.Monetization.Model, Customer: result.Monetization.Customer, Value: result.Monetization.Value, RevenuePath: result.Monetization.RevenuePath}
+		m.Monetization = &core.Monetization{Model: result.Monetization.Model, Customer: result.Monetization.Customer, Value: result.Monetization.Value, RevenuePath: result.Monetization.RevenuePath, NextAction: result.Monetization.NextAction, Confidence: result.Monetization.Confidence}
 	}
 	return m
 }

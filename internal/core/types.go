@@ -77,6 +77,8 @@ type Monetization struct {
 	Customer    string `json:"c,omitempty"`
 	Value       string `json:"v,omitempty"`
 	RevenuePath string `json:"r,omitempty"`
+	NextAction  string `json:"n,omitempty"`
+	Confidence  string `json:"f,omitempty"`
 }
 
 type Topology string
@@ -88,6 +90,7 @@ type Metadata struct {
 	CapturedAt   time.Time     `json:"t"`
 	AIIntegrated bool          `json:"a"`
 	PromptSchema string        `json:"p,omitempty"`
+	LogicalPrompts []string    `json:"l,omitempty"`
 	Facets       []Facet       `json:"f,omitempty"`
 	BuildNodes   []BuildNode   `json:"n,omitempty"`
 	BuildEdges   []BuildEdge   `json:"e,omitempty"`
@@ -100,6 +103,9 @@ func (m *Metadata) Validate() error {
 	}
 	if m.CapturedAt.IsZero() {
 		return fmt.Errorf("metadata capture timestamp required")
+	}
+	if len(m.LogicalPrompts) > 6 {
+		return fmt.Errorf("logical prompts exceed bounds")
 	}
 	allowed := map[Facet]bool{
 		FacetFIELDCommand: true, FacetEmergenceCapture: true, FacetProgramForge: true,

@@ -65,7 +65,17 @@ GEMMA_EXTRA_ARGS=
 field init
 field doctor
 field run
+field open
 ```
+
+`field open` is the direct product entry point. It rebuilds `outputs/field.html`
+from the canonical event stream and opens the living registry. On Termux it uses
+`termux-open`; Linux, macOS, and Windows use their native opener.
+
+New registry entities include a UTC integration timestamp, reasoner provenance,
+logical prompts, monetization hypotheses, build-graph metadata, and the governed
+dodecahedron topology. The heuristic fallback labels unresolved assumptions
+instead of copying source code into the visible summary.
 
 Files placed in the Dropzone are analyzed by local Gemma, reduced to one EmergION candidate, verified through RECOIL/WVC, persisted at GOV, and removed from the Dropzone. The runtime then waits for HUMAN_FINAL.
 
