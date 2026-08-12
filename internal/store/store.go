@@ -215,6 +215,23 @@ func (s *Store) SaveAccepted(r core.REGReceipt) (string, error) {
 	return s.append("R", r.EmergIONID, nil, nil, &r)
 }
 
+func (s *Store) ApprovingDecisionID(emergionID string) (string, error) {
+	events, err := s.Events()
+	if err != nil {
+		return "", err
+	}
+	decisionID := ""
+	for _, event := range events {
+		if event.Decision != nil && event.Decision.EmergIONID == emergionID && event.Decision.Decision == "APPROVE" {
+			decisionID = event.ID
+		}
+	}
+	if decisionID == "" {
+		return "", fmt.Errorf("approving decision receipt not found")
+	}
+	return decisionID, nil
+}
+
 func (s *Store) lock() (func(), error) {
 	path := filepath.Join(s.Root, ".lock")
 	for i := 0; i < 100; i++ {

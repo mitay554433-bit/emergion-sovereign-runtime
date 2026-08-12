@@ -78,6 +78,26 @@ func (r *Runtime) Decide(id, decision, reasonText string) error {
 	}
 	return nil
 }
+func (r *Runtime) Accept(id string) error {
+	st, err := r.state()
+	if err != nil {
+		return err
+	}
+	em, ok := st.Approved[id]
+	if !ok {
+		return fmt.Errorf("candidate is not HUMAN_FINAL approved")
+	}
+	decisionID, err := r.store.ApprovingDecisionID(id)
+	if err != nil {
+		return err
+	}
+	_, receipt, err := reg.Accept(em, decisionID)
+	if err != nil {
+		return err
+	}
+	_, err = r.store.SaveAccepted(receipt)
+	return err
+}
 func (r *Runtime) Render(dir string) error {
 	st, err := r.state()
 	if err != nil {

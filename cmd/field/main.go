@@ -191,6 +191,28 @@ func main() {
 			renderField(s, *output)
 			fmt.Println(em.IDN, receipt.Decision)
 		}
+	case "accept":
+		if len(args) < 2 {
+			fail(fmt.Errorf("accept <id>"))
+		}
+		st := loadState(s)
+		em, ok := st.Approved[args[1]]
+		if !ok {
+			fail(fmt.Errorf("candidate is not HUMAN_FINAL approved"))
+		}
+		decisionID, err := s.ApprovingDecisionID(em.IDN)
+		if err != nil {
+			fail(err)
+		}
+		_, regReceipt, err := reg.Accept(em, decisionID)
+		if err != nil {
+			fail(err)
+		}
+		if _, err = s.SaveAccepted(regReceipt); err != nil {
+			fail(err)
+		}
+		renderField(s, *output)
+		fmt.Println(em.IDN, "REG_ACCEPTED")
 	case "status":
 		printJSON(analytics.Measure(loadState(s)))
 	case "render":
@@ -254,6 +276,7 @@ Commands:
   once                         process and clear the dropzone once
   run                          run the local living FIELD event loop; no server
   decide <id> <decision> [why] HUMAN_FINAL decision; approval is then REG-accepted
+  accept <id>                  resume REG acceptance after an interrupted approval
   status                       CPU and FIELD metrics
   render [directory]           static JSON and HTML FIELD projection
   open                         render and open the FIELD registry
