@@ -9,6 +9,7 @@ import (
 "io"
 "log"
 "net"
+"net/http"
 "os"
 "os/signal"
 "path/filepath"
@@ -46,6 +47,7 @@ func main() {
 stateDir := flag.String("state", ".field", "Path to sovereign state directory")
 socketPath := flag.String("socket", "/tmp/fieldd.sock", "Path to Unix domain socket")
 pidPath := flag.String("pid", "/tmp/fieldd.pid", "Path to PID file")
+httpAddr := flag.String("http", "", "Optional loopback-only HTTP status listener")
 flag.Parse()
 
 if err := writePIDFile(*pidPath); err != nil {
@@ -89,6 +91,31 @@ continue
 go handleConn(rt, conn)
 }
 }()
+
+if *httpAddr != "" {
+host, _, err := net.SplitHostPort(*httpAddr)
+if err != nil {
+log.Fatalf("Invalid HTTP listener address %q: %v", *httpAddr, err)
+}
+if host != "127.0.0.1" && host != "localhost" {
+log.Fatalf("HTTP listener must be loopback-only, got %q", host)
+}
+mux := http.NewServeMux()
+mux.HandleFunc("/status", func(w http.ResponseWriter, req *http.Request) {
+if req.Method != http.MethodGet {
+http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+return
+}
+w.Header().Set("Content-Type", "application/json")
+_ = json.NewEncoder(w).Encode(dispatch(rt, Request{Method: "status"}))
+})
+go func() {
+log.Printf("Field Sovereign HTTP status listening on %s", *httpAddr)
+if err := http.ListenAndServe(*httpAddr, mux); err != nil {
+log.Printf("HTTP status listener stopped: %v", err)
+}
+}()
+}
 
 <-ctx.Done()
 log.Println("Shutting down Field Sovereign Daemon gracefully...")
