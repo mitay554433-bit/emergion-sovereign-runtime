@@ -132,6 +132,30 @@ w.Header().Set("Content-Type", "application/json")
 _, _ = w.Write([]byte(actionsJSON))
 })
 
+
+mux.HandleFunc("/authorize", func(w http.ResponseWriter, req *http.Request) {
+if req.Method != http.MethodPost {
+http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+return
+}
+
+var p AuthorizeParams
+if err := json.NewDecoder(req.Body).Decode(&p); err != nil {
+http.Error(w, "invalid authorize params", http.StatusBadRequest)
+return
+}
+
+params, err := json.Marshal(p)
+if err != nil {
+http.Error(w, err.Error(), http.StatusInternalServerError)
+return
+}
+
+resp := dispatch(rt, Request{Method: "authorize", Params: params})
+w.Header().Set("Content-Type", "application/json")
+_ = json.NewEncoder(w).Encode(resp)
+})
+
 mux.HandleFunc("/decide", func(w http.ResponseWriter, req *http.Request) {
 if req.Method != http.MethodPost {
 http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
