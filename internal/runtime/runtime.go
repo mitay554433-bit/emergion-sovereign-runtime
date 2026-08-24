@@ -729,6 +729,91 @@ func deriveDelta(previous core.EmergION, analysis reason.Result) []string {
 		delta = append(delta, "DF:-:"+facet)
 	}
 
+	previousNodes := map[string]core.BuildNode{}
+	if previous.EVO.Metadata != nil {
+		for _, node := range previous.EVO.Metadata.BuildNodes {
+			previousNodes[node.ID] = node
+		}
+	}
+
+	currentNodes := map[string]reason.BuildNode{}
+	for _, node := range analysis.BuildNodes {
+		currentNodes[node.ID] = node
+	}
+
+	var addedNodes, removedNodes, changedNodes []string
+	for id, node := range currentNodes {
+		previousNode, exists := previousNodes[id]
+		if !exists {
+			addedNodes = append(addedNodes, id)
+			continue
+		}
+		if previousNode.System != node.System || previousNode.State != node.State {
+			changedNodes = append(changedNodes, id)
+		}
+	}
+	for id := range previousNodes {
+		if _, exists := currentNodes[id]; !exists {
+			removedNodes = append(removedNodes, id)
+		}
+	}
+
+	sort.Strings(addedNodes)
+	sort.Strings(removedNodes)
+	sort.Strings(changedNodes)
+
+	for _, id := range addedNodes {
+		delta = append(delta, "DN:+:"+id)
+	}
+	for _, id := range removedNodes {
+		delta = append(delta, "DN:-:"+id)
+	}
+	for _, id := range changedNodes {
+		delta = append(delta, "DN:~:"+id)
+	}
+
+	edgeKey := func(from, to, kind string) string {
+		return from + "\x00" + to + "\x00" + kind
+	}
+	edgeToken := func(prefix, key string) string {
+		parts := strings.Split(key, "\x00")
+		return prefix + parts[0] + ":" + parts[1] + ":" + parts[2]
+	}
+
+	previousEdges := map[string]bool{}
+	if previous.EVO.Metadata != nil {
+		for _, edge := range previous.EVO.Metadata.BuildEdges {
+			previousEdges[edgeKey(edge.From, edge.To, edge.Kind)] = true
+		}
+	}
+
+	currentEdges := map[string]bool{}
+	for _, edge := range analysis.BuildEdges {
+		currentEdges[edgeKey(edge.From, edge.To, edge.Kind)] = true
+	}
+
+	var addedEdges, removedEdges []string
+	for key := range currentEdges {
+		if !previousEdges[key] {
+			addedEdges = append(addedEdges, key)
+		}
+	}
+	for key := range previousEdges {
+		if !currentEdges[key] {
+			removedEdges = append(removedEdges, key)
+		}
+	}
+
+	sort.Strings(addedEdges)
+	sort.Strings(removedEdges)
+
+	for _, key := range addedEdges {
+		delta = append(delta, edgeToken("DE:+:", key))
+	}
+	for _, key := range removedEdges {
+		delta = append(delta, edgeToken("DE:-:", key))
+	}
+
 	if len(delta) == 0 {
 		return []string{"D0"}
 	}
@@ -1100,6 +1185,27 @@ func (r Runtime) captureBytes(
 			return r.recapture(ctx, governedState, fieldDelta, pivotErr)
 		}
 		return em, false, coverageErr
+	}
+
+	r.resolveRequiredCapability(&em, boundary)
+
+	delete(em.REL, "capability_provider_edge_proposal")
+
+	if providers := strings.TrimSpace(em.REL["capability_providers"]); providers != "" {
+		edges, edgeErr := capabilityProviderEdges(providers)
+		if edgeErr != nil {
+			_, _ = r.Store.PruneOrphans()
+			return core.EmergION{}, false, edgeErr
+		}
+
+		proposal := make([]string, 0, len(edges))
+		for _, edge := range edges {
+			proposal = append(proposal, edge.From+"->"+edge.To)
+		}
+
+		if len(proposal) > 0 {
+			em.REL["capability_provider_edge_proposal"] = strings.Join(proposal, ",")
+		}
 	}
 
 	if err := protector(&em); err != nil {

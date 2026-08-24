@@ -146,3 +146,85 @@ func TestPrepareExecutionDoesNotMutateAuthorizationState(t *testing.T) {
 		t.Fatal("execution preparation mutated authorization state")
 	}
 }
+
+func TestPrepareExecutionRequiresHumanFinalForProgram(t *testing.T) {
+	st := core.EmptyState()
+
+	st.Accepted["E-PROGRAM-PROOF"] = core.EmergION{
+		IDN: "E-PROGRAM-PROOF",
+		STA: core.StateAccepted,
+		CAP: []string{"PROGRAM"},
+		EVO: core.Evolution{
+			Metadata: &core.Metadata{
+				CapturedAt: time.Now().UTC(),
+				Facets: []core.Facet{
+					core.FacetProgramForge,
+				},
+			},
+		},
+	}
+
+	if _, err := PrepareExecution(
+		st,
+		"E-PROGRAM-PROOF",
+		"GITHUB",
+		"PROGRAM",
+		false,
+	); err == nil {
+		t.Fatal("GITHUB:PROGRAM without HUMAN_FINAL authorization unexpectedly prepared")
+	}
+
+	st.ActionAuthorizations = append(
+		st.ActionAuthorizations,
+		core.ActionAuthorizationReceipt{
+			EventID:    "EV-Q-PROGRAM",
+			EmergIONID: "E-PROGRAM-PROOF",
+			Adapter:    "GITHUB",
+			Action:     "PROGRAM",
+			Authority:  "HUMAN_FINAL",
+			Authorized: true,
+			At:         time.Now().UTC(),
+		},
+	)
+
+	request, err := PrepareExecution(
+		st,
+		"E-PROGRAM-PROOF",
+		"GITHUB",
+		"PROGRAM",
+		false,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if request.AuthorizationID != "EV-Q-PROGRAM" {
+		t.Fatalf(
+			"PROGRAM authorization ID = %q want EV-Q-PROGRAM",
+			request.AuthorizationID,
+		)
+	}
+
+	if request.Adapter != "GITHUB" || request.Action != "PROGRAM" {
+		t.Fatalf("unexpected PROGRAM request: %#v", request)
+	}
+}
+
+func TestPrepareExecutionBirthsTravellingEmergIONIdentity(t *testing.T) {
+	st := executionProofState()
+
+	request, err := PrepareExecution(
+		st,
+		"E-EXEC-PROOF",
+		"EMAIL",
+		"DRAFT",
+		false,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if request.TransitionEmergIONID == "" {
+		t.Fatal("PrepareExecution did not birth travelling EmergION identity")
+	}
+}

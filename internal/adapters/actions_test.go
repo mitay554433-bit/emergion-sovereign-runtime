@@ -85,3 +85,22 @@ func TestDeriveActionCandidatesIsDeterministic(t *testing.T) {
 		}
 	}
 }
+
+func TestProgramRequiresHumanFinal(t *testing.T) {
+	actions := DeriveActionCandidates(
+		[]string{"PROGRAM_FORGE"},
+		[]string{"PROGRAM"},
+		false,
+	)
+
+	for _, action := range actions {
+		if action.Adapter == "GITHUB" && action.Action == "PROGRAM" {
+			if !action.HumanFinalRequired {
+				t.Fatal("GITHUB:PROGRAM must require HUMAN_FINAL")
+			}
+			return
+		}
+	}
+
+	t.Fatal("GITHUB:PROGRAM candidate missing")
+}

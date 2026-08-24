@@ -104,6 +104,107 @@ func TestSpatialConvergenceZoneContainsAcceptedOnly(t *testing.T) {
 	}
 }
 
+func TestSpatialEmergIONProjectionContainsAcceptedOnlyWithoutMutation(t *testing.T) {
+	accepted := core.EmergION{
+		IDN: "E-SPATIAL-ACCEPTED",
+		STA: core.StateAccepted,
+		EVO: core.Evolution{
+			Metadata: &core.Metadata{
+				Archonym: "SPATIAL ACCEPTED",
+				Topology: core.TopologyDodecahedronV1,
+				Facets: []core.Facet{
+					core.FacetFIELDCommand,
+				},
+			},
+		},
+	}
+
+	atGOV := core.EmergION{
+		IDN: "E-SPATIAL-GOV",
+		STA: core.StateAtGOV,
+	}
+
+	rejected := core.EmergION{
+		IDN: "E-SPATIAL-REJECTED",
+		STA: core.StateRejected,
+	}
+
+	st := core.EmptyState()
+	st.Accepted[accepted.IDN] = accepted
+	st.AtGOV[atGOV.IDN] = atGOV
+	st.Rejected[rejected.IDN] = rejected
+
+	projected := spatialEmergIONs(st)
+
+	if len(projected) != 1 {
+		t.Fatalf(
+			"spatial EmergION projection count = %d want 1",
+			len(projected),
+		)
+	}
+
+	if projected[0].ID != accepted.IDN {
+		t.Fatalf(
+			"spatial EmergION = %q want %q",
+			projected[0].ID,
+			accepted.IDN,
+		)
+	}
+
+	if projected[0].Topology != string(core.TopologyDodecahedronV1) {
+		t.Fatalf(
+			"spatial topology = %q want %q",
+			projected[0].Topology,
+			core.TopologyDodecahedronV1,
+		)
+	}
+
+	projected[0].Facets[0] = core.FacetProgramForge
+
+	if st.Accepted[accepted.IDN].EVO.Metadata.Facets[0] != core.FacetFIELDCommand {
+		t.Fatal("spatial projection mutated accepted state")
+	}
+}
+
+func TestSpatialFacetOrderIsCompleteDeterministicProjectionOnly(t *testing.T) {
+	got := spatialFacetOrder()
+
+	want := []core.Facet{
+		core.FacetFIELDCommand,
+		core.FacetEmergenceCapture,
+		core.FacetProgramForge,
+		core.FacetProductStore,
+		core.FacetCustomersSales,
+		core.FacetCommunications,
+		core.FacetPaymentsFinance,
+		core.FacetGrantFunding,
+		core.FacetPatentIP,
+		core.FacetMAPartnerships,
+		core.FacetDocsProjection,
+		core.FacetAnalyticsForecast,
+	}
+
+	if len(got) != 12 {
+		t.Fatalf("spatial facet count = %d want 12", len(got))
+	}
+
+	seen := map[core.Facet]bool{}
+	for i, facet := range got {
+		if seen[facet] {
+			t.Fatalf("duplicate spatial facet %q", facet)
+		}
+		seen[facet] = true
+		if facet != want[i] {
+			t.Fatalf("spatial facet[%d] = %q want %q", i, facet, want[i])
+		}
+	}
+
+	got[0] = core.FacetProgramForge
+	if spatialFacetOrder()[0] != core.FacetFIELDCommand {
+		t.Fatal("spatial facet order retained caller mutation")
+	}
+}
+
 func TestSpatialConvergenceZoneDerivesAcceptedKinWithoutMerging(t *testing.T) {
 	predecessor := core.EmergION{
 		IDN: "E-PREDECESSOR",

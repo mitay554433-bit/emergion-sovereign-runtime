@@ -27,12 +27,13 @@ func JSON(path string, st core.State) error {
 }
 
 type row struct {
-	ID         string
-	State      string
-	Summary    string
-	Risk       string
-	Proof      string
-	Governance string
+	ID            string
+	State         string
+	Summary       string
+	Risk          string
+	Proof         string
+	Governance    string
+	Relationships string
 }
 
 func rows(st core.State) []row {
@@ -56,13 +57,28 @@ func rows(st core.State) []row {
 			case core.StateReturned:
 				governance = "HUMAN_FINAL returned for rework"
 			}
+			keys := make([]string, 0, len(e.REL))
+			for key := range e.REL {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+
+			relationships := make([]string, 0, len(keys))
+			for _, key := range keys {
+				relationships = append(
+					relationships,
+					key+" → "+e.REL[key],
+				)
+			}
+
 			out = append(out, row{
-				ID:         e.IDN,
-				State:      e.STA,
-				Summary:    e.MEM.Summary,
-				Risk:       e.VAL.Risk,
-				Proof:      proof,
-				Governance: governance,
+				ID:            e.IDN,
+				State:         e.STA,
+				Summary:       e.MEM.Summary,
+				Risk:          e.VAL.Risk,
+				Proof:         proof,
+				Governance:    governance,
+				Relationships: strings.Join(relationships, "; "),
 			})
 		}
 	}
@@ -92,6 +108,57 @@ type convergenceRow struct {
 	Relationships string
 	BuildNodes    string
 	BuildEdges    string
+}
+
+type spatialEmergION struct {
+	ID       string
+	Archonym string
+	Topology string
+	Facets   []core.Facet
+}
+
+func spatialEmergIONs(st core.State) []spatialEmergION {
+	out := make([]spatialEmergION, 0, len(st.Accepted))
+
+	for _, em := range st.Accepted {
+		item := spatialEmergION{
+			ID: em.IDN,
+		}
+
+		if em.EVO.Metadata != nil {
+			item.Archonym = em.EVO.Metadata.Archonym
+			item.Topology = string(em.EVO.Metadata.Topology)
+			item.Facets = append(
+				[]core.Facet(nil),
+				em.EVO.Metadata.Facets...,
+			)
+		}
+
+		out = append(out, item)
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].ID < out[j].ID
+	})
+
+	return out
+}
+
+func spatialFacetOrder() []core.Facet {
+	return []core.Facet{
+		core.FacetFIELDCommand,
+		core.FacetEmergenceCapture,
+		core.FacetProgramForge,
+		core.FacetProductStore,
+		core.FacetCustomersSales,
+		core.FacetCommunications,
+		core.FacetPaymentsFinance,
+		core.FacetGrantFunding,
+		core.FacetPatentIP,
+		core.FacetMAPartnerships,
+		core.FacetDocsProjection,
+		core.FacetAnalyticsForecast,
+	}
 }
 
 type prm struct {
@@ -225,13 +292,17 @@ func HTML(path string, st core.State) error {
 body{font:15px system-ui;background:#020817;color:#e6eaf0;margin:0;padding:2rem}a{color:#c9a227}.ok,.good{color:#2ecc71}.bad,.err{color:#e74c3c}.muted{color:#8b95a8}.panel{background:#0f1c2e;border:1px solid #2a3548;border-radius:12px;padding:1rem;margin:0.75rem 0}h1,h2{color:#e6eaf0;border-bottom:1px solid #2d6cff;padding-bottom:0.35rem}code,pre{background:#0a1628;color:#e6eaf0;border:1px solid #2a3548}
 h1{font-size:1.5rem}
 h2{margin-top:2rem;font-size:1.15rem}
-table{width:100%;border-collapse:collapse}
-th,td{text-align:left;vertical-align:top;padding:.7rem;border-bottom:1px solid #2b3140}
-code{color:#a78bfa}
+table{width:max-content;min-width:100%;border-collapse:collapse}
+th,td{text-align:left;vertical-align:top;padding:.7rem;border-bottom:1px solid #2b3140;overflow-wrap:anywhere;word-break:break-word}
+code{color:#a78bfa;overflow-wrap:anywhere;word-break:break-all}
 .G{color:#f59e0b}
 .F{color:#22c55e}
 .X{color:#ef4444}
 .small{color:#9ca3af;font-size:.9rem}
+@media (max-width:700px){
+body{padding:1rem}
+th,td{padding:.5rem;font-size:.9rem}
+}
 </style>
 </head>
 <body>
@@ -249,7 +320,9 @@ code{color:#a78bfa}
 <th>Risk</th>
 <th>Evidence proof</th>
 <th>Governance</th>
+<th>Relationships</th>
 <th>Meaning</th>
+<th>HUMAN_FINAL</th>
 </tr>
 </thead>
 <tbody>
@@ -260,7 +333,16 @@ code{color:#a78bfa}
 <td>{{.Risk}}</td>
 <td><code>{{.Proof}}</code></td>
 <td>{{.Governance}}</td>
+<td>{{.Relationships}}</td>
 <td>{{.Summary}}</td>
+{{if eq .State "G"}}
+<td>
+<button type="button" onclick="humanFinal('{{.ID}}','APPROVE')">APPROVE</button>
+<button type="button" onclick="humanFinal('{{.ID}}','REJECT')">REJECT</button>
+</td>
+{{else}}
+<td></td>
+{{end}}
 </tr>
 {{end}}
 </tbody>
@@ -302,6 +384,50 @@ code{color:#a78bfa}
 </tbody>
 </table>
 
+<h2>SPATIAL EMERGION PROJECTION</h2>
+<p class="small">Accepted EmergION structures projected from governed state.</p>
+
+<table>
+<thead>
+<tr>
+<th>EmergION</th>
+<th>Archonym</th>
+<th>Topology</th>
+<th>Facets</th>
+</tr>
+</thead>
+<tbody>
+{{range .Spatial}}
+<tr>
+<td><code>{{.ID}}</code></td>
+<td>{{.Archonym}}</td>
+<td>{{.Topology}}</td>
+<td>{{range .Facets}}{{.}} {{end}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+
+<script>
+async function humanFinal(id, decision) {
+  if (!confirm(decision + " " + id + "?")) return;
+  const response = await fetch("/decide", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      emergion_id: id,
+      decision: decision,
+      reason: "HUMAN_FINAL PIVOTAI decision"
+    })
+  });
+  const result = await response.json();
+  if (result.error) {
+    alert(result.error);
+    return;
+  }
+  location.reload();
+}
+</script>
 </body>
 </html>`))
 
@@ -310,11 +436,16 @@ code{color:#a78bfa}
 		return err
 	}
 
+	spatial := spatialEmergIONs(st)
+	facetOrder := spatialFacetOrder()
+
 	return t.Execute(f, map[string]any{
 		"Events":      st.Events,
 		"TipHash":     st.TipHash,
 		"Rows":        rows(st),
 		"Convergence": convergence,
+		"Spatial":     spatial,
+		"FacetOrder":  facetOrder,
 	})
 }
 

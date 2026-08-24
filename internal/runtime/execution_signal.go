@@ -7,6 +7,7 @@ import (
 
 	"emergion-sovereign-runtime/internal/adapters"
 	"emergion-sovereign-runtime/internal/core"
+	"emergion-sovereign-runtime/internal/pivot"
 	"emergion-sovereign-runtime/internal/reason"
 )
 
@@ -66,14 +67,25 @@ func (r Runtime) CaptureExecutionResult(
 	}
 
 	relationships := map[string]string{
-		"source_kind":     "EXECUTION_RESULT",
-		"parent_emergion": request.EmergIONID,
-		"adapter":         request.Adapter,
-		"action":          request.Action,
+		"source_kind":         "EXECUTION_RESULT",
+		"parent_emergion":     request.EmergIONID,
+		"transition_emergion": request.TransitionEmergIONID,
+		"adapter":             request.Adapter,
+		"action":              request.Action,
 	}
 
 	if request.AuthorizationID != "" {
 		relationships["authorization_event"] = request.AuthorizationID
+	}
+
+	if !result.Succeeded && strings.TrimSpace(result.Error) != "" {
+		required := requiredCapabilityFromDivergence(pivot.Result{
+			Name:       "COVERAGE",
+			Divergence: result.Error,
+		})
+		if required != "" {
+			relationships["required_capability"] = required
+		}
 	}
 
 	signalRuntime := r

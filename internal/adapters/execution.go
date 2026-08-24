@@ -2,33 +2,63 @@ package adapters
 
 import (
 	"fmt"
+	"strings"
 
 	"emergion-sovereign-runtime/internal/core"
+	"emergion-sovereign-runtime/internal/store"
 )
 
 type ExecutionRequest struct {
-	EmergIONID      string
-	SourceHash      string
-	AuthorizationID string
-	Adapter         string
-	Action          string
-	Authority       string
+	EmergIONID           string
+	SourceHash           string
+	AuthorizationID      string
+	TransitionEmergIONID string
+	Adapter              string
+	Action               string
+	Authority            string
 }
 
 type ExecutionResult struct {
-	EmergIONID      string
-	SourceHash      string
-	AuthorizationID string
-	Authority       string
-	Adapter         string
-	Action          string
-	Succeeded       bool
-	Output          string
-	Error           string
+	EmergIONID           string
+	SourceHash           string
+	AuthorizationID      string
+	TransitionEmergIONID string
+	Authority            string
+	Adapter              string
+	Action               string
+	Succeeded            bool
+	Output               string
+	Error                string
 }
 
 type Executor interface {
 	Execute(ExecutionRequest) (ExecutionResult, error)
+}
+
+func ExecutionTransitionBytes(request ExecutionRequest) []byte {
+	var content strings.Builder
+
+	writeField := func(key, value string) {
+		fmt.Fprintf(&content, "%s=%d:", key, len(value))
+		content.WriteString(value)
+		content.WriteByte('\n')
+	}
+
+	writeField("S", "XS/1")
+	writeField("K", "XT")
+	writeField("P", request.EmergIONID)
+	writeField("H", request.SourceHash)
+	writeField("Q", request.AuthorizationID)
+	writeField("A", request.Authority)
+	writeField("D", request.Adapter)
+	writeField("X", request.Action)
+
+	return []byte(content.String())
+}
+
+func ExecutionTransitionID(request ExecutionRequest) string {
+	hash := store.Hash(ExecutionTransitionBytes(request))
+	return "E-" + strings.ToUpper(hash[:16])
 }
 
 func PrepareExecution(
@@ -107,7 +137,7 @@ func PrepareExecution(
 		}
 	}
 
-	return ExecutionRequest{
+	request := ExecutionRequest{
 		EmergIONID: emergionID,
 		SourceHash: em.MEM.SourceHash,
 		AuthorizationID: func() string {
@@ -119,5 +149,9 @@ func PrepareExecution(
 		Adapter:   adapter,
 		Action:    action,
 		Authority: candidate.Authority,
-	}, nil
+	}
+
+	request.TransitionEmergIONID = ExecutionTransitionID(request)
+
+	return request, nil
 }

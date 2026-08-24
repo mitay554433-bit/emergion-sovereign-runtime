@@ -3842,3 +3842,87 @@ func TestGovernedProviderCompositionCirculatesThroughSAWExecutionRecapture(t *te
 		t.Fatal("accepted SAW EmergION disappeared during circulation")
 	}
 }
+
+func TestDeriveDeltaIncludesDeterministicBuildGraphEvolution(t *testing.T) {
+	previous := core.EmergION{
+		MEM: core.Memory{
+			Summary: "same implementation",
+		},
+		EVO: core.Evolution{
+			Metadata: &core.Metadata{
+				BuildNodes: []core.BuildNode{
+					{
+						ID:     "A",
+						System: "SOURCE",
+						State:  "READY",
+					},
+					{
+						ID:     "B",
+						System: "TRANSFORM",
+						State:  "READY",
+					},
+				},
+				BuildEdges: []core.BuildEdge{
+					{
+						From: "A",
+						To:   "B",
+						Kind: "FLOW",
+					},
+				},
+			},
+		},
+	}
+
+	analysis := reason.Result{
+		Summary: "same implementation",
+		BuildNodes: []reason.BuildNode{
+			{
+				ID:     "A",
+				System: "SOURCE",
+				State:  "ACTIVE",
+			},
+			{
+				ID:     "C",
+				System: "OUTPUT",
+				State:  "READY",
+			},
+		},
+		BuildEdges: []reason.BuildEdge{
+			{
+				From: "A",
+				To:   "C",
+				Kind: "FLOW",
+			},
+		},
+	}
+
+	got := deriveDelta(previous, analysis)
+
+	want := []string{
+		"DN:+:C",
+		"DN:-:B",
+		"DN:~:A",
+		"DE:+:A:C:FLOW",
+		"DE:-:A:B:FLOW",
+	}
+
+	if len(got) != len(want) {
+		t.Fatalf(
+			"structural delta = %#v want %#v",
+			got,
+			want,
+		)
+	}
+
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf(
+				"structural delta[%d] = %q want %q; full=%#v",
+				i,
+				got[i],
+				want[i],
+				got,
+			)
+		}
+	}
+}

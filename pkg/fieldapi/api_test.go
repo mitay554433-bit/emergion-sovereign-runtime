@@ -3,9 +3,11 @@ package fieldapi
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"emergion-sovereign-runtime/internal/core"
 	"emergion-sovereign-runtime/internal/gov"
@@ -413,4 +415,296 @@ func TestRenderCurrentJSONUsesCanonicalProjectionReceipt(t *testing.T) {
 	if _, ok := got["field_html_sha256"]; !ok {
 		t.Fatalf("projection receipt missing field_html_sha256: %s", wire)
 	}
+}
+
+func TestGovernedCycleCirculatesAndExecutesExistingSafeWork(t *testing.T) {
+	binary := os.Getenv("GEMMA_BIN")
+	model := os.Getenv("GEMMA_MODEL")
+	if binary == "" || model == "" {
+		t.Skip("set GEMMA_BIN and GEMMA_MODEL for GovernedCycle integration test")
+	}
+
+	root := t.TempDir()
+
+	rt, err := Open(
+		filepath.Join(root, "state"),
+		sawCirculationReasoner{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	accept := func(em core.EmergION, reasonText string) {
+		if _, err := rt.store.SaveCandidate(em); err != nil {
+			t.Fatal(err)
+		}
+
+		approved, decision, err := gov.Decide(
+			em,
+			gov.Approve,
+			"HUMAN_FINAL",
+			reasonText,
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		decisionID, err := rt.store.SaveDecision(decision)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, receipt, err := reg.Accept(approved, decisionID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := rt.store.SaveAccepted(receipt); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	compositionTarget := core.EmergION{
+		IDN: "E-GOVERNED-CYCLE-TARGET",
+		STA: core.StateAtGOV,
+		MEM: core.Memory{
+			SourceHash: "governed-cycle-target-source",
+			Bytes:      1,
+			Stored:     1,
+			Summary:    "governed cycle composition target",
+		},
+		REL: map[string]string{},
+		CAP: []string{"CMP"},
+		VAL: core.Validation{
+			Facts:  []string{"bounded target"},
+			Recoil: true,
+			WVC:    true,
+		},
+		EVO: core.Evolution{
+			Version: 1,
+		},
+	}
+
+	compositionSource := core.EmergION{
+		IDN: "E-GOVERNED-CYCLE-COMPOSITION",
+		STA: core.StateAtGOV,
+		MEM: core.Memory{
+			SourceHash: "governed-cycle-composition-source",
+			Bytes:      1,
+			Stored:     1,
+			Summary:    "governed cycle composition source",
+		},
+		REL: map[string]string{
+			"COMPOSITION_KIN": compositionTarget.IDN,
+		},
+		CAP: []string{"OBS", "ANALYZE"},
+		VAL: core.Validation{
+			Facts:  []string{"bounded source"},
+			Recoil: true,
+			WVC:    true,
+		},
+		EVO: core.Evolution{
+			Version: 1,
+		},
+	}
+
+	safeEvidence := []byte("existing REG accepted safe local analyze work")
+	evidence, err := rt.store.Preserve(safeEvidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	safeWork := core.EmergION{
+		IDN: "E-GOVERNED-CYCLE-SAFE-WORK",
+		STA: core.StateAtGOV,
+		MEM: core.Memory{
+			SourceHash: evidence.Hash,
+			Codec:      evidence.Codec,
+			Bytes:      evidence.Bytes,
+			Stored:     evidence.Stored,
+			Summary:    "existing safe ANALYZE work",
+		},
+		REL: map[string]string{
+			"protector": "NO_EXTERNAL_AUTHORITY_CLAIMED",
+		},
+		CAP: []string{"ANALYZE"},
+		VAL: core.Validation{
+			Facts:  []string{"safe work preserved"},
+			Risk:   "L",
+			Recoil: true,
+			WVC:    true,
+		},
+		EVO: core.Evolution{
+			Version: 1,
+			Metadata: &core.Metadata{
+				Topology:     core.TopologyDodecahedronV1,
+				CapturedAt:   time.Now().UTC(),
+				AIIntegrated: false,
+				PromptSchema: "MXPD/2",
+				Facets: []core.Facet{
+					core.FacetAnalyticsForecast,
+				},
+			},
+		},
+	}
+
+	accept(compositionTarget, "accept governed cycle target")
+	accept(compositionSource, "accept governed cycle composition")
+	accept(safeWork, "accept existing safe local analyze work")
+
+	gemma := reason.GemmaCLI{
+		Binary:    binary,
+		Model:     model,
+		Threads:   4,
+		Context:   2048,
+		MaxTokens: 80,
+		Timeout:   180 * time.Second,
+		ExtraArgs: []string{"--seed", "1"},
+	}
+
+	circulated, signal, executed, err := rt.GovernedCycle(
+		context.Background(),
+		gemma,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(circulated) != 1 {
+		t.Fatalf("circulated = %d want 1", len(circulated))
+	}
+
+	if !executed {
+		t.Fatal("GovernedCycle did not execute existing safe work")
+	}
+
+	if signal.STA != core.StateAtGOV {
+		t.Fatalf(
+			"execution signal state = %q want %q",
+			signal.STA,
+			core.StateAtGOV,
+		)
+	}
+
+	if !signal.VAL.Recoil || !signal.VAL.WVC {
+		t.Fatal("execution signal did not pass RECOIL/WVC")
+	}
+	if signal.REL["transition_emergion"] == "" {
+		t.Fatal("T_n execution signal lost travelling EmergION identity")
+	}
+
+	state, err := rt.state()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	circulatedID := circulated[0].IDN
+
+	if _, ok := state.AtGOV[circulatedID]; !ok {
+		t.Fatal("circulated SAW did not remain at GOV")
+	}
+
+	if _, ok := state.Accepted[circulatedID]; ok {
+		t.Fatal("GovernedCycle self-authorized circulated SAW into REG")
+	}
+
+	if _, ok := state.AtGOV[signal.IDN]; !ok {
+		t.Fatal("execution RECAPTURE signal did not return to GOV")
+	}
+
+	if _, ok := state.Accepted[signal.IDN]; ok {
+		t.Fatal("GovernedCycle self-authorized execution signal into REG")
+	}
+
+	// Cycle N produced candidates only. HUMAN_FINAL now makes the explicit
+	// authority transition through the existing Decide -> REG path.
+	if err := rt.Decide(
+		circulatedID,
+		string(gov.Approve),
+		"approve cycle N circulated SAW for recursive emergence",
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := rt.Decide(
+		signal.IDN,
+		string(gov.Approve),
+		"approve cycle N execution observation for recursive emergence",
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	acceptedState, err := rt.state()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, ok := acceptedState.Accepted[circulatedID]; !ok {
+		t.Fatal("HUMAN_FINAL-approved cycle N SAW did not reach REG")
+	}
+
+	if _, ok := acceptedState.Accepted[signal.IDN]; !ok {
+		t.Fatal("HUMAN_FINAL-approved cycle N execution signal did not reach REG")
+	}
+
+	// T_n+1 must now operate through the same existing governed cycle,
+	// using the newly REG-accepted canonical state rather than bypassing it.
+	circulatedNext, signalNext, executedNext, err := rt.GovernedCycle(
+		context.Background(),
+		gemma,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	nextState, err := rt.state()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !executedNext {
+		t.Fatal("T_n+1 did not execute newly governed safe work")
+	}
+
+	if signalNext.STA != core.StateAtGOV {
+		t.Fatalf("T_n+1 execution signal state = %q want %q", signalNext.STA, core.StateAtGOV)
+	}
+
+	if signalNext.REL["transition_emergion"] == "" {
+		t.Fatal("T_n+1 execution signal lost travelling EmergION identity")
+	}
+
+	if signalNext.REL["transition_emergion"] == signal.REL["transition_emergion"] {
+		t.Fatalf(
+			"T_n+1 travelling EmergION identity reused T_n identity: %q",
+			signalNext.REL["transition_emergion"],
+		)
+	}
+
+	if !signalNext.VAL.Recoil || !signalNext.VAL.WVC {
+		t.Fatal("T_n+1 execution signal did not pass RECOIL/WVC")
+	}
+
+	if signalNext.REL["parent_emergion"] != circulatedID {
+		t.Fatalf(
+			"T_n+1 execution parent = %q want governed T_n SAW %q",
+			signalNext.REL["parent_emergion"],
+			circulatedID,
+		)
+	}
+
+	if _, ok := nextState.AtGOV[signalNext.IDN]; !ok {
+		t.Fatal("T_n+1 execution RECAPTURE did not return to GOV")
+	}
+
+	if _, ok := nextState.Accepted[signalNext.IDN]; ok {
+		t.Fatal("T_n+1 self-authorized its execution signal into REG")
+	}
+
+	for _, em := range circulatedNext {
+		if _, ok := nextState.Accepted[em.IDN]; ok {
+			t.Fatalf("T_n+1 self-authorized circulated SAW %s into REG", em.IDN)
+		}
+	}
+
 }

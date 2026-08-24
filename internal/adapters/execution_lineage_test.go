@@ -3,7 +3,7 @@ package adapters
 import "testing"
 
 func executionLineageProofRequest() ExecutionRequest {
-	return ExecutionRequest{
+	request := ExecutionRequest{
 		EmergIONID:      "E-LINEAGE-PROOF",
 		SourceHash:      "SOURCE-HASH-PROOF",
 		AuthorizationID: "Q-PROOF",
@@ -11,6 +11,8 @@ func executionLineageProofRequest() ExecutionRequest {
 		Action:          "ANALYZE",
 		Authority:       "CAP_ONLY",
 	}
+	request.TransitionEmergIONID = ExecutionTransitionID(request)
+	return request
 }
 
 func TestBindExecutionResultCopiesRequestLineage(t *testing.T) {
@@ -136,5 +138,40 @@ func TestFailedExecutionRetainsLineage(t *testing.T) {
 
 	if result.Error == "" {
 		t.Fatal("failed execution lost error observation")
+	}
+}
+
+func TestExecutionLineageCarriesTravellingEmergIONIdentity(t *testing.T) {
+	request := ExecutionRequest{
+		EmergIONID:      "E-PARENT",
+		SourceHash:      "SOURCE-HASH-PROOF",
+		AuthorizationID: "EV-Q-PROOF",
+		Authority:       "HUMAN_FINAL",
+		Adapter:         "LOCAL_GEMMA",
+		Action:          "ANALYZE",
+
+		// This is the pre-run transition identity.
+		// The current architecture does not carry it yet.
+		TransitionEmergIONID: "E-TRANSITION-PROOF",
+	}
+
+	result := BindExecutionResult(
+		request,
+		ExecutionResult{
+			Succeeded: true,
+			Output:    "transition proof",
+		},
+	)
+
+	if err := VerifyExecutionResult(request, result); err != nil {
+		t.Fatal(err)
+	}
+
+	if result.TransitionEmergIONID != request.TransitionEmergIONID {
+		t.Fatalf(
+			"travelling EmergION identity = %q want %q",
+			result.TransitionEmergIONID,
+			request.TransitionEmergIONID,
+		)
 	}
 }

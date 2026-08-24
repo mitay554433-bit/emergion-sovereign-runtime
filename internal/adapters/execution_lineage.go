@@ -11,6 +11,7 @@ func BindExecutionResult(
 	result.EmergIONID = request.EmergIONID
 	result.SourceHash = request.SourceHash
 	result.AuthorizationID = request.AuthorizationID
+	result.TransitionEmergIONID = request.TransitionEmergIONID
 	result.Authority = request.Authority
 	result.Adapter = request.Adapter
 	result.Action = request.Action
@@ -57,6 +58,18 @@ func VerifyExecutionResult(
 			"execution result authorization mismatch: got %q want %q",
 			result.AuthorizationID,
 			request.AuthorizationID,
+		)
+	}
+
+	if request.TransitionEmergIONID == "" {
+		return fmt.Errorf("execution request missing travelling EmergION identity")
+	}
+
+	if result.TransitionEmergIONID != request.TransitionEmergIONID {
+		return fmt.Errorf(
+			"execution travelling EmergION changed: %s != %s",
+			result.TransitionEmergIONID,
+			request.TransitionEmergIONID,
 		)
 	}
 

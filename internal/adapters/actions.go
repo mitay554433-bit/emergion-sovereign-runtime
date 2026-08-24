@@ -63,7 +63,7 @@ var facetActions = map[string][]string{
 
 func humanFinalAction(action string) bool {
 	switch action {
-	case "SEND", "TRANSFER", "DEPLOY", "CONTRACT", "ACQUIRE":
+	case "SEND", "TRANSFER", "DEPLOY", "CONTRACT", "ACQUIRE", "PROGRAM":
 		return true
 	default:
 		return false
