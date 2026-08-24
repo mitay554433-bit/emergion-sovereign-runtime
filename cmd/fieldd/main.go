@@ -109,6 +109,29 @@ func main() {
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(dispatch(rt, Request{Method: "status"}))
 		})
+
+mux.HandleFunc("/actions", func(w http.ResponseWriter, req *http.Request) {
+if req.Method != http.MethodGet {
+http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+return
+}
+
+emergionID := req.URL.Query().Get("emergion_id")
+if emergionID == "" {
+http.Error(w, "missing emergion_id", http.StatusBadRequest)
+return
+}
+
+actionsJSON, err := rt.ActionsJSON(emergionID, true)
+if err != nil {
+http.Error(w, err.Error(), http.StatusBadRequest)
+return
+}
+
+w.Header().Set("Content-Type", "application/json")
+_, _ = w.Write([]byte(actionsJSON))
+})
+
 mux.HandleFunc("/decide", func(w http.ResponseWriter, req *http.Request) {
 if req.Method != http.MethodPost {
 http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
