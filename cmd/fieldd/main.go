@@ -261,7 +261,7 @@ func dispatch(rt *fieldapi.Runtime, req Request) Response {
 		if err != nil {
 			return Response{Error: err.Error()}
 		}
-		return Response{Result: json.RawMessage(authJSON)}
+		return Response{Result: authJSON}
 
 	default:
 		return Response{Error: fmt.Sprintf("unknown method: %s", req.Method)}
