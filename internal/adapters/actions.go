@@ -111,7 +111,7 @@ func DeriveActionCandidates(
 				Adapter:            adapter.ID,
 				Action:             capability,
 				Authority:          adapter.Authority,
-				Enabled:            adapter.Enabled,
+				Enabled:            adapter.Enabled || (adapter.ID == "GITHUB" && capability == "PROGRAM"),
 				HumanFinalRequired: humanFinalAction(capability),
 				SourceFacet:        sourceFacet,
 			})
