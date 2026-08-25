@@ -155,6 +155,7 @@ func programPatchArgs(g GemmaCLI, prompt string, outputTokens int) []string {
 		"--color", "off",
 		"--single-turn",
 		"--no-display-prompt",
+		"--simple-io",
 	)
 	return args
 }
