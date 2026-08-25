@@ -60,7 +60,7 @@ func (g GemmaCLI) ProposeProgramPatch(ctx context.Context, in ProgramPatchInput)
 	}
 
 	prompt := buildProgramPatchPrompt(target, source, governed)
-	args := gemmaArgs(g, prompt)
+	args := programPatchArgs(g, prompt, g.MaxTokens)
 
 	cctx, cancel := context.WithTimeout(ctx, g.Timeout)
 	defer cancel()
