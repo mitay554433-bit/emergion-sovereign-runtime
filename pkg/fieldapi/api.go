@@ -163,10 +163,28 @@ func (r *Runtime) GovernedCycle(
 	ctx context.Context,
 	gemma reason.GemmaCLI,
 ) ([]core.EmergION, core.EmergION, bool, error) {
-	circulated, err := r.CirculateSAWs(ctx)
+	circulated := []core.EmergION{}
+
+	program, proposed, err := (fieldruntime.Runtime{
+		Store:    r.store,
+		Reasoner: r.reasoner,
+	}).ProposeOneProgramPatch(
+		ctx,
+		gemma,
+		".",
+	)
 	if err != nil {
 		return nil, core.EmergION{}, false, err
 	}
+	if proposed {
+		circulated = append(circulated, program)
+	}
+
+	saws, err := r.CirculateSAWs(ctx)
+	if err != nil {
+		return circulated, core.EmergION{}, false, err
+	}
+	circulated = append(circulated, saws...)
 
 	signal, executed, err := (fieldruntime.Runtime{
 		Store: r.store,

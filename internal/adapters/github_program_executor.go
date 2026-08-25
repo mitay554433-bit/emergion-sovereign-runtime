@@ -62,45 +62,8 @@ func (e GitHubProgramExecutor) Execute(
 		result.Error = err.Error()
 		return result, err
 	}
-	if len(bytes.TrimSpace(patch)) == 0 {
-		err := fmt.Errorf("GITHUB:PROGRAM patch evidence is empty")
-		result.Error = err.Error()
-		return result, err
-	}
-	if bytes.Contains(patch, []byte("GIT binary patch")) ||
-		bytes.Contains(patch, []byte("Binary files ")) {
-		err := fmt.Errorf("GITHUB:PROGRAM binary patches are not supported")
-		result.Error = err.Error()
-		return result, err
-	}
-
-	workDir := strings.TrimSpace(e.WorkDir)
-	if workDir == "" {
-		workDir = "."
-	}
-
-	rootBytes, err := exec.Command("git", "-C", workDir, "rev-parse", "--show-toplevel").Output()
+	root, err := CheckGitHubProgramPatch(e.WorkDir, patch)
 	if err != nil {
-		err = fmt.Errorf("GITHUB:PROGRAM working directory is not a git repository: %w", err)
-		result.Error = err.Error()
-		return result, err
-	}
-	root := strings.TrimSpace(string(rootBytes))
-
-	status, err := exec.Command("git", "-C", root, "status", "--porcelain").Output()
-	if err != nil {
-		err = fmt.Errorf("GITHUB:PROGRAM could not inspect repository state: %w", err)
-		result.Error = err.Error()
-		return result, err
-	}
-	if len(bytes.TrimSpace(status)) != 0 {
-		err = fmt.Errorf("GITHUB:PROGRAM requires a clean worktree")
-		result.Error = err.Error()
-		return result, err
-	}
-
-	if output, applyErr := runPatchCommand(root, patch, "apply", "--check", "--whitespace=error-all", "-"); applyErr != nil {
-		err = fmt.Errorf("GITHUB:PROGRAM patch check failed: %s", boundedExecutionOutput(output))
 		result.Error = err.Error()
 		return result, err
 	}
@@ -139,6 +102,41 @@ func (e GitHubProgramExecutor) Execute(
 	}
 
 	return result, nil
+}
+
+func CheckGitHubProgramPatch(workDir string, patch []byte) (string, error) {
+	if len(bytes.TrimSpace(patch)) == 0 {
+		return "", fmt.Errorf("GITHUB:PROGRAM patch evidence is empty")
+	}
+	if bytes.Contains(patch, []byte("GIT binary patch")) ||
+		bytes.Contains(patch, []byte("Binary files ")) {
+		return "", fmt.Errorf("GITHUB:PROGRAM binary patches are not supported")
+	}
+
+	workDir = strings.TrimSpace(workDir)
+	if workDir == "" {
+		workDir = "."
+	}
+
+	rootBytes, err := exec.Command("git", "-C", workDir, "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return "", fmt.Errorf("GITHUB:PROGRAM working directory is not a git repository: %w", err)
+	}
+	root := strings.TrimSpace(string(rootBytes))
+
+	status, err := exec.Command("git", "-C", root, "status", "--porcelain").Output()
+	if err != nil {
+		return "", fmt.Errorf("GITHUB:PROGRAM could not inspect repository state: %w", err)
+	}
+	if len(bytes.TrimSpace(status)) != 0 {
+		return "", fmt.Errorf("GITHUB:PROGRAM requires a clean worktree")
+	}
+
+	if output, applyErr := runPatchCommand(root, patch, "apply", "--check", "--whitespace=error-all", "-"); applyErr != nil {
+		return "", fmt.Errorf("GITHUB:PROGRAM patch check failed: %s", boundedExecutionOutput(output))
+	}
+
+	return root, nil
 }
 
 func runPatchCommand(root string, patch []byte, args ...string) ([]byte, error) {
