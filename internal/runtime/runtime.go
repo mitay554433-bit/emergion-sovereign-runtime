@@ -1171,6 +1171,21 @@ func (r Runtime) recapture(
 		return em, false, err
 	}
 
+	if required := strings.TrimSpace(em.REL["required_capability"]); required != "" {
+		if _, err := r.materializeCapabilityProviderPopulation(
+			ctx,
+			required,
+			capabilityState,
+			governedState,
+			em.IDN,
+		); err != nil {
+			return em, false, fmt.Errorf(
+				"recapture provider population materialization failed: %w",
+				err,
+			)
+		}
+	}
+
 	return em, false, &RecaptureError{
 		Cause:    cause,
 		EmergION: em,

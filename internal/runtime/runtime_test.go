@@ -4627,3 +4627,184 @@ func TestMaterializedProviderPopulationCanShareRuntimeOwnedOriginWithoutCollapsi
 		}
 	}
 }
+
+func TestRecaptureProviderPopulationOriginMustExistBeforeDerivedBranches(t *testing.T) {
+	root := t.TempDir()
+
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	accepted := []core.EmergION{
+		{
+			IDN: "E-ANALYZE-A",
+			STA: core.StateAtGOV,
+			CAP: []string{"ANALYZE"},
+		},
+		{
+			IDN: "E-CMP-A",
+			STA: core.StateAtGOV,
+			CAP: []string{"CMP"},
+		},
+		{
+			IDN: "E-CMP-B",
+			STA: core.StateAtGOV,
+			CAP: []string{"CMP"},
+		},
+		{
+			IDN: "E-RLT-A",
+			STA: core.StateAtGOV,
+			CAP: []string{"RLT"},
+		},
+	}
+
+	for _, em := range accepted {
+		em.MEM.SourceHash = store.Hash([]byte(em.IDN))
+		em.MEM.Codec = "raw"
+		em.MEM.Bytes = int64(len(em.IDN))
+		em.MEM.Stored = int64(len(em.IDN))
+		em.VAL.Recoil = true
+		em.VAL.WVC = true
+		em.EVO.Version = 1
+		em.EVO.Metadata = &core.Metadata{CapturedAt: time.Now().UTC()}
+
+		if _, err := s.Preserve([]byte(em.IDN)); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := s.SaveCandidate(em); err != nil {
+			t.Fatal(err)
+		}
+
+		approved, decision, err := gov.Decide(
+			em,
+			gov.Approve,
+			"HUMAN_FINAL",
+			"accept provider for recapture population ordering proof",
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		decisionID, err := s.SaveDecision(decision)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, receipt, err := reg.Accept(approved, decisionID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := s.SaveAccepted(receipt); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	r := Runtime{
+		Store:    s,
+		Reasoner: coverageRecaptureReasoner{},
+	}
+
+	divergence := &pivot.DivergenceError{
+		Result: pivot.Result{
+			Name:       "COVERAGE",
+			Divergence: "BRIDGEGAP:capabilities",
+		},
+		EmergION: core.EmergION{
+			IDN: "E-BRIDGEGAP-ORIGIN",
+			MEM: core.Memory{
+				Provenance: "test",
+				Summary:    "capability bridgegap recapture",
+			},
+			REL: map[string]string{},
+			CAP: []string{"OBS"},
+			VAL: core.Validation{
+				Facts: []string{"bridgegap_preserved"},
+			},
+			EVO: core.Evolution{
+				Version: 1,
+			},
+		},
+	}
+
+	origin, _, err := r.recapture(
+		context.Background(),
+		"",
+		nil,
+		divergence,
+	)
+	if err == nil {
+		t.Fatal("recapture unexpectedly returned without RecaptureError")
+	}
+
+	var recaptureErr *RecaptureError
+	if !errors.As(err, &recaptureErr) {
+		t.Fatalf("recapture error type = %T want *RecaptureError", err)
+	}
+
+	if recaptureErr.EmergION.IDN != origin.IDN {
+		t.Fatalf(
+			"RecaptureError origin = %q want %q",
+			recaptureErr.EmergION.IDN,
+			origin.IDN,
+		)
+	}
+
+	events, err := s.Events()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := livefield.Rebuild(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	storedOrigin, ok := st.AtGOV[origin.IDN]
+	if !ok {
+		t.Fatalf("recapture origin %s was not persisted at GOV", origin.IDN)
+	}
+
+	if storedOrigin.REL["required_capability"] != "DERIVE_CAPABILITY" {
+		t.Fatalf(
+			"origin required capability = %q want DERIVE_CAPABILITY",
+			storedOrigin.REL["required_capability"],
+		)
+	}
+
+	branches := make([]core.EmergION, 0)
+	for _, em := range st.AtGOV {
+		if em.REL["origin"] == origin.IDN {
+			branches = append(branches, em)
+		}
+	}
+
+	if len(branches) != 2 {
+		t.Fatalf("derived provider branches = %d want 2", len(branches))
+	}
+
+	for _, branch := range branches {
+		if branch.IDN == origin.IDN {
+			t.Fatalf("origin %s was counted as its own derived branch", origin.IDN)
+		}
+
+		if branch.REL["origin"] != origin.IDN {
+			t.Fatalf(
+				"branch %s origin = %q want %q",
+				branch.IDN,
+				branch.REL["origin"],
+				origin.IDN,
+			)
+		}
+
+		if !branch.VAL.Recoil || !branch.VAL.WVC {
+			t.Fatalf("branch %s bypassed RECOIL/WVC", branch.IDN)
+		}
+
+		if _, ok := st.Accepted[branch.IDN]; ok {
+			t.Fatalf("branch %s self-authorized into REG", branch.IDN)
+		}
+	}
+}
