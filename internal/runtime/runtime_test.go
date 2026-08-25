@@ -4234,3 +4234,133 @@ func TestResolveRequiredCapabilityRejectsInvalidExplicitProviderTupleWithoutSubs
 		t.Fatalf("invalid explicit provider tuple produced composition %q", got)
 	}
 }
+
+func TestMaterializeCapabilityProviderPopulationAdmitsAllDeterministicTrajectoriesAtGOV(t *testing.T) {
+	root := t.TempDir()
+
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	boundary := core.EmptyState()
+
+	accepted := []core.EmergION{
+		{
+			IDN: "E-ANALYZE-A",
+			STA: core.StateAccepted,
+			CAP: []string{"ANALYZE"},
+		},
+		{
+			IDN: "E-CMP-A",
+			STA: core.StateAccepted,
+			CAP: []string{"CMP"},
+		},
+		{
+			IDN: "E-CMP-B",
+			STA: core.StateAccepted,
+			CAP: []string{"CMP"},
+		},
+		{
+			IDN: "E-RLT-A",
+			STA: core.StateAccepted,
+			CAP: []string{"RLT"},
+		},
+	}
+
+	for _, em := range accepted {
+		boundary.Accepted[em.IDN] = em
+	}
+
+	r := Runtime{
+		Store:    s,
+		Reasoner: coverageRecaptureReasoner{},
+	}
+
+	got, err := r.materializeCapabilityProviderPopulation(
+		context.Background(),
+		"DERIVE_CAPABILITY",
+		boundary,
+		"",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(got) != 2 {
+		t.Fatalf("materialized trajectories = %d want 2", len(got))
+	}
+
+	wantProviders := []string{
+		"ANALYZE:E-ANALYZE-A,CMP:E-CMP-A,RLT:E-RLT-A",
+		"ANALYZE:E-ANALYZE-A,CMP:E-CMP-B,RLT:E-RLT-A",
+	}
+
+	wantEdges := []string{
+		"E-ANALYZE-A->E-CMP-A,E-CMP-A->E-RLT-A",
+		"E-ANALYZE-A->E-CMP-B,E-CMP-B->E-RLT-A",
+	}
+
+	for i, em := range got {
+		if em.REL["capability_providers"] != wantProviders[i] {
+			t.Fatalf(
+				"trajectory %d providers = %q want %q",
+				i,
+				em.REL["capability_providers"],
+				wantProviders[i],
+			)
+		}
+
+		if em.REL["capability_provider_edge_proposal"] != wantEdges[i] {
+			t.Fatalf(
+				"trajectory %d edges = %q want %q",
+				i,
+				em.REL["capability_provider_edge_proposal"],
+				wantEdges[i],
+			)
+		}
+
+		if em.STA != core.StateAtGOV {
+			t.Fatalf(
+				"trajectory %d state = %q want %q",
+				i,
+				em.STA,
+				core.StateAtGOV,
+			)
+		}
+
+		if !em.VAL.Recoil || !em.VAL.WVC {
+			t.Fatalf("trajectory %d bypassed RECOIL/WVC", i)
+		}
+
+		if _, exists := em.REL["COMPOSITION_KIN"]; exists {
+			t.Fatalf("trajectory %d self-created COMPOSITION_KIN", i)
+		}
+	}
+
+	if got[0].IDN == got[1].IDN {
+		t.Fatalf("materialized trajectories collapsed to identity %q", got[0].IDN)
+	}
+
+	if got[0].MEM.SourceHash == got[1].MEM.SourceHash {
+		t.Fatalf(
+			"materialized trajectories collapsed to source hash %q",
+			got[0].MEM.SourceHash,
+		)
+	}
+
+	st, err := livefield.Rebuild(mustEvents(t, s))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, em := range got {
+		if _, ok := st.AtGOV[em.IDN]; !ok {
+			t.Fatalf("materialized trajectory %s missing from GOV", em.IDN)
+		}
+
+		if _, ok := st.Accepted[em.IDN]; ok {
+			t.Fatalf("materialized trajectory %s self-authorized into REG", em.IDN)
+		}
+	}
+}

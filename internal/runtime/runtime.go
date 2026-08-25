@@ -289,6 +289,62 @@ func acceptedCapabilityProviderPopulation(
 	return population, true
 }
 
+func (r Runtime) materializeCapabilityProviderPopulation(
+	ctx context.Context,
+	required string,
+	boundary core.State,
+	governedState string,
+) ([]core.EmergION, error) {
+	population, ok := acceptedCapabilityProviderPopulation(required, boundary)
+	if !ok {
+		return nil, nil
+	}
+
+	recipe := requiredCapabilityRecipe(required)
+	if len(recipe) == 0 {
+		return nil, nil
+	}
+
+	out := make([]core.EmergION, 0, len(population))
+
+	for _, providers := range population {
+		analysis := reason.Result{
+			Summary: "deterministic capability provider trajectory",
+			Relationships: map[string]string{
+				"source_name":            "provider_population",
+				"required_capability":    required,
+				"capability_resolution":  "COMPOSABLE_CANDIDATE",
+				"capability_composition": strings.Join(recipe, "+"),
+				"capability_providers":   providers,
+			},
+			Capabilities: []string{"OBS"},
+			Facts:        []string{"source_preserved"},
+			Risk:         "L",
+		}
+
+		em, duplicate, err := r.admitAnalyzedCandidate(
+			ctx,
+			"provider_population",
+			[]byte(providers),
+			"provider_population",
+			boundary,
+			governedState,
+			analysis,
+		)
+		if err != nil {
+			return out, err
+		}
+
+		if duplicate {
+			continue
+		}
+
+		out = append(out, em)
+	}
+
+	return out, nil
+}
+
 type capabilityProviderEdge struct {
 	From string
 	To   string
