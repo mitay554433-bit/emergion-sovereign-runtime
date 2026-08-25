@@ -19,8 +19,9 @@ type ProgramPatchInput struct {
 }
 
 // ProposeProgramPatch asks the existing local Gemma reasoner for one bounded,
-// source-specific unified diff. It does not mutate the repository and may
-// legitimately return no patch when the evidence does not support a change.
+// source-specific edit. The runtime deterministically renders that edit as a
+// unified Git diff. It does not mutate the repository and may legitimately
+// return no patch when the evidence does not support a change.
 func (g GemmaCLI) ProposeProgramPatch(ctx context.Context, in ProgramPatchInput) ([]byte, error) {
 	if err := g.Validate(); err != nil {
 		return nil, err
@@ -81,13 +82,33 @@ func (g GemmaCLI) ProposeProgramPatch(ctx context.Context, in ProgramPatchInput)
 	candidates := []string{stdout.String(), stderr.String(), stdout.String() + "\n" + stderr.String()}
 	var parseErr error
 	for _, candidate := range candidates {
-		patch, noChange, err := parseProgramPatch(candidate, target)
+		oldText, newText, noChange, err := parseProgramEdit(candidate)
 		if err != nil {
+			// Preserve compatibility with already-valid governed patch producers while
+			// the live Gemma contract uses EDIT/1. Malformed raw diffs still fail.
+			patch, rawNoChange, patchErr := parseProgramPatch(candidate, target)
+			if patchErr == nil {
+				if rawNoChange {
+					return nil, nil
+				}
+				return patch, nil
+			}
 			parseErr = err
 			continue
 		}
 		if noChange {
 			return nil, nil
+		}
+
+		patch, err := renderProgramPatch(target, string(in.Content), oldText, newText)
+		if err != nil {
+			parseErr = err
+			continue
+		}
+		patch, _, err = parseProgramPatch(string(patch), target)
+		if err != nil {
+			parseErr = err
+			continue
 		}
 		return patch, nil
 	}
@@ -130,14 +151,154 @@ Determine whether one small code change to TARGET is directly justified by SOURC
 If no exact change is justified, output exactly:
 NO_CHANGE
 
-Otherwise output only one standard unified Git diff for TARGET.
+Otherwise output exactly one bounded edit in this format:
+EDIT/1
+OLD:
+<exact complete existing source line or contiguous source lines>
+===NEW===
+<replacement line or contiguous replacement lines>
+===END===
+
 Rules:
+- OLD must be copied exactly from TARGET and occur exactly once
+- OLD and NEW must contain complete lines only
+- NEW must differ from OLD
 - modify TARGET only
 - no new files, deletes, renames, binary patches, commits, pushes, deployments, or authority changes
 - preserve HUMAN_FINAL, REG authority, provenance, RECOIL/WVC, and existing architecture
 - smallest sufficient change only
-- no markdown fences or explanatory prose
-- patch must begin: diff --git a/` + target + ` b/` + target
+- no markdown fences, Git diff syntax, or explanatory prose
+`
+}
+
+func parseProgramEdit(raw string) (string, string, bool, error) {
+	text := strings.TrimSpace(raw)
+	if text == "" {
+		return "", "", false, fmt.Errorf("empty program proposal")
+	}
+	if text == "NO_CHANGE" {
+		return "", "", true, nil
+	}
+	if strings.Contains(text, "```") || strings.Contains(text, "diff --git ") {
+		return "", "", false, fmt.Errorf("program edit contains unsupported output")
+	}
+
+	const prefix = "EDIT/1\nOLD:\n"
+	const middle = "\n===NEW===\n"
+	const suffix = "\n===END==="
+	if !strings.HasPrefix(text, prefix) || !strings.HasSuffix(text, suffix) {
+		return "", "", false, fmt.Errorf("program edit does not match EDIT/1 contract")
+	}
+
+	body := strings.TrimSuffix(strings.TrimPrefix(text, prefix), suffix)
+	if strings.Count(body, middle) != 1 {
+		return "", "", false, fmt.Errorf("program edit must contain one NEW boundary")
+	}
+	parts := strings.SplitN(body, middle, 2)
+	oldText := parts[0]
+	newText := parts[1]
+	if oldText == "" {
+		return "", "", false, fmt.Errorf("program edit OLD is empty")
+	}
+	if oldText == newText {
+		return "", "", false, fmt.Errorf("program edit does not change source")
+	}
+	return oldText, newText, false, nil
+}
+
+func renderProgramPatch(target, source, oldText, newText string) ([]byte, error) {
+	if strings.Count(source, oldText) != 1 {
+		return nil, fmt.Errorf("program edit OLD must occur exactly once in target")
+	}
+
+	idx := strings.Index(source, oldText)
+	if idx < 0 {
+		return nil, fmt.Errorf("program edit OLD not found in target")
+	}
+	if idx > 0 && source[idx-1] != '\n' {
+		return nil, fmt.Errorf("program edit OLD must start at a line boundary")
+	}
+	end := idx + len(oldText)
+	if end < len(source) && source[end] != '\n' {
+		return nil, fmt.Errorf("program edit OLD must end at a line boundary")
+	}
+	if strings.HasPrefix(oldText, "\n") || strings.HasSuffix(oldText, "\n") || strings.HasPrefix(newText, "\n") || strings.HasSuffix(newText, "\n") {
+		return nil, fmt.Errorf("program edit blocks must not include boundary newlines")
+	}
+
+	prefixLines := splitProgramLines(source[:idx])
+	oldLines := splitProgramLines(oldText)
+	newLines := splitProgramLines(newText)
+	afterStart := end
+	if afterStart < len(source) && source[afterStart] == '\n' {
+		afterStart++
+	}
+	afterLines := splitProgramLines(source[afterStart:])
+
+	contextBefore := 3
+	if len(prefixLines) < contextBefore {
+		contextBefore = len(prefixLines)
+	}
+	contextAfter := 3
+	if len(afterLines) < contextAfter {
+		contextAfter = len(afterLines)
+	}
+
+	oldStart := len(prefixLines) - contextBefore + 1
+	newStart := oldStart
+	oldCount := contextBefore + len(oldLines) + contextAfter
+	newCount := contextBefore + len(newLines) + contextAfter
+
+	var b strings.Builder
+	b.WriteString("diff --git a/")
+	b.WriteString(target)
+	b.WriteString(" b/")
+	b.WriteString(target)
+	b.WriteByte('\n')
+	b.WriteString("--- a/")
+	b.WriteString(target)
+	b.WriteByte('\n')
+	b.WriteString("+++ b/")
+	b.WriteString(target)
+	b.WriteByte('\n')
+	fmt.Fprintf(&b, "@@ -%d,%d +%d,%d @@\n", oldStart, oldCount, newStart, newCount)
+	for _, line := range prefixLines[len(prefixLines)-contextBefore:] {
+		b.WriteByte(' ')
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	for _, line := range oldLines {
+		b.WriteByte('-')
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	for _, line := range newLines {
+		b.WriteByte('+')
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	for _, line := range afterLines[:contextAfter] {
+		b.WriteByte(' ')
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+
+	patch := []byte(b.String())
+	if len(patch) > maxProgramPatchBytes {
+		return nil, fmt.Errorf("program patch exceeds %d bytes", maxProgramPatchBytes)
+	}
+	return patch, nil
+}
+
+func splitProgramLines(s string) []string {
+	if s == "" {
+		return nil
+	}
+	s = strings.TrimSuffix(s, "\n")
+	if s == "" {
+		return nil
+	}
+	return strings.Split(s, "\n")
 }
 
 func parseProgramPatch(raw, target string) ([]byte, bool, error) {
