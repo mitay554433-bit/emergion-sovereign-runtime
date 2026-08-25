@@ -3967,3 +3967,125 @@ func TestAcceptedCapabilityProviderPopulationPreservesAllDeterministicCombinatio
 		t.Fatalf("population = %#v want %#v", population, want)
 	}
 }
+
+func TestAnalyzedCandidateAdmissionPreservesDistinctProviderTrajectoryIdentitiesAtGOV(t *testing.T) {
+	root := t.TempDir()
+
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r := Runtime{
+		Store:    s,
+		Reasoner: coverageRecaptureReasoner{},
+	}
+
+	boundary := core.EmptyState()
+
+	trajectoryA := []byte(
+		"ANALYZE:E-ANALYZE-A,CMP:E-CMP-A,RLT:E-RLT-A",
+	)
+	trajectoryB := []byte(
+		"ANALYZE:E-ANALYZE-A,CMP:E-CMP-B,RLT:E-RLT-A",
+	)
+
+	analysisA := reason.Result{
+		Summary: "deterministic provider trajectory A",
+		Relationships: map[string]string{
+			"source_name": "provider-trajectory-a",
+		},
+		Capabilities: []string{"OBS"},
+		Facts:        []string{"source_preserved"},
+		Risk:         "L",
+	}
+
+	analysisB := reason.Result{
+		Summary: "deterministic provider trajectory B",
+		Relationships: map[string]string{
+			"source_name": "provider-trajectory-b",
+		},
+		Capabilities: []string{"OBS"},
+		Facts:        []string{"source_preserved"},
+		Risk:         "L",
+	}
+
+	a, duplicate, err := r.admitAnalyzedCandidate(
+		context.Background(),
+		"provider-trajectory-a",
+		trajectoryA,
+		"provider_population",
+		boundary,
+		"",
+		analysisA,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate {
+		t.Fatal("provider trajectory A unexpectedly duplicate")
+	}
+
+	b, duplicate, err := r.admitAnalyzedCandidate(
+		context.Background(),
+		"provider-trajectory-b",
+		trajectoryB,
+		"provider_population",
+		boundary,
+		"",
+		analysisB,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate {
+		t.Fatal("provider trajectory B unexpectedly duplicate")
+	}
+
+	if a.IDN == b.IDN {
+		t.Fatalf("distinct provider trajectories collapsed to identity %q", a.IDN)
+	}
+
+	if a.MEM.SourceHash == b.MEM.SourceHash {
+		t.Fatalf(
+			"distinct provider trajectories collapsed to source hash %q",
+			a.MEM.SourceHash,
+		)
+	}
+
+	for _, em := range []core.EmergION{a, b} {
+		if em.STA != core.StateAtGOV {
+			t.Fatalf(
+				"provider trajectory %s state = %q want %q",
+				em.IDN,
+				em.STA,
+				core.StateAtGOV,
+			)
+		}
+
+		if !em.VAL.Recoil || !em.VAL.WVC {
+			t.Fatalf(
+				"provider trajectory %s bypassed canonical RECOIL/WVC admission",
+				em.IDN,
+			)
+		}
+	}
+
+	st, err := livefield.Rebuild(mustEvents(t, s))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, em := range []core.EmergION{a, b} {
+		if _, ok := st.AtGOV[em.IDN]; !ok {
+			t.Fatalf("provider trajectory %s missing from GOV", em.IDN)
+		}
+
+		if _, ok := st.Accepted[em.IDN]; ok {
+			t.Fatalf(
+				"provider trajectory %s self-authorized into REG",
+				em.IDN,
+			)
+		}
+	}
+}
