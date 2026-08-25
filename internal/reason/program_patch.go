@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -61,7 +62,20 @@ func (g GemmaCLI) ProposeProgramPatch(ctx context.Context, in ProgramPatchInput)
 	}
 
 	prompt := buildProgramPatchPrompt(target, source, governed)
+
+	outputFile, err := os.CreateTemp("", "unifusion-program-*.txt")
+	if err != nil {
+		return nil, fmt.Errorf("create program proposal output: %w", err)
+	}
+	outputPath := outputFile.Name()
+	if err := outputFile.Close(); err != nil {
+		_ = os.Remove(outputPath)
+		return nil, fmt.Errorf("close program proposal output: %w", err)
+	}
+	defer os.Remove(outputPath)
+
 	args := programPatchArgs(g, prompt, g.MaxTokens)
+	args = append(args, "--output-file", outputPath)
 
 	cctx, cancel := context.WithTimeout(ctx, g.Timeout)
 	defer cancel()
@@ -79,7 +93,17 @@ func (g GemmaCLI) ProposeProgramPatch(ctx context.Context, in ProgramPatchInput)
 		return nil, fmt.Errorf("Gemma program proposal failed: %w: %s", runErr, trim(stderr.String(), 500))
 	}
 
-	candidates := []string{stdout.String(), stderr.String(), stdout.String() + "\n" + stderr.String()}
+	fileOutput, readErr := os.ReadFile(outputPath)
+	if readErr != nil {
+		return nil, fmt.Errorf("read program proposal output: %w", readErr)
+	}
+
+	candidates := []string{
+		string(fileOutput),
+		stdout.String(),
+		stderr.String(),
+		stdout.String() + "\n" + stderr.String(),
+	}
 	var parseErr error
 	for _, candidate := range candidates {
 		oldText, newText, noChange, err := parseProgramEdit(candidate, target)
@@ -131,7 +155,6 @@ func programPatchArgs(g GemmaCLI, prompt string, outputTokens int) []string {
 		"--color", "off",
 		"--single-turn",
 		"--no-display-prompt",
-		"--output-file", "/dev/stdout",
 	)
 	return args
 }

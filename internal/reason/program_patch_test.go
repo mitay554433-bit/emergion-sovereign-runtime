@@ -136,6 +136,19 @@ func TestProgramPatchArgsDoNotUseSemanticGrammar(t *testing.T) {
 	}
 }
 
+func TestProgramPatchArgsDoNotRedirectOutputFile(t *testing.T) {
+	args := programPatchArgs(
+		GemmaCLI{Model: "model.gguf", Context: 2048, Threads: 4},
+		"prompt",
+		256,
+	)
+	for _, arg := range args {
+		if arg == "--output-file" || arg == "/dev/stdout" {
+			t.Fatalf("program patch args unexpectedly redirect model output: %q", arg)
+		}
+	}
+}
+
 func TestBuildProgramPatchPromptRequiresExactObservedEditContract(t *testing.T) {
 	prompt := buildProgramPatchPrompt("internal/a.go", "old\n", "state")
 	wants := []string{
