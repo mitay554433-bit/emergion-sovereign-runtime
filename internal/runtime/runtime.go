@@ -1590,6 +1590,12 @@ func (r Runtime) ExecuteAction(
 			Gemma: gemma,
 		}
 		result, execErr = executor.Execute(request)
+	case "GITHUB":
+		executor := adapters.GitHubProgramExecutor{
+			Store:   r.Store,
+			WorkDir: ".",
+		}
+		result, execErr = executor.Execute(request)
 	default:
 		return request, adapters.ExecutionResult{}, core.EmergION{}, false, fmt.Errorf(
 			"no local executor connected for adapter %s",
