@@ -708,3 +708,215 @@ func TestGovernedCycleCirculatesAndExecutesExistingSafeWork(t *testing.T) {
 	}
 
 }
+
+func TestRunDrivesSuccessiveGovernedCyclesWithoutManualInvocation(t *testing.T) {
+	root := t.TempDir()
+	binary := os.Getenv("GEMMA_BIN")
+	model := os.Getenv("GEMMA_MODEL")
+	if binary == "" || model == "" {
+		t.Skip("set GEMMA_BIN and GEMMA_MODEL for unattended Run integration test")
+	}
+
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rt := &Runtime{
+		store:    s,
+		reasoner: sawCirculationReasoner{},
+	}
+
+	accept := func(em core.EmergION, reasonText string) {
+		t.Helper()
+
+		em.STA = core.StateAtGOV
+		em.VAL.Recoil = true
+		em.VAL.WVC = true
+
+		if em.EVO.Version == 0 {
+			em.EVO.Version = 1
+		}
+		if em.EVO.Metadata == nil {
+			em.EVO.Metadata = &core.Metadata{
+				CapturedAt:   time.Now().UTC(),
+				AIIntegrated: false,
+				PromptSchema: "MXPD/2",
+			}
+		}
+
+		evidence := []byte(em.IDN)
+		preserved, err := s.Preserve(evidence)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		em.MEM.SourceHash = preserved.Hash
+		em.MEM.Codec = preserved.Codec
+		em.MEM.Bytes = preserved.Bytes
+		em.MEM.Stored = preserved.Stored
+
+		if _, err := s.SaveCandidate(em); err != nil {
+			t.Fatal(err)
+		}
+
+		approved, decision, err := gov.Decide(
+			em,
+			gov.Approve,
+			"HUMAN_FINAL",
+			reasonText,
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		decisionID, err := s.SaveDecision(decision)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, receipt, err := reg.Accept(approved, decisionID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := s.SaveAccepted(receipt); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	safeWork := core.EmergION{
+		IDN: "E-RUN-AUTONOMY-SAFE-WORK",
+		CAP: []string{"ANALYZE"},
+		EVO: core.Evolution{
+			Version: 1,
+			Metadata: &core.Metadata{
+				CapturedAt:   time.Now().UTC(),
+				AIIntegrated: false,
+				PromptSchema: "MXPD/2",
+				Facets: []core.Facet{
+					core.FacetAnalyticsForecast,
+				},
+			},
+		},
+	}
+
+	accept(safeWork, "accept unattended run safe work")
+
+	gemma := reason.GemmaCLI{
+		Binary:    binary,
+		Model:     model,
+		Threads:   4,
+		Context:   2048,
+		MaxTokens: 80,
+		Timeout:   180 * time.Second,
+		ExtraArgs: []string{"--seed", "1"},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	type cycleObservation struct {
+		circulated []core.EmergION
+		signal     core.EmergION
+		executed   bool
+	}
+
+	cycles := make(chan cycleObservation, 4)
+	runErr := make(chan error, 1)
+
+	go func() {
+		runErr <- rt.Run(
+			ctx,
+			filepath.Join(root, "dropzone"),
+			10*time.Millisecond,
+			gemma,
+			nil,
+			func(
+				circulated []core.EmergION,
+				signal core.EmergION,
+				executed bool,
+			) {
+				cycles <- cycleObservation{
+					circulated: circulated,
+					signal:     signal,
+					executed:   executed,
+				}
+			},
+		)
+	}()
+
+	var observed []cycleObservation
+
+	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
+
+	for len(observed) < 2 {
+		select {
+		case cycle := <-cycles:
+			observed = append(observed, cycle)
+
+		case err := <-runErr:
+			if err != nil {
+				t.Fatalf("Run exited before two cycles: %v", err)
+			}
+			t.Fatal("Run exited before two cycles without error")
+
+		case <-timeout.C:
+			t.Fatal("Run did not produce two unattended governed cycles")
+		}
+	}
+
+	cancel()
+
+	select {
+	case err := <-runErr:
+		if err != nil && err != context.Canceled {
+			t.Fatalf("Run cancellation error = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run did not stop after context cancellation")
+	}
+
+	if !observed[0].executed {
+		t.Fatal("first unattended governed cycle did not execute existing safe work")
+	}
+
+	firstSignal := observed[0].signal
+	if firstSignal.STA != core.StateAtGOV {
+		t.Fatalf(
+			"first unattended execution signal state = %q want %q",
+			firstSignal.STA,
+			core.StateAtGOV,
+		)
+	}
+
+	if !firstSignal.VAL.Recoil || !firstSignal.VAL.WVC {
+		t.Fatal("first unattended execution signal bypassed RECOIL/WVC")
+	}
+
+	if firstSignal.REL["parent_emergion"] != safeWork.IDN {
+		t.Fatalf(
+			"first unattended execution parent = %q want %q",
+			firstSignal.REL["parent_emergion"],
+			safeWork.IDN,
+		)
+	}
+
+	state, err := rt.state()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, ok := state.AtGOV[firstSignal.IDN]; !ok {
+		t.Fatal("unattended execution RECAPTURE did not return to GOV")
+	}
+
+	if _, ok := state.Accepted[firstSignal.IDN]; ok {
+		t.Fatal("unattended Run self-authorized execution result into REG")
+	}
+
+	if len(observed) < 2 {
+		t.Fatal("unattended Run did not reach a second governed cycle")
+	}
+}
