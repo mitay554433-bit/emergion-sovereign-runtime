@@ -153,16 +153,20 @@ NO_CHANGE
 
 Otherwise output exactly one bounded edit in this format:
 EDIT/1
-OLD:
-<exact complete existing source line or contiguous source lines>
+TARGET:` + target + `
+===OLD===
+<exact complete existing source line or contiguous source lines copied verbatim from SOURCE>
 ===NEW===
 <replacement line or contiguous replacement lines>
 ===END===
 
 Rules:
-- OLD must be copied exactly from TARGET and occur exactly once
+- TARGET must be exactly the TARGET shown above
+- OLD is mandatory; never output ===NEW=== before a non-empty ===OLD=== block
+- OLD must be copied verbatim from SOURCE and occur exactly once in TARGET
+- if you cannot quote the exact OLD block, output exactly NO_CHANGE
 - OLD and NEW must contain complete lines only
-- NEW must differ from OLD
+- NEW must differ from OLD and must not duplicate code already present in SOURCE
 - modify TARGET only
 - no new files, deletes, renames, binary patches, commits, pushes, deployments, or authority changes
 - preserve HUMAN_FINAL, REG authority, provenance, RECOIL/WVC, and existing architecture

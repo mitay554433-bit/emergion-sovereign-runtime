@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -131,6 +132,22 @@ func TestProgramPatchArgsDoNotUseSemanticGrammar(t *testing.T) {
 	for i, arg := range args {
 		if arg == "--grammar" {
 			t.Fatalf("program patch args unexpectedly include semantic grammar at %d", i)
+		}
+	}
+}
+
+func TestBuildProgramPatchPromptRequiresExactObservedEditContract(t *testing.T) {
+	prompt := buildProgramPatchPrompt("internal/a.go", "old\n", "state")
+	wants := []string{
+		"EDIT/1\nTARGET:internal/a.go\n===OLD===",
+		"OLD is mandatory",
+		"if you cannot quote the exact OLD block, output exactly NO_CHANGE",
+		"must not duplicate code already present in SOURCE",
+		"no markdown fences, Git diff syntax, or explanatory prose",
+	}
+	for _, want := range wants {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("program patch prompt missing %q\n%s", want, prompt)
 		}
 	}
 }
