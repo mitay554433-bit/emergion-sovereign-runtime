@@ -50,7 +50,7 @@ func TestParseProgramPatchRejectsOtherTarget(t *testing.T) {
 }
 
 func TestParseProgramEdit(t *testing.T) {
-	oldText, newText, noChange, err := parseProgramEdit("EDIT/1\nOLD:\nold\n===NEW===\nnew\n===END===")
+	oldText, newText, noChange, err := parseProgramEdit("EDIT/1\nOLD:\nold\n===NEW===\nnew\n===END===", "internal/a.go")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,8 +59,32 @@ func TestParseProgramEdit(t *testing.T) {
 	}
 }
 
+func TestParseProgramEditAcceptsObservedGemmaFraming(t *testing.T) {
+	oldText, newText, noChange, err := parseProgramEdit("EDIT/1\nTARGET:internal/a.go\n===OLD===\nold\n===NEW===\nnew", "internal/a.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if noChange || oldText != "old" || newText != "new" {
+		t.Fatalf("edit = old %q new %q noChange=%v", oldText, newText, noChange)
+	}
+}
+
+func TestParseProgramEditRejectsUnexpectedTarget(t *testing.T) {
+	_, _, _, err := parseProgramEdit("EDIT/1\nTARGET:internal/b.go\n===OLD===\nold\n===NEW===\nnew", "internal/a.go")
+	if err == nil {
+		t.Fatal("unexpectedly accepted edit for another target")
+	}
+}
+
+func TestParseProgramEditRejectsMultipleNewBoundaries(t *testing.T) {
+	_, _, _, err := parseProgramEdit("EDIT/1\n===OLD===\nold\n===NEW===\nnew\n===NEW===\nother", "internal/a.go")
+	if err == nil {
+		t.Fatal("unexpectedly accepted multiple NEW boundaries")
+	}
+}
+
 func TestParseProgramEditAllowsNoChange(t *testing.T) {
-	oldText, newText, noChange, err := parseProgramEdit("NO_CHANGE\n")
+	oldText, newText, noChange, err := parseProgramEdit("NO_CHANGE\n", "internal/a.go")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -82,7 +82,7 @@ func (g GemmaCLI) ProposeProgramPatch(ctx context.Context, in ProgramPatchInput)
 	candidates := []string{stdout.String(), stderr.String(), stdout.String() + "\n" + stderr.String()}
 	var parseErr error
 	for _, candidate := range candidates {
-		oldText, newText, noChange, err := parseProgramEdit(candidate)
+		oldText, newText, noChange, err := parseProgramEdit(candidate, target)
 		if err != nil {
 			// Preserve compatibility with already-valid governed patch producers while
 			// the live Gemma contract uses EDIT/1. Malformed raw diffs still fail.
@@ -171,7 +171,7 @@ Rules:
 `
 }
 
-func parseProgramEdit(raw string) (string, string, bool, error) {
+func parseProgramEdit(raw, target string) (string, string, bool, error) {
 	text := strings.TrimSpace(raw)
 	if text == "" {
 		return "", "", false, fmt.Errorf("empty program proposal")
@@ -183,20 +183,50 @@ func parseProgramEdit(raw string) (string, string, bool, error) {
 		return "", "", false, fmt.Errorf("program edit contains unsupported output")
 	}
 
-	const prefix = "EDIT/1\nOLD:\n"
-	const middle = "\n===NEW===\n"
-	const suffix = "\n===END==="
-	if !strings.HasPrefix(text, prefix) || !strings.HasSuffix(text, suffix) {
+	lines := strings.Split(text, "\n")
+	if len(lines) == 0 || lines[0] != "EDIT/1" {
 		return "", "", false, fmt.Errorf("program edit does not match EDIT/1 contract")
 	}
+	lines = lines[1:]
 
-	body := strings.TrimSuffix(strings.TrimPrefix(text, prefix), suffix)
-	if strings.Count(body, middle) != 1 {
+	if len(lines) > 0 && strings.HasPrefix(lines[0], "TARGET:") {
+		proposalTarget := strings.TrimSpace(strings.TrimPrefix(lines[0], "TARGET:"))
+		if proposalTarget != target {
+			return "", "", false, fmt.Errorf("program edit targets unexpected file")
+		}
+		lines = lines[1:]
+	}
+	if len(lines) == 0 || (lines[0] != "OLD:" && lines[0] != "===OLD===") {
+		return "", "", false, fmt.Errorf("program edit does not match EDIT/1 contract")
+	}
+	lines = lines[1:]
+
+	newBoundary := -1
+	for i, line := range lines {
+		if line == "===NEW===" {
+			if newBoundary >= 0 {
+				return "", "", false, fmt.Errorf("program edit must contain one NEW boundary")
+			}
+			newBoundary = i
+		}
+	}
+	if newBoundary < 0 {
 		return "", "", false, fmt.Errorf("program edit must contain one NEW boundary")
 	}
-	parts := strings.SplitN(body, middle, 2)
-	oldText := parts[0]
-	newText := parts[1]
+
+	oldLines := lines[:newBoundary]
+	newLines := lines[newBoundary+1:]
+	if len(newLines) > 0 && newLines[len(newLines)-1] == "===END===" {
+		newLines = newLines[:len(newLines)-1]
+	}
+	for _, line := range newLines {
+		if line == "===END===" {
+			return "", "", false, fmt.Errorf("program edit END boundary must terminate proposal")
+		}
+	}
+
+	oldText := strings.Join(oldLines, "\n")
+	newText := strings.Join(newLines, "\n")
 	if oldText == "" {
 		return "", "", false, fmt.Errorf("program edit OLD is empty")
 	}
