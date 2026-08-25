@@ -344,6 +344,8 @@ func (r Runtime) resolveRequiredCapability(
 		return
 	}
 
+	explicitProviders := strings.TrimSpace(em.REL["capability_providers"])
+
 	em.REL["capability_resolution"] = "UNRESOLVED"
 	delete(em.REL, "capability_composition")
 	delete(em.REL, "capability_providers")
@@ -385,6 +387,29 @@ func (r Runtime) resolveRequiredCapability(
 
 	recipe := requiredCapabilityRecipe(required)
 	if len(recipe) == 0 {
+		return
+	}
+
+	if explicitProviders != "" {
+		population, ok := acceptedCapabilityProviderPopulation(required, st)
+		if !ok {
+			return
+		}
+
+		valid := false
+		for _, providers := range population {
+			if providers == explicitProviders {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return
+		}
+
+		em.REL["capability_resolution"] = "COMPOSABLE_CANDIDATE"
+		em.REL["capability_composition"] = strings.Join(recipe, "+")
+		em.REL["capability_providers"] = explicitProviders
 		return
 	}
 

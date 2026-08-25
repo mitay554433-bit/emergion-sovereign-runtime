@@ -4089,3 +4089,148 @@ func TestAnalyzedCandidateAdmissionPreservesDistinctProviderTrajectoryIdentities
 		}
 	}
 }
+
+func TestAnalyzedCandidateAdmissionPreservesExplicitProviderTupleBinding(t *testing.T) {
+	root := t.TempDir()
+
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	accepted := []core.EmergION{
+		{
+			IDN: "E-ANALYZE-A",
+			STA: core.StateAccepted,
+			CAP: []string{"ANALYZE"},
+		},
+		{
+			IDN: "E-CMP-A",
+			STA: core.StateAccepted,
+			CAP: []string{"CMP"},
+		},
+		{
+			IDN: "E-CMP-B",
+			STA: core.StateAccepted,
+			CAP: []string{"CMP"},
+		},
+		{
+			IDN: "E-RLT-A",
+			STA: core.StateAccepted,
+			CAP: []string{"RLT"},
+		},
+	}
+
+	boundary := core.EmptyState()
+	for _, em := range accepted {
+		boundary.Accepted[em.IDN] = em
+	}
+
+	r := Runtime{
+		Store:    s,
+		Reasoner: coverageRecaptureReasoner{},
+	}
+
+	wantProviders := "ANALYZE:E-ANALYZE-A,CMP:E-CMP-B,RLT:E-RLT-A"
+
+	analysis := reason.Result{
+		Summary: "explicit deterministic provider trajectory",
+		Relationships: map[string]string{
+			"source_name":            "provider-trajectory-b",
+			"required_capability":    "DERIVE_CAPABILITY",
+			"capability_resolution":  "COMPOSABLE_CANDIDATE",
+			"capability_composition": "ANALYZE+CMP+RLT",
+			"capability_providers":   wantProviders,
+		},
+		Capabilities: []string{"OBS"},
+		Facts:        []string{"source_preserved"},
+		Risk:         "L",
+	}
+
+	em, duplicate, err := r.admitAnalyzedCandidate(
+		context.Background(),
+		"provider-trajectory-b",
+		[]byte(wantProviders),
+		"provider_population",
+		boundary,
+		"",
+		analysis,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate {
+		t.Fatal("explicit provider trajectory unexpectedly duplicate")
+	}
+
+	if got := em.REL["capability_providers"]; got != wantProviders {
+		t.Fatalf(
+			"explicit provider binding changed during admission: got %q want %q",
+			got,
+			wantProviders,
+		)
+	}
+
+	wantEdges := "E-ANALYZE-A->E-CMP-B,E-CMP-B->E-RLT-A"
+	if got := em.REL["capability_provider_edge_proposal"]; got != wantEdges {
+		t.Fatalf(
+			"provider edge proposal changed during admission: got %q want %q",
+			got,
+			wantEdges,
+		)
+	}
+
+	if em.STA != core.StateAtGOV {
+		t.Fatalf(
+			"provider trajectory state = %q want %q",
+			em.STA,
+			core.StateAtGOV,
+		)
+	}
+
+	if !em.VAL.Recoil || !em.VAL.WVC {
+		t.Fatal("provider trajectory bypassed canonical RECOIL/WVC admission")
+	}
+}
+
+func TestResolveRequiredCapabilityRejectsInvalidExplicitProviderTupleWithoutSubstitution(t *testing.T) {
+	st := core.EmptyState()
+
+	st.Accepted["E-ANALYZE-A"] = core.EmergION{
+		IDN: "E-ANALYZE-A",
+		STA: core.StateAccepted,
+		CAP: []string{"ANALYZE"},
+	}
+	st.Accepted["E-CMP-A"] = core.EmergION{
+		IDN: "E-CMP-A",
+		STA: core.StateAccepted,
+		CAP: []string{"CMP"},
+	}
+	st.Accepted["E-RLT-A"] = core.EmergION{
+		IDN: "E-RLT-A",
+		STA: core.StateAccepted,
+		CAP: []string{"RLT"},
+	}
+
+	em := core.EmergION{
+		REL: map[string]string{
+			"required_capability":  "DERIVE_CAPABILITY",
+			"capability_providers": "ANALYZE:E-ANALYZE-A,CMP:E-CMP-NOT-ACCEPTED,RLT:E-RLT-A",
+		},
+	}
+
+	r := Runtime{}
+	r.resolveRequiredCapability(&em, st)
+
+	if got := em.REL["capability_resolution"]; got != "UNRESOLVED" {
+		t.Fatalf("invalid explicit provider tuple resolution = %q want UNRESOLVED", got)
+	}
+
+	if got := em.REL["capability_providers"]; got != "" {
+		t.Fatalf("invalid explicit provider tuple was substituted with %q", got)
+	}
+
+	if got := em.REL["capability_composition"]; got != "" {
+		t.Fatalf("invalid explicit provider tuple produced composition %q", got)
+	}
+}
