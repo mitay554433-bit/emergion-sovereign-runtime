@@ -4017,6 +4017,7 @@ func TestAnalyzedCandidateAdmissionPreservesDistinctProviderTrajectoryIdentities
 		"provider_population",
 		boundary,
 		"",
+		"",
 		analysisA,
 	)
 	if err != nil {
@@ -4032,6 +4033,7 @@ func TestAnalyzedCandidateAdmissionPreservesDistinctProviderTrajectoryIdentities
 		trajectoryB,
 		"provider_population",
 		boundary,
+		"",
 		"",
 		analysisB,
 	)
@@ -4153,6 +4155,7 @@ func TestAnalyzedCandidateAdmissionPreservesExplicitProviderTupleBinding(t *test
 		[]byte(wantProviders),
 		"provider_population",
 		boundary,
+		"",
 		"",
 		analysis,
 	)
@@ -4282,6 +4285,7 @@ func TestMaterializeCapabilityProviderPopulationAdmitsAllDeterministicTrajectori
 		"DERIVE_CAPABILITY",
 		boundary,
 		"",
+		"",
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -4361,6 +4365,265 @@ func TestMaterializeCapabilityProviderPopulationAdmitsAllDeterministicTrajectori
 
 		if _, ok := st.Accepted[em.IDN]; ok {
 			t.Fatalf("materialized trajectory %s self-authorized into REG", em.IDN)
+		}
+	}
+}
+
+func TestProviderPopulationOriginLineageMustBeRuntimeOwnedAndPreserveBranchIdentity(t *testing.T) {
+	root := t.TempDir()
+
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	boundary := core.EmptyState()
+
+	accepted := []core.EmergION{
+		{
+			IDN: "E-ANALYZE-A",
+			STA: core.StateAccepted,
+			CAP: []string{"ANALYZE"},
+		},
+		{
+			IDN: "E-CMP-A",
+			STA: core.StateAccepted,
+			CAP: []string{"CMP"},
+		},
+		{
+			IDN: "E-CMP-B",
+			STA: core.StateAccepted,
+			CAP: []string{"CMP"},
+		},
+		{
+			IDN: "E-RLT-A",
+			STA: core.StateAccepted,
+			CAP: []string{"RLT"},
+		},
+	}
+
+	for _, em := range accepted {
+		boundary.Accepted[em.IDN] = em
+	}
+
+	r := Runtime{
+		Store:    s,
+		Reasoner: coverageRecaptureReasoner{},
+	}
+
+	originID := "E-BRIDGEGAP-ORIGIN"
+
+	// The reasoner is not allowed to assert runtime-owned causal lineage.
+	reasonerClaim := reason.Result{
+		Summary: "reasoner attempted origin claim",
+		Relationships: map[string]string{
+			"source_name": "provider-population-origin-claim",
+			"origin":      originID,
+		},
+		Capabilities: []string{"OBS"},
+		Facts:        []string{"source_preserved"},
+		Risk:         "L",
+	}
+
+	if _, _, err := r.admitAnalyzedCandidate(
+		context.Background(),
+		"provider-population-origin-claim",
+		[]byte("reasoner-origin-claim"),
+		"provider_population",
+		boundary,
+		"",
+		"",
+		reasonerClaim,
+	); err == nil {
+		t.Fatal("reasoner-origin claim unexpectedly bypassed runtime-owned lineage boundary")
+	}
+
+	// Existing population materialization must still preserve distinct branches.
+	got, err := r.materializeCapabilityProviderPopulation(
+		context.Background(),
+		"DERIVE_CAPABILITY",
+		boundary,
+		"",
+		"",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(got) != 2 {
+		t.Fatalf("materialized trajectories = %d want 2", len(got))
+	}
+
+	if got[0].IDN == got[1].IDN {
+		t.Fatalf("provider trajectories collapsed to identity %q", got[0].IDN)
+	}
+
+	if got[0].MEM.SourceHash == got[1].MEM.SourceHash {
+		t.Fatalf(
+			"provider trajectories collapsed to source hash %q",
+			got[0].MEM.SourceHash,
+		)
+	}
+
+	// No current production path may fabricate origin before the runtime binds it.
+	for i, em := range got {
+		if gotOrigin := em.REL["origin"]; gotOrigin != "" {
+			t.Fatalf(
+				"trajectory %d fabricated origin before runtime binding: %q",
+				i,
+				gotOrigin,
+			)
+		}
+
+		if em.STA != core.StateAtGOV {
+			t.Fatalf(
+				"trajectory %d state = %q want %q",
+				i,
+				em.STA,
+				core.StateAtGOV,
+			)
+		}
+
+		if !em.VAL.Recoil || !em.VAL.WVC {
+			t.Fatalf("trajectory %d bypassed RECOIL/WVC", i)
+		}
+	}
+}
+
+func TestMaterializedProviderPopulationCanShareRuntimeOwnedOriginWithoutCollapsingBranches(t *testing.T) {
+	root := t.TempDir()
+
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	boundary := core.EmptyState()
+
+	accepted := []core.EmergION{
+		{
+			IDN: "E-ANALYZE-A",
+			STA: core.StateAccepted,
+			CAP: []string{"ANALYZE"},
+		},
+		{
+			IDN: "E-CMP-A",
+			STA: core.StateAccepted,
+			CAP: []string{"CMP"},
+		},
+		{
+			IDN: "E-CMP-B",
+			STA: core.StateAccepted,
+			CAP: []string{"CMP"},
+		},
+		{
+			IDN: "E-RLT-A",
+			STA: core.StateAccepted,
+			CAP: []string{"RLT"},
+		},
+	}
+
+	for _, em := range accepted {
+		boundary.Accepted[em.IDN] = em
+	}
+
+	r := Runtime{
+		Store:    s,
+		Reasoner: coverageRecaptureReasoner{},
+	}
+
+	originID := "E-BRIDGEGAP-ORIGIN"
+
+	got, err := r.materializeCapabilityProviderPopulation(
+		context.Background(),
+		"DERIVE_CAPABILITY",
+		boundary,
+		"",
+		originID,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(got) != 2 {
+		t.Fatalf("materialized trajectories = %d want 2", len(got))
+	}
+
+	wantProviders := []string{
+		"ANALYZE:E-ANALYZE-A,CMP:E-CMP-A,RLT:E-RLT-A",
+		"ANALYZE:E-ANALYZE-A,CMP:E-CMP-B,RLT:E-RLT-A",
+	}
+
+	for i, em := range got {
+		if gotOrigin := em.REL["origin"]; gotOrigin != originID {
+			t.Fatalf(
+				"trajectory %d origin = %q want %q",
+				i,
+				gotOrigin,
+				originID,
+			)
+		}
+
+		if em.REL["capability_providers"] != wantProviders[i] {
+			t.Fatalf(
+				"trajectory %d providers = %q want %q",
+				i,
+				em.REL["capability_providers"],
+				wantProviders[i],
+			)
+		}
+
+		if em.STA != core.StateAtGOV {
+			t.Fatalf(
+				"trajectory %d state = %q want %q",
+				i,
+				em.STA,
+				core.StateAtGOV,
+			)
+		}
+
+		if !em.VAL.Recoil || !em.VAL.WVC {
+			t.Fatalf("trajectory %d bypassed RECOIL/WVC", i)
+		}
+
+		if _, exists := em.REL["COMPOSITION_KIN"]; exists {
+			t.Fatalf("trajectory %d self-created COMPOSITION_KIN", i)
+		}
+	}
+
+	if got[0].IDN == got[1].IDN {
+		t.Fatalf("provider trajectories collapsed to identity %q", got[0].IDN)
+	}
+
+	if got[0].MEM.SourceHash == got[1].MEM.SourceHash {
+		t.Fatalf(
+			"provider trajectories collapsed to source hash %q",
+			got[0].MEM.SourceHash,
+		)
+	}
+
+	st, err := livefield.Rebuild(mustEvents(t, s))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, em := range got {
+		stored, ok := st.AtGOV[em.IDN]
+		if !ok {
+			t.Fatalf("trajectory %s missing from GOV", em.IDN)
+		}
+
+		if stored.REL["origin"] != originID {
+			t.Fatalf(
+				"stored trajectory %s origin = %q want %q",
+				em.IDN,
+				stored.REL["origin"],
+				originID,
+			)
+		}
+
+		if _, ok := st.Accepted[em.IDN]; ok {
+			t.Fatalf("trajectory %s self-authorized into REG", em.IDN)
 		}
 	}
 }

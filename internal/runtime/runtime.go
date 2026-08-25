@@ -294,6 +294,7 @@ func (r Runtime) materializeCapabilityProviderPopulation(
 	required string,
 	boundary core.State,
 	governedState string,
+	runtimeOrigin string,
 ) ([]core.EmergION, error) {
 	population, ok := acceptedCapabilityProviderPopulation(required, boundary)
 	if !ok {
@@ -329,6 +330,7 @@ func (r Runtime) materializeCapabilityProviderPopulation(
 			"provider_population",
 			boundary,
 			governedState,
+			runtimeOrigin,
 			analysis,
 		)
 		if err != nil {
@@ -1256,6 +1258,7 @@ func (r Runtime) captureBytes(
 		provenance,
 		boundary,
 		governedState,
+		"",
 		analysis,
 	)
 }
@@ -1267,6 +1270,7 @@ func (r Runtime) admitAnalyzedCandidate(
 	provenance string,
 	boundary core.State,
 	governedState string,
+	runtimeOrigin string,
 	analysis reason.Result,
 ) (core.EmergION, bool, error) {
 	analysis = reason.Calibrate(analysis)
@@ -1326,6 +1330,10 @@ func (r Runtime) admitAnalyzedCandidate(
 	if em.REL == nil {
 		em.REL = map[string]string{}
 	}
+	if runtimeOrigin != "" {
+		em.REL["origin"] = runtimeOrigin
+	}
+
 	if strings.TrimSpace(governedState) != "" {
 		em.REL["governed_state"] = "accepted_context_present"
 		em.VAL.Facts = append(em.VAL.Facts, "living_state_projected")
