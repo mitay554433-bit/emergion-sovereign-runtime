@@ -1168,6 +1168,26 @@ func (r Runtime) captureBytes(
 		return core.EmergION{}, false, err
 	}
 
+	return r.admitAnalyzedCandidate(
+		ctx,
+		name,
+		b,
+		provenance,
+		boundary,
+		governedState,
+		analysis,
+	)
+}
+
+func (r Runtime) admitAnalyzedCandidate(
+	ctx context.Context,
+	name string,
+	b []byte,
+	provenance string,
+	boundary core.State,
+	governedState string,
+	analysis reason.Result,
+) (core.EmergION, bool, error) {
 	analysis = reason.Calibrate(analysis)
 	fieldDelta := deriveFieldDelta(boundary.Accepted, analysis)
 	if err := r.validateLineage(&analysis); err != nil {
