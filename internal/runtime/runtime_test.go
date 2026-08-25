@@ -3926,3 +3926,44 @@ func TestDeriveDeltaIncludesDeterministicBuildGraphEvolution(t *testing.T) {
 		}
 	}
 }
+func TestAcceptedCapabilityProviderPopulationPreservesAllDeterministicCombinations(t *testing.T) {
+	st := core.EmptyState()
+
+	st.Accepted["E-ANALYZE-A"] = core.EmergION{
+		IDN: "E-ANALYZE-A",
+		STA: core.StateAccepted,
+		CAP: []string{"ANALYZE"},
+	}
+	st.Accepted["E-CMP-A"] = core.EmergION{
+		IDN: "E-CMP-A",
+		STA: core.StateAccepted,
+		CAP: []string{"CMP"},
+	}
+	st.Accepted["E-CMP-B"] = core.EmergION{
+		IDN: "E-CMP-B",
+		STA: core.StateAccepted,
+		CAP: []string{"CMP"},
+	}
+	st.Accepted["E-RLT-A"] = core.EmergION{
+		IDN: "E-RLT-A",
+		STA: core.StateAccepted,
+		CAP: []string{"RLT"},
+	}
+
+	population, ok := acceptedCapabilityProviderPopulation(
+		"DERIVE_CAPABILITY",
+		st,
+	)
+	if !ok {
+		t.Fatal("accepted provider population unexpectedly unresolved")
+	}
+
+	want := []string{
+		"ANALYZE:E-ANALYZE-A,CMP:E-CMP-A,RLT:E-RLT-A",
+		"ANALYZE:E-ANALYZE-A,CMP:E-CMP-B,RLT:E-RLT-A",
+	}
+
+	if !reflect.DeepEqual(population, want) {
+		t.Fatalf("population = %#v want %#v", population, want)
+	}
+}

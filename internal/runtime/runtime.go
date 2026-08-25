@@ -230,6 +230,65 @@ func acceptedCapabilityProviders(
 	return strings.Join(providers, ","), true
 }
 
+func acceptedCapabilityProviderPopulation(
+	required string,
+	st core.State,
+) ([]string, bool) {
+	recipe := requiredCapabilityRecipe(required)
+	if len(recipe) == 0 {
+		return nil, false
+	}
+
+	providerSets := make([][]string, 0, len(recipe))
+
+	for _, requiredPart := range recipe {
+		requiredPart = strings.ToUpper(strings.TrimSpace(requiredPart))
+
+		matches := make([]string, 0)
+		for id, em := range st.Accepted {
+			if em.STA != core.StateAccepted {
+				continue
+			}
+
+			for _, capability := range em.CAP {
+				if strings.ToUpper(strings.TrimSpace(capability)) != requiredPart {
+					continue
+				}
+
+				matches = append(matches, id)
+				break
+			}
+		}
+
+		if len(matches) == 0 {
+			return nil, false
+		}
+
+		sort.Strings(matches)
+		providerSets = append(providerSets, matches)
+	}
+
+	population := []string{""}
+
+	for i, matches := range providerSets {
+		requiredPart := strings.ToUpper(strings.TrimSpace(recipe[i]))
+
+		next := make([]string, 0, len(population)*len(matches))
+		for _, prefix := range population {
+			for _, id := range matches {
+				entry := requiredPart + ":" + id
+				if prefix != "" {
+					entry = prefix + "," + entry
+				}
+				next = append(next, entry)
+			}
+		}
+		population = next
+	}
+
+	return population, true
+}
+
 type capabilityProviderEdge struct {
 	From string
 	To   string
