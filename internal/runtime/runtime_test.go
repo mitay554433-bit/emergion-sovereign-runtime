@@ -4053,6 +4053,43 @@ func TestAcceptedCapabilityProviderPopulationPreservesAllDeterministicCombinatio
 	}
 }
 
+func TestEstablishFactProviderPopulationPreservesDeterministicCombinations(t *testing.T) {
+	st := core.EmptyState()
+
+	st.Accepted["E-OBS-A"] = core.EmergION{
+		IDN: "E-OBS-A",
+		STA: core.StateAccepted,
+		CAP: []string{"OBS"},
+	}
+	st.Accepted["E-VLD-A"] = core.EmergION{
+		IDN: "E-VLD-A",
+		STA: core.StateAccepted,
+		CAP: []string{"VLD"},
+	}
+	st.Accepted["E-VLD-B"] = core.EmergION{
+		IDN: "E-VLD-B",
+		STA: core.StateAccepted,
+		CAP: []string{"VLD"},
+	}
+
+	population, ok := acceptedCapabilityProviderPopulation(
+		"ESTABLISH_FACT",
+		st,
+	)
+	if !ok {
+		t.Fatal("ESTABLISH_FACT provider population unexpectedly unresolved")
+	}
+
+	want := []string{
+		"OBS:E-OBS-A,VLD:E-VLD-A",
+		"OBS:E-OBS-A,VLD:E-VLD-B",
+	}
+
+	if !reflect.DeepEqual(population, want) {
+		t.Fatalf("population = %#v want %#v", population, want)
+	}
+}
+
 func TestAnalyzedCandidateAdmissionPreservesDistinctProviderTrajectoryIdentitiesAtGOV(t *testing.T) {
 	root := t.TempDir()
 
