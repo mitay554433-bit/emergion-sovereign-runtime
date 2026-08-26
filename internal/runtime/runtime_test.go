@@ -2654,13 +2654,45 @@ func TestEstablishFactRequirementComposesFromSemanticCapabilities(t *testing.T) 
 }
 
 func TestDeriveRelationshipRequirementUsesAcceptedCapability(t *testing.T) {
-	st := core.EmptyState()
-	st.Accepted["E-ACCEPTED-RLT"] = core.EmergION{
-		IDN: "E-ACCEPTED-RLT",
-		STA: core.StateAccepted,
-		CAP: []string{"RLT"},
-	}
 
+	provider := core.EmergION{
+		IDN: "E-ACCEPTED-RLT",
+		STA: core.StateAtGOV,
+		CAP: []string{"RLT"},
+		MEM: core.Memory{SourceHash: "derive-relationship-rlt-source", Bytes: 1, Stored: 1},
+		VAL: core.Validation{Recoil: true, WVC: true},
+		EVO: core.Evolution{Version: 1},
+	}
+	root := t.TempDir()
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveCandidate(provider); err != nil {
+		t.Fatal(err)
+	}
+	approved, decision, err := gov.Decide(provider, gov.Approve, "HUMAN_FINAL", "accept RLT relationship provider")
+	if err != nil {
+		t.Fatal(err)
+	}
+	decisionID, err := s.SaveDecision(decision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	acceptedProvider, receipt, err := reg.Accept(approved, decisionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if acceptedProvider.STA != core.StateAccepted {
+		t.Fatalf("provider was not REG accepted: %s", acceptedProvider.STA)
+	}
+	if _, err := s.SaveAccepted(receipt); err != nil {
+		t.Fatal(err)
+	}
+	st, err := livefield.Rebuild(mustEvents(t, s))
+	if err != nil {
+		t.Fatal(err)
+	}
 	em := core.EmergION{
 		REL: map[string]string{
 			"required_capability": "DERIVE_RELATIONSHIP",
