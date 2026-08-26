@@ -572,7 +572,8 @@ func TestFullGovernedEmergenceLoop(t *testing.T) {
 			result: reason.Result{
 				Summary: "corrected implementation",
 				Relationships: map[string]string{
-					"source_name": "corrected.txt",
+					"source_name":         "corrected.txt",
+					"required_capability": "DERIVE_CAPABILITY",
 				},
 				Capabilities: []string{"OBS", "CMP"},
 				Facts:        []string{"source_preserved"},
@@ -691,6 +692,9 @@ func TestFullGovernedEmergenceLoop(t *testing.T) {
 	if final.STA != core.StateAccepted {
 		t.Fatalf("final state = %s", final.STA)
 	}
+	if final.REL["required_capability"] != "DERIVE_CAPABILITY" {
+		t.Fatalf("final required capability = %q want DERIVE_CAPABILITY", final.REL["required_capability"])
+	}
 	if final.EVO.Supersedes != original.IDN {
 		t.Fatalf(
 			"final lineage = %q want %q",
@@ -701,8 +705,27 @@ func TestFullGovernedEmergenceLoop(t *testing.T) {
 	if len(final.EVO.Delta) == 0 {
 		t.Fatal("final governed delta missing")
 	}
+	replayed, err := livefield.Rebuild(mustEvents(t, s))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(replayed.Accepted) != len(state.Accepted) {
+		t.Fatalf("replayed accepted count = %d want %d", len(replayed.Accepted), len(state.Accepted))
+	}
+	replayedFinal, ok := replayed.Accepted[successor.IDN]
+	if !ok {
+		t.Fatal("successor disappeared on replay")
+	}
+	if replayedFinal.IDN != final.IDN {
+		t.Fatalf("replayed ID = %q want %q", replayedFinal.IDN, final.IDN)
+	}
+	if replayedFinal.REL["required_capability"] != final.REL["required_capability"] {
+		t.Fatalf("replayed required capability = %q want %q", replayedFinal.REL["required_capability"], final.REL["required_capability"])
+	}
+	if replayedFinal.EVO.Supersedes != final.EVO.Supersedes {
+		t.Fatalf("replayed lineage = %q want %q", replayedFinal.EVO.Supersedes, final.EVO.Supersedes)
+	}
 }
-
 func mustEvents(t *testing.T, s *store.Store) []core.Event {
 	t.Helper()
 
