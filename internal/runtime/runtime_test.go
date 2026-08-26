@@ -2499,13 +2499,43 @@ func TestRequiredCapabilityProducesComposableCandidateWhenAllInputsExist(t *test
 func TestRequiredCapabilityUsesREGAcceptedCapability(t *testing.T) {
 	accepted := core.EmergION{
 		IDN: "E-ACCEPTED-RLT",
-		STA: core.StateAccepted,
+		STA: core.StateAtGOV,
 		CAP: []string{"RLT"},
+		MEM: core.Memory{SourceHash: "accepted-rlt-source", Bytes: 1, Stored: 1},
+		VAL: core.Validation{Recoil: true, WVC: true},
+		EVO: core.Evolution{Version: 1},
 	}
 
-	st := core.EmptyState()
-	st.Accepted[accepted.IDN] = accepted
-
+	root := t.TempDir()
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveCandidate(accepted); err != nil {
+		t.Fatal(err)
+	}
+	approved, decision, err := gov.Decide(accepted, gov.Approve, "HUMAN_FINAL", "accept RLT provider")
+	if err != nil {
+		t.Fatal(err)
+	}
+	decisionID, err := s.SaveDecision(decision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	acceptedProvider, receipt, err := reg.Accept(approved, decisionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if acceptedProvider.STA != core.StateAccepted {
+		t.Fatalf("provider was not REG accepted: %s", acceptedProvider.STA)
+	}
+	if _, err := s.SaveAccepted(receipt); err != nil {
+		t.Fatal(err)
+	}
+	st, err := livefield.Rebuild(mustEvents(t, s))
+	if err != nil {
+		t.Fatal(err)
+	}
 	em := core.EmergION{
 		REL: map[string]string{
 			"required_capability": "DERIVE_CAPABILITY",
