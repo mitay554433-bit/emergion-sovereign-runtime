@@ -173,12 +173,14 @@ func (g GemmaCLI) Validate() error {
 	return nil
 }
 
-const mxpdGrammar = `root ::= summary risk fact capability? end
+const mxpdGrammar = `root ::= summary risk fact capability? facet? end
 summary ::= "S|" text "\n"
 risk ::= "K|" ("L" | "M" | "H") "\n"
 fact ::= "F|" text "\n"
 capability ::= "C|" capability-token "\n"
 capability-token ::= "OBS" | "CMP" | "RLT" | "VLD" | "REASON" | "ANALYZE" | "DRAFT" | "SIMULATE" | "PROGRAM" | "VERSION" | "PATENT_EVIDENCE" | "READ" | "SEND" | "PRODUCT" | "PRICE" | "LINK" | "RECEIPT" | "TRANSFER" | "CUSTOMER" | "LEAD" | "SALE" | "SUPPORT" | "SITE" | "STORE" | "DEPLOY" | "PATENT" | "GRANT" | "MARKET" | "MA"
+facet ::= "T|" facet-token "\n"
+facet-token ::= "FIELD_COMMAND" | "EMERGENCE_CAPTURE" | "PROGRAM_FORGE" | "PRODUCT_STORE" | "CUSTOMERS_SALES" | "COMMUNICATIONS" | "PAYMENTS_FINANCE" | "GRANT_FUNDING" | "PATENT_IP" | "MA_PARTNERSHIPS" | "DOCS_PROJECTION" | "ANALYTICS_FORECAST"
 end ::= "Z"
 text ::= safe-first text-tail | label-first label-next text-tail
 safe-first ::= [ABDIJOPQRVWXYZabdijopqrvwxyz0-9]
@@ -457,9 +459,10 @@ S = concise natural-language statement of the main meaning proved by SOURCE.
 K = L, M, or H.
 F = one concrete source-supported observation or verified state.
 C = one reusable behavior, mechanism, or operational ability evidenced by SOURCE.
+T = optional canonical operational facet evidenced by SOURCE.
 Z = final terminator.
 
-S, F, and C MUST come from SOURCE.
+S, F, C, and T MUST come from SOURCE.
 S must state SOURCE meaning directly and must not repeat instruction wording such as
 "summary supported by SOURCE", "meaningful natural-language summary", or field definitions.
 F must describe what is evidenced or verified.
