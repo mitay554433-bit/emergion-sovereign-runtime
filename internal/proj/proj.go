@@ -408,6 +408,34 @@ th,td{padding:.5rem;font-size:.9rem}
 </tbody>
 </table>
 
+<h2>SAW WORK PROJECTION</h2>
+<p class="small">Deterministic SAW artifacts derived from accepted governed composition.</p>
+
+<table>
+<thead>
+<tr>
+<th>SAW</th>
+<th>SAAB</th>
+<th>Member PRMs</th>
+<th>Capabilities</th>
+<th>Commercial</th>
+<th>CPSL</th>
+</tr>
+</thead>
+<tbody>
+{{range .SAWs}}
+<tr>
+<td><code>{{.ID}}</code></td>
+<td><code>{{.SAABID}}</code></td>
+<td>{{.MemberPRMIDs}}</td>
+<td>{{.Capabilities}}</td>
+<td>{{.Commercial}}</td>
+<td><pre>{{.CPSL}}</pre></td>
+</tr>
+{{end}}
+</tbody>
+</table>
+
 <script>
 async function humanFinal(id, decision) {
   if (!confirm(decision + " " + id + "?")) return;
@@ -436,6 +464,11 @@ async function humanFinal(id, decision) {
 		return err
 	}
 
+	saws, err := extractSAWs(st)
+	if err != nil {
+		return err
+	}
+
 	spatial := spatialEmergIONs(st)
 	facetOrder := spatialFacetOrder()
 
@@ -444,6 +477,7 @@ async function humanFinal(id, decision) {
 		"TipHash":     st.TipHash,
 		"Rows":        rows(st),
 		"Convergence": convergence,
+		"SAWs":        saws,
 		"Spatial":     spatial,
 		"FacetOrder":  facetOrder,
 	})
