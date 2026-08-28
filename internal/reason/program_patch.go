@@ -115,6 +115,12 @@ func (g GemmaCLI) ProposeProgramPatch(ctx context.Context, in ProgramPatchInput)
 		return nil, fmt.Errorf("read program proposal output: %w", readErr)
 	}
 
+	if filepath.Base(g.Binary) == "llama-cli" {
+		prefix := "User:\n" + strings.TrimSuffix(prompt, "\n") + "\n\nAssistant:\n"
+		if strings.HasPrefix(string(fileOutput), prefix) {
+			fileOutput = []byte(strings.TrimPrefix(string(fileOutput), prefix))
+		}
+	}
 	candidates := []string{
 		string(fileOutput),
 		stdout.String(),
