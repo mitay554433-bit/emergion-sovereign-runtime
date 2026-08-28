@@ -108,14 +108,13 @@ func TestProposeOneProgramPatchAdmitsPatchAtGOVWithRuntimeOrigin(t *testing.T) {
 	fake := filepath.Join(root, "fake-gemma")
 	script := "#!/bin/sh\n" +
 		"cat <<'PATCH'\n" +
-		"diff --git a/internal/a.go b/internal/a.go\n" +
-		"--- a/internal/a.go\n" +
-		"+++ b/internal/a.go\n" +
-		"@@ -1,3 +1,3 @@\n" +
-		" package internal\n" +
-		" \n" +
-		"-const value = 1\n" +
-		"+const value = 2\n" +
+		"EDIT/1\n" +
+		"TARGET:internal/a.go\n" +
+		"===OLD===\n" +
+		"const value = 1\n" +
+		"===NEW===\n" +
+		"const value = 2\n" +
+		"===END===\n" +
 		"PATCH\n"
 	if err := os.WriteFile(fake, []byte(script), 0o700); err != nil {
 		t.Fatal(err)

@@ -173,12 +173,13 @@ func (g GemmaCLI) Validate() error {
 	return nil
 }
 
-const mxpdGrammar = `root ::= summary risk fact capability? facet? end
+const mxpdGrammar = `root ::= summary risk fact relationship? capability? facet? end
 summary ::= "S|" text "\n"
 risk ::= "K|" ("L" | "M" | "H") "\n"
 fact ::= "F|" text "\n"
 capability ::= "C|" capability-token "\n"
 capability-token ::= "OBS" | "CMP" | "RLT" | "VLD" | "REASON" | "ANALYZE" | "DRAFT" | "SIMULATE" | "PROGRAM" | "VERSION" | "PATENT_EVIDENCE" | "READ" | "SEND" | "PRODUCT" | "PRICE" | "LINK" | "RECEIPT" | "TRANSFER" | "CUSTOMER" | "LEAD" | "SALE" | "SUPPORT" | "SITE" | "STORE" | "DEPLOY" | "PATENT" | "GRANT" | "MARKET" | "MA"
+relationship ::= "L|COMPOSITION_KIN|" text "\n"
 facet ::= "T|" facet-token "\n"
 facet-token ::= "FIELD_COMMAND" | "EMERGENCE_CAPTURE" | "PROGRAM_FORGE" | "PRODUCT_STORE" | "CUSTOMERS_SALES" | "COMMUNICATIONS" | "PAYMENTS_FINANCE" | "GRANT_FUNDING" | "PATENT_IP" | "MA_PARTNERSHIPS" | "DOCS_PROJECTION" | "ANALYTICS_FORECAST"
 end ::= "Z"
@@ -192,29 +193,50 @@ text-tail ::= [^|\r\n]*
 func gemmaArgs(g GemmaCLI, prompt string) []string {
 	args := []string{
 		"-m", g.Model,
-		"-p", prompt,
+	}
+
+	if filepath.Base(g.Binary) == "llama-completion" {
+		args = append(args,
+			"-sys", prompt,
+			"-p", "Execute the instruction now.",
+		)
+	} else {
+		args = append(args,
+			"-p", prompt,
+		)
+	}
+
+	args = append(args,
 		"-n", strconv.Itoa(g.MaxTokens),
 		"-c", strconv.Itoa(g.Context),
 		"-t", strconv.Itoa(g.Threads),
 		"--temp", "0.1",
-	}
+	)
 
 	args = append(args, g.ExtraArgs...)
 
 	// Execution-boundary invariants. These intentionally come last.
+	if filepath.Base(g.Binary) != "llama-completion" {
+		args = append(args, "--log-disable")
+	}
+
 	args = append(args,
-		"--log-disable",
 		"--color", "off",
 		"--grammar", mxpdGrammar,
 		"--single-turn",
 		"--no-display-prompt",
-		"--output-file", "/dev/stdout",
 	)
+
+	if filepath.Base(g.Binary) != "llama-completion" {
+		args = append(args, "--output-file", "/dev/stdout")
+	}
 
 	return args
 }
 
 func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
+	fmt.Fprintln(os.Stderr, "ANALYZE_START")
+	defer fmt.Fprintln(os.Stderr, "ANALYZE_END")
 	if err := g.Validate(); err != nil {
 		return Result{}, err
 	}
@@ -263,7 +285,7 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 
 		if runErr != nil {
 			if errors.Is(ctxErr, context.DeadlineExceeded) {
-				return Result{}, fmt.Errorf("Gemma timed out: %w", ctxErr)
+				return Result{}, fmt.Errorf("Gemma timed out: %w: %s", ctxErr, trim(stderr.String(), 1000))
 			}
 			return Result{}, fmt.Errorf(
 				"Gemma failed: %w: %s",
@@ -482,6 +504,8 @@ Generated structure is constrained by the runtime grammar.
 No markdown or explanatory prose.`
 }
 func parseResult(s string) (Result, error) {
+	s = strings.TrimSpace(s)
+	s = strings.TrimSpace(strings.TrimSuffix(s, "[end of text]"))
 	r := Result{Relationships: map[string]string{}}
 	complete := false
 

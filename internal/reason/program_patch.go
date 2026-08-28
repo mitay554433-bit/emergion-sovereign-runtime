@@ -24,6 +24,8 @@ type ProgramPatchInput struct {
 // unified Git diff. It does not mutate the repository and may legitimately
 // return no patch when the evidence does not support a change.
 func (g GemmaCLI) ProposeProgramPatch(ctx context.Context, in ProgramPatchInput) ([]byte, error) {
+	fmt.Fprintf(os.Stderr, "PROGRAM_PROPOSAL_START target=%s\n", in.Name)
+	defer fmt.Fprintf(os.Stderr, "PROGRAM_PROPOSAL_END target=%s\n", in.Name)
 	if err := g.Validate(); err != nil {
 		return nil, err
 	}
@@ -44,7 +46,10 @@ func (g GemmaCLI) ProposeProgramPatch(ctx context.Context, in ProgramPatchInput)
 		return nil, fmt.Errorf("Gemma context too small for bounded program proposal")
 	}
 
-	inputBytes := inputTokens * 3
+	inputBytes := inputTokens*3 - len(buildProgramPatchPrompt(target, "", ""))
+	if inputBytes < 1 {
+		return nil, fmt.Errorf("Gemma context exhausted by program proposal instructions")
+	}
 	governedLimit := inputBytes / 4
 	if len(governed) > governedLimit {
 		governed = governed[:governedLimit]
@@ -62,6 +67,16 @@ func (g GemmaCLI) ProposeProgramPatch(ctx context.Context, in ProgramPatchInput)
 	}
 
 	prompt := buildProgramPatchPrompt(target, source, governed)
+	fmt.Fprintf(
+		os.Stderr,
+		"PROGRAM_PROMPT_SIZE target=%s prompt_bytes=%d source_bytes=%d governed_bytes=%d context=%d max_tokens=%d\n",
+		in.Name,
+		len(prompt),
+		len(source),
+		len(governed),
+		g.Context,
+		g.MaxTokens,
+	)
 
 	outputFile, err := os.CreateTemp("", "unifusion-program-*.txt")
 	if err != nil {
@@ -75,9 +90,11 @@ func (g GemmaCLI) ProposeProgramPatch(ctx context.Context, in ProgramPatchInput)
 	defer os.Remove(outputPath)
 
 	args := programPatchArgs(g, prompt, g.MaxTokens)
-	args = append(args, "--output-file", outputPath)
+	if filepath.Base(g.Binary) != "llama-completion" {
+		args = append(args, "--output-file", outputPath)
+	}
 
-	cctx, cancel := context.WithTimeout(ctx, g.Timeout)
+	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), g.Timeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(cctx, g.Binary, args...)
@@ -88,7 +105,7 @@ func (g GemmaCLI) ProposeProgramPatch(ctx context.Context, in ProgramPatchInput)
 	runErr := cmd.Run()
 	if runErr != nil {
 		if errors.Is(cctx.Err(), context.DeadlineExceeded) {
-			return nil, fmt.Errorf("Gemma program proposal timed out: %w", cctx.Err())
+			return nil, fmt.Errorf("Gemma program proposal timed out: %w: %s", cctx.Err(), trim(stderr.String(), 1000))
 		}
 		return nil, fmt.Errorf("Gemma program proposal failed: %w: %s", runErr, trim(stderr.String(), 500))
 	}
@@ -108,19 +125,11 @@ func (g GemmaCLI) ProposeProgramPatch(ctx context.Context, in ProgramPatchInput)
 	for _, candidate := range candidates {
 		oldText, newText, noChange, err := parseProgramEdit(candidate, target)
 		if err != nil {
-			// Preserve compatibility with already-valid governed patch producers while
-			// the live Gemma contract uses EDIT/1. Malformed raw diffs still fail.
-			patch, rawNoChange, patchErr := parseProgramPatch(candidate, target)
-			if patchErr == nil {
-				if rawNoChange {
-					return nil, nil
-				}
-				return patch, nil
-			}
 			parseErr = err
 			continue
 		}
 		if noChange {
+			fmt.Fprintf(os.Stderr, "PROGRAM_PROPOSAL_RESULT target=%s result=NO_CHANGE\n", in.Name)
 			return nil, nil
 		}
 
@@ -134,24 +143,49 @@ func (g GemmaCLI) ProposeProgramPatch(ctx context.Context, in ProgramPatchInput)
 			parseErr = err
 			continue
 		}
+		fmt.Fprintf(os.Stderr, "PROGRAM_PROPOSAL_RESULT target=%s result=PATCH\n", in.Name)
 		return patch, nil
 	}
 
-	return nil, fmt.Errorf("Gemma program proposal invalid: %w", parseErr)
+	proposal := string(fileOutput)
+	if strings.TrimSpace(proposal) == "" {
+		proposal = stdout.String()
+		if strings.TrimSpace(proposal) == "" {
+			proposal = stderr.String()
+		}
+	}
+	fmt.Fprintf(os.Stderr, "PROGRAM_PROPOSAL_RESULT target=%s result=INVALID\n", in.Name)
+	return nil, fmt.Errorf("Gemma program proposal invalid: %w: proposal=%q", parseErr, trim(proposal, 500))
 }
 
 func programPatchArgs(g GemmaCLI, prompt string, outputTokens int) []string {
 	args := []string{
 		"-m", g.Model,
-		"-p", prompt,
+	}
+
+	if filepath.Base(g.Binary) == "llama-completion" {
+		args = append(args,
+			"-sys", prompt,
+			"-p", "Execute the instruction now.",
+		)
+	} else {
+		args = append(args,
+			"-p", prompt,
+		)
+	}
+
+	args = append(args,
 		"-n", fmt.Sprintf("%d", outputTokens),
 		"-c", fmt.Sprintf("%d", g.Context),
 		"-t", fmt.Sprintf("%d", g.Threads),
 		"--temp", "0.1",
-	}
+	)
+
 	args = append(args, g.ExtraArgs...)
+	if filepath.Base(g.Binary) != "llama-completion" {
+		args = append(args, "--log-disable")
+	}
 	args = append(args,
-		"--log-disable",
 		"--color", "off",
 		"--single-turn",
 		"--no-display-prompt",
@@ -163,44 +197,43 @@ func programPatchArgs(g GemmaCLI, prompt string, outputTokens int) []string {
 func buildProgramPatchPrompt(target, source, governed string) string {
 	return `@L:MXPD/2
 @T:PROGRAM_DELTA
-
 TARGET:` + target + `
 SOURCE:
 ` + source + `
 
-GOVERNED_STATE is comparison context only:
+GOVERNED_STATE:
 ` + governed + `
 
-Determine whether one small code change to TARGET is directly justified by SOURCE plus GOVERNED_STATE and advances the governed system without changing authority boundaries.
-If no exact change is justified, output exactly:
+Choose one small TARGET change justified by SOURCE and GOVERNED_STATE without changing authority boundaries.
+
+If no exact change is justified:
 NO_CHANGE
 
-Otherwise output exactly one bounded edit in this format:
+Otherwise output exactly:
 EDIT/1
 TARGET:` + target + `
 ===OLD===
-<exact complete existing source line or contiguous source lines copied verbatim from SOURCE>
+<exact complete existing line(s) copied from SOURCE>
 ===NEW===
-<replacement line or contiguous replacement lines>
+<replacement complete line(s)>
 ===END===
 
 Rules:
-- TARGET must be exactly the TARGET shown above
-- OLD is mandatory; never output ===NEW=== before a non-empty ===OLD=== block
-- OLD must be copied verbatim from SOURCE and occur exactly once in TARGET
+- TARGET exactly as given
+- OLD is mandatory; verbatim from SOURCE, complete lines, occurs exactly once
 - if you cannot quote the exact OLD block, output exactly NO_CHANGE
-- OLD and NEW must contain complete lines only
 - NEW must differ from OLD and must not duplicate code already present in SOURCE
 - modify TARGET only
-- no new files, deletes, renames, binary patches, commits, pushes, deployments, or authority changes
-- preserve HUMAN_FINAL, REG authority, provenance, RECOIL/WVC, and existing architecture
-- smallest sufficient change only
+- no files/deletes/renames/binary patches/commits/pushes/deployments/authority changes
+- preserve HUMAN_FINAL, REG, provenance, RECOIL/WVC, existing architecture
+- smallest sufficient change
 - no markdown fences, Git diff syntax, or explanatory prose
 `
 }
 
 func parseProgramEdit(raw, target string) (string, string, bool, error) {
 	text := strings.TrimSpace(raw)
+	text = strings.TrimSpace(strings.TrimSuffix(text, "[end of text]"))
 	if text == "" {
 		return "", "", false, fmt.Errorf("empty program proposal")
 	}
@@ -340,7 +373,6 @@ func renderProgramPatch(target, source, oldText, newText string) ([]byte, error)
 		b.WriteString(line)
 		b.WriteByte('\n')
 	}
-
 	patch := []byte(b.String())
 	if len(patch) > maxProgramPatchBytes {
 		return nil, fmt.Errorf("program patch exceeds %d bytes", maxProgramPatchBytes)

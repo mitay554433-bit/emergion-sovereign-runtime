@@ -429,7 +429,7 @@ func TestMXPDGrammarOwnsKnownBadLeadingLexicalForms(t *testing.T) {
 func TestMXPDGrammarMakesCapabilityOptionalAndCanonical(t *testing.T) {
 	if !strings.Contains(
 		mxpdGrammar,
-		`root ::= summary risk fact capability? facet? end`,
+		`root ::= summary risk fact relationship? capability? facet? end`,
 	) {
 		t.Fatal("MXPD grammar still requires a capability")
 	}
@@ -466,5 +466,59 @@ func TestMXPDGrammarMakesCapabilityOptionalAndCanonical(t *testing.T) {
 
 	if strings.Contains(mxpdGrammar, `capability ::= "C|can " text "\n"`) {
 		t.Fatal("free-form natural-language capability generation remains enabled")
+	}
+}
+
+func TestMXPDGrammarAllowsGovernedCompositionRelationship(t *testing.T) {
+	if !strings.Contains(
+		mxpdGrammar,
+		`root ::= summary risk fact relationship? capability? facet? end`,
+	) {
+		t.Fatal("MXPD grammar does not permit an optional governed relationship")
+	}
+
+	if !strings.Contains(
+		mxpdGrammar,
+		`relationship ::= "L|COMPOSITION_KIN|" text "\n"`,
+	) {
+		t.Fatal("MXPD grammar does not constrain relationship output to COMPOSITION_KIN")
+	}
+}
+
+func TestParseResultAcceptsLlamaEndMarker(t *testing.T) {
+	want := Result{
+		Summary:      "bounded semantic result",
+		Risk:         "L",
+		Facts:        []string{"verified state"},
+		Capabilities: []string{"ANALYZE"},
+		Facets:       []string{"ANALYTICS_FORECAST"},
+	}
+
+	raw := "S|bounded semantic result\n" +
+		"K|L\n" +
+		"F|verified state\n" +
+		"C|ANALYZE\n" +
+		"T|ANALYTICS_FORECAST\n" +
+		"Z [end of text]\n"
+
+	got, err := parseResult(raw)
+	if err != nil {
+		t.Fatalf("parseResult returned error: %v", err)
+	}
+
+	if got.Summary != want.Summary {
+		t.Fatalf("summary = %q want %q", got.Summary, want.Summary)
+	}
+	if got.Risk != want.Risk {
+		t.Fatalf("risk = %q want %q", got.Risk, want.Risk)
+	}
+	if len(got.Facts) != 1 || got.Facts[0] != want.Facts[0] {
+		t.Fatalf("facts = %#v want %#v", got.Facts, want.Facts)
+	}
+	if len(got.Capabilities) != 1 || got.Capabilities[0] != want.Capabilities[0] {
+		t.Fatalf("capabilities = %#v want %#v", got.Capabilities, want.Capabilities)
+	}
+	if len(got.Facets) != 1 || got.Facets[0] != want.Facets[0] {
+		t.Fatalf("facets = %#v want %#v", got.Facets, want.Facets)
 	}
 }

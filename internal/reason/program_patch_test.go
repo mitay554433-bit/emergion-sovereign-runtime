@@ -164,3 +164,16 @@ func TestBuildProgramPatchPromptRequiresExactObservedEditContract(t *testing.T) 
 		}
 	}
 }
+
+func TestParseProgramEditAcceptsNoChangeWithLlamaEndMarker(t *testing.T) {
+	oldText, newText, noChange, err := parseProgramEdit("NO_CHANGE\n [end of text]\n", "target.go")
+	if err != nil {
+		t.Fatalf("parseProgramEdit returned error: %v", err)
+	}
+	if !noChange {
+		t.Fatal("expected NO_CHANGE")
+	}
+	if oldText != "" || newText != "" {
+		t.Fatalf("expected empty edit texts, got old=%q new=%q", oldText, newText)
+	}
+}
