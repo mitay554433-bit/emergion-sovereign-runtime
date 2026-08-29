@@ -165,6 +165,12 @@ func (r *Runtime) GovernedCycle(
 ) ([]core.EmergION, core.EmergION, bool, error) {
 	circulated := []core.EmergION{}
 
+	saws, err := r.CirculateSAWs(ctx)
+	if err != nil {
+		return circulated, core.EmergION{}, false, err
+	}
+	circulated = append(circulated, saws...)
+
 	program, proposed, err := (fieldruntime.Runtime{
 		Store:    r.store,
 		Reasoner: r.reasoner,
@@ -174,17 +180,11 @@ func (r *Runtime) GovernedCycle(
 		".",
 	)
 	if err != nil {
-		return nil, core.EmergION{}, false, err
+		return circulated, core.EmergION{}, false, err
 	}
 	if proposed {
 		circulated = append(circulated, program)
 	}
-
-	saws, err := r.CirculateSAWs(ctx)
-	if err != nil {
-		return circulated, core.EmergION{}, false, err
-	}
-	circulated = append(circulated, saws...)
 
 	signal, executed, err := (fieldruntime.Runtime{
 		Store: r.store,

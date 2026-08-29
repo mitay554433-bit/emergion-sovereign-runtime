@@ -25,7 +25,6 @@ func (sawCirculationReasoner) Analyze(
 	return reason.Result{
 		Summary: "bounded " + in.Name,
 		Relationships: map[string]string{
-			"source_name": in.Name,
 			"source_kind": "PROGRAM",
 		},
 		Capabilities: []string{
@@ -181,6 +180,15 @@ func TestCirculateSAWsUsesGovernedCaptureWithoutSelfAcceptance(t *testing.T) {
 
 	if em.MEM.SourceHash == "" {
 		t.Fatal("circulated SAW source identity missing")
+	}
+
+	wantSourceName := "SAW:SAAB:E-FIELDAPI-SAW-A+E-FIELDAPI-SAW-B"
+	if got := em.REL["source_name"]; got != wantSourceName {
+		t.Fatalf(
+			"circulated SAW source_name = %q want %q",
+			got,
+			wantSourceName,
+		)
 	}
 
 	if !strings.Contains(em.MEM.Summary, "SAW:") {
@@ -918,5 +926,152 @@ func TestRunDrivesSuccessiveGovernedCyclesWithoutManualInvocation(t *testing.T) 
 
 	if len(observed) < 2 {
 		t.Fatal("unattended Run did not reach a second governed cycle")
+	}
+}
+
+func TestGovernedCycleCirculatesSAWBeforeProgramProposalFailure(t *testing.T) {
+	root := t.TempDir()
+
+	rt, err := Open(
+		filepath.Join(root, "state"),
+		sawCirculationReasoner{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sourceA := core.EmergION{
+		IDN: "E-FIELDAPI-CYCLE-SAW-A",
+		STA: core.StateAtGOV,
+		MEM: core.Memory{
+			SourceHash: "fieldapi-cycle-saw-source-a",
+			Bytes:      1,
+			Stored:     1,
+			Summary:    "accepted governed composition source A",
+		},
+		REL: map[string]string{
+			"COMPOSITION_KIN": "E-FIELDAPI-CYCLE-SAW-B",
+			"source_name":     "internal/adapters/actions.go",
+		},
+		CAP: []string{
+			"OBS",
+			"ANALYZE",
+		},
+		VAL: core.Validation{
+			Facts:  []string{"bounded source A"},
+			Recoil: true,
+			WVC:    true,
+		},
+		EVO: core.Evolution{
+			Version: 1,
+			Metadata: &core.Metadata{
+				CapturedAt:   time.Now().UTC(),
+				Topology:     core.TopologyDodecahedronV1,
+				PromptSchema: "MXPD/2",
+				Facets:       []core.Facet{core.FacetProgramForge},
+			},
+		},
+	}
+
+	sourceB := core.EmergION{
+		IDN: "E-FIELDAPI-CYCLE-SAW-B",
+		STA: core.StateAtGOV,
+		MEM: core.Memory{
+			SourceHash: "fieldapi-cycle-saw-source-b",
+			Bytes:      1,
+			Stored:     1,
+			Summary:    "accepted governed composition source B",
+		},
+		REL: map[string]string{},
+		CAP: []string{"CMP"},
+		VAL: core.Validation{
+			Facts:  []string{"bounded source B"},
+			Recoil: true,
+			WVC:    true,
+		},
+		EVO: core.Evolution{
+			Version: 1,
+		},
+	}
+
+	accept := func(em core.EmergION) {
+		if _, err := rt.store.SaveCandidate(em); err != nil {
+			t.Fatal(err)
+		}
+
+		approved, decision, err := gov.Decide(
+			em,
+			gov.Approve,
+			"HUMAN_FINAL",
+			"fieldapi governed-cycle ordering proof",
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		decisionID, err := rt.store.SaveDecision(decision)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, receipt, err := reg.Accept(approved, decisionID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := rt.store.SaveAccepted(receipt); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	accept(sourceA)
+	accept(sourceB)
+
+	model := filepath.Join(root, "model.gguf")
+	if err := os.WriteFile(model, []byte("test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	fake := filepath.Join(root, "fake-gemma")
+	if err := os.WriteFile(
+		fake,
+		[]byte("#!/bin/sh\nexit 7\n"),
+		0o700,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	circulated, _, executed, err := rt.GovernedCycle(
+		context.Background(),
+		reason.GemmaCLI{
+			Binary:    fake,
+			Model:     model,
+			Context:   2048,
+			MaxTokens: 80,
+			Threads:   1,
+			Timeout:   5 * time.Second,
+		},
+	)
+	if err == nil {
+		t.Fatal("PROGRAM proposal failure was not returned")
+	}
+	if executed {
+		t.Fatal("safe action executed after PROGRAM proposal failure")
+	}
+	if len(circulated) == 0 {
+		t.Fatal("SAW circulation was lost when PROGRAM proposal failed")
+	}
+
+	state, err := rt.state()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, em := range circulated {
+		if _, ok := state.AtGOV[em.IDN]; !ok {
+			t.Fatalf("circulated SAW %s missing from GOV", em.IDN)
+		}
+		if _, ok := state.Accepted[em.IDN]; ok {
+			t.Fatalf("circulated SAW %s self-authorized into REG", em.IDN)
+		}
 	}
 }
