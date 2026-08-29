@@ -234,6 +234,22 @@ func gemmaArgs(g GemmaCLI, prompt string) []string {
 	return args
 }
 
+func normalizeLlamaCLIAnalyzeCandidate(prompt, candidate string) string {
+	prefix := "User:\n" + strings.TrimSuffix(prompt, "\n") + "\n\nAssistant:\n"
+	if strings.HasPrefix(candidate, prefix) {
+		candidate = strings.TrimPrefix(candidate, prefix)
+	}
+
+	// Real llama-cli can emit the displayed prompt and terminal control bytes
+	// before the generated record. MXPD grammar requires every generated
+	// record to begin with S|, so the final S| marks the assistant record.
+	if start := strings.LastIndex(candidate, "S|"); start >= 0 {
+		candidate = candidate[start:]
+	}
+
+	return candidate
+}
+
 func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 	fmt.Fprintln(os.Stderr, "ANALYZE_START")
 	defer fmt.Fprintln(os.Stderr, "ANALYZE_END")
@@ -293,7 +309,6 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 				trim(stderr.String(), 500),
 			)
 		}
-
 		candidates := []string{
 			stdout.String(),
 			stderr.String(),
@@ -304,6 +319,9 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 		var validationErr error
 
 		for _, candidate := range candidates {
+			if filepath.Base(g.Binary) == "llama-cli" {
+				candidate = normalizeLlamaCLIAnalyzeCandidate(prompt, candidate)
+			}
 			res, err := parseResult(candidate)
 			if err != nil {
 				parseErr = err

@@ -3,6 +3,7 @@ package reason
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -520,5 +521,168 @@ func TestParseResultAcceptsLlamaEndMarker(t *testing.T) {
 	}
 	if len(got.Facets) != 1 || got.Facets[0] != want.Facets[0] {
 		t.Fatalf("facets = %#v want %#v", got.Facets, want.Facets)
+	}
+}
+
+func TestAnalyzeStripsLlamaCLITranscriptBeforeParsing(t *testing.T) {
+	root := t.TempDir()
+
+	model := filepath.Join(root, "model.gguf")
+	if err := os.WriteFile(model, []byte("test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	binary := filepath.Join(root, "llama-cli")
+	script := `#!/bin/sh
+prompt=""
+while [ "$#" -gt 0 ]; do
+case "$1" in
+-p|--prompt)
+shift
+prompt="$1"
+;;
+esac
+shift
+done
+
+printf 'User:\n%s\n\nAssistant:\n' "$prompt"
+cat <<'OUT'
+S|clean assistant result
+K|L
+F|clean assistant fact
+C|CMP
+T|DOCS_PROJECTION
+Z
+OUT
+`
+	if err := os.WriteFile(binary, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	g := GemmaCLI{
+		Binary:    binary,
+		Model:     model,
+		Context:   2048,
+		MaxTokens: 80,
+		Threads:   1,
+		Timeout:   5 * time.Second,
+	}
+
+	result, err := g.Analyze(context.Background(), Input{
+		Name: "SAW:SAAB:E-A+E-B",
+		Content: []byte(
+			"clean assistant fact\n" +
+				"SAW/1\n" +
+				`C|"OBS"` + "\n" +
+				`C|"RLT"` + "\n" +
+				`L|"E-A"|"E-B"|"COMPOSITION_KIN"` + "\n" +
+				"Z\n",
+		),
+		GovernedState: "accepted_context_present",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result.Summary != "clean assistant result" {
+		t.Fatalf("summary = %q", result.Summary)
+	}
+	if result.Risk != "L" {
+		t.Fatalf("risk = %q want L", result.Risk)
+	}
+	if len(result.Facts) != 1 || result.Facts[0] != "clean assistant fact" {
+		t.Fatalf("facts leaked prompt content: %#v", result.Facts)
+	}
+	if len(result.Capabilities) != 1 || result.Capabilities[0] != "CMP" {
+		t.Fatalf("capabilities leaked prompt content: %#v", result.Capabilities)
+	}
+	if len(result.Relationships) != 0 {
+		t.Fatalf("relationships leaked prompt content: %#v", result.Relationships)
+	}
+	if len(result.Facets) != 1 || result.Facets[0] != "DOCS_PROJECTION" {
+		t.Fatalf("facets = %#v", result.Facets)
+	}
+}
+
+func TestAnalyzeStripsLiveLlamaCLITranscriptBeforeParsing(t *testing.T) {
+	root := t.TempDir()
+
+	model := filepath.Join(root, "model.gguf")
+	if err := os.WriteFile(model, []byte("test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	binary := filepath.Join(root, "llama-cli")
+	script := `#!/bin/sh
+prompt=""
+while [ "$#" -gt 0 ]; do
+case "$1" in
+-p|--prompt)
+shift
+prompt="$1"
+;;
+esac
+shift
+done
+
+# Match the live llama-cli transport shape:
+# displayed prompt/source, terminal control bytes, then generated MXPD.
+printf '%s\n' "$prompt"
+printf '\033[2K\033[1G'
+cat <<'OUT'
+S|clean assistant result
+K|L
+F|clean assistant fact
+C|CMP
+T|DOCS_PROJECTION
+Z
+OUT
+`
+	if err := os.WriteFile(binary, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	g := GemmaCLI{
+		Binary:    binary,
+		Model:     model,
+		Context:   2048,
+		MaxTokens: 80,
+		Threads:   1,
+		Timeout:   5 * time.Second,
+	}
+
+	result, err := g.Analyze(context.Background(), Input{
+		Name: "SAW:SAAB:E-A+E-B",
+		Content: []byte(
+			"clean assistant fact\n" +
+				"SAW/1\n" +
+				`C|"OBS"` + "\n" +
+				`C|"RLT"` + "\n" +
+				`L|"E-A"|"E-B"|"COMPOSITION_KIN"` + "\n" +
+				"Z\n",
+		),
+		GovernedState: "accepted_context_present",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result.Summary != "clean assistant result" {
+		t.Fatalf("summary = %q", result.Summary)
+	}
+	if result.Risk != "L" {
+		t.Fatalf("risk = %q want L", result.Risk)
+	}
+	if len(result.Facts) != 1 || result.Facts[0] != "clean assistant fact" {
+		t.Fatalf("facts leaked displayed prompt: %#v", result.Facts)
+	}
+	if len(result.Capabilities) != 1 || result.Capabilities[0] != "CMP" {
+		t.Fatalf("capabilities leaked displayed prompt: %#v", result.Capabilities)
+	}
+	if len(result.Relationships) != 0 {
+		t.Fatalf("relationships leaked displayed prompt: %#v", result.Relationships)
+	}
+	if len(result.Facets) != 1 || result.Facets[0] != "DOCS_PROJECTION" {
+		t.Fatalf("facets = %#v", result.Facets)
 	}
 }
