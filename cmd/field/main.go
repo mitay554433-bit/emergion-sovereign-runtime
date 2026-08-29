@@ -228,6 +228,33 @@ func main() {
 		} else {
 			fmt.Println(em.IDN, "AT_GOV", "REWORK_OF", args[1])
 		}
+	case "reinterpret":
+		if len(args) != 3 {
+			fail(fmt.Errorf("reinterpret <at-gov-id> <source-name>"))
+		}
+
+		rt := fieldruntime.Runtime{
+			Store:    s,
+			Reasoner: mkReasoner(),
+		}
+
+		em, err := rt.RevalidateInterpretation(
+			context.Background(),
+			args[1],
+			args[2],
+		)
+		if err != nil {
+			fail(err)
+		}
+
+		receipt := renderField(s, *output)
+		fmt.Println(
+			em.IDN,
+			"AT_GOV",
+			"INTERPRETATION_REVISION",
+			"PROJECTION_TIP",
+			receipt.TipHash,
+		)
 	case "once":
 		rt := fieldruntime.Runtime{Store: s, Reasoner: mkReasoner()}
 		ids, err := rt.Once(context.Background(), *dropzone)

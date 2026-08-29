@@ -4930,3 +4930,157 @@ func TestRecaptureProviderPopulationOriginMustExistBeforeDerivedBranches(t *test
 		}
 	}
 }
+
+type interpretationRevisionReasoner struct {
+	result    reason.Result
+	calls     int
+	lastInput reason.Input
+}
+
+func (r *interpretationRevisionReasoner) Analyze(
+	_ context.Context,
+	in reason.Input,
+) (reason.Result, error) {
+	r.calls++
+	r.lastInput = in
+	return r.result, nil
+}
+
+func (*interpretationRevisionReasoner) Name() string {
+	return "interpretation-revision-test"
+}
+
+func (*interpretationRevisionReasoner) Version(context.Context) string {
+	return "1"
+}
+
+func TestRevalidateInterpretationReanalyzesPreservedEvidence(t *testing.T) {
+	root := t.TempDir()
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	content := []byte("same immutable SAW evidence")
+	evidence, err := s.Preserve(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	id := "E-" + strings.ToUpper(evidence.Hash[:16])
+	now := time.Now().UTC()
+
+	original := core.EmergION{
+		IDN: id,
+		STA: core.StateAtGOV,
+		MEM: core.Memory{
+			SourceHash: evidence.Hash,
+			Codec:      evidence.Codec,
+			Bytes:      evidence.Bytes,
+			Stored:     evidence.Stored,
+			Summary:    "malformed interpretation",
+			Provenance: "saw_projection",
+		},
+		VAL: core.Validation{
+			Facts:  []string{"malformed interpretation"},
+			Risk:   "L",
+			Recoil: true,
+			WVC:    true,
+		},
+		EVO: core.Evolution{
+			Version: 1,
+			Metadata: &core.Metadata{
+				Topology:     core.TopologyDodecahedronV1,
+				CapturedAt:   now,
+				PromptSchema: "MXPD/2",
+			},
+		},
+	}
+
+	if _, err := s.SaveCandidate(original); err != nil {
+		t.Fatal(err)
+	}
+
+	reasoner := &interpretationRevisionReasoner{
+		result: reason.Result{
+			Summary: "corrected interpretation",
+			Relationships: map[string]string{
+				"source_name": "SAW:test",
+			},
+			Capabilities: []string{"OBS"},
+			Facts:        []string{"corrected interpretation"},
+			Risk:         "L",
+		},
+	}
+
+	r := Runtime{
+		Store:    s,
+		Reasoner: reasoner,
+	}
+
+	revised, err := r.RevalidateInterpretation(
+		context.Background(),
+		original.IDN,
+		"SAW:test",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if reasoner.calls != 1 {
+		t.Fatalf("Analyze calls = %d want 1", reasoner.calls)
+	}
+	if string(reasoner.lastInput.Content) != string(content) {
+		t.Fatalf(
+			"Analyze content = %q want preserved evidence %q",
+			reasoner.lastInput.Content,
+			content,
+		)
+	}
+
+	if revised.IDN != original.IDN {
+		t.Fatalf("IDN = %q want %q", revised.IDN, original.IDN)
+	}
+	if revised.MEM.SourceHash != original.MEM.SourceHash ||
+		revised.MEM.Bytes != original.MEM.Bytes ||
+		revised.MEM.Stored != original.MEM.Stored ||
+		revised.MEM.Codec != original.MEM.Codec ||
+		revised.MEM.Provenance != original.MEM.Provenance {
+		t.Fatal("revalidation changed immutable evidence identity")
+	}
+	if revised.MEM.Summary != "corrected interpretation" {
+		t.Fatalf("summary = %q", revised.MEM.Summary)
+	}
+	if revised.STA != core.StateAtGOV ||
+		!revised.VAL.Recoil ||
+		!revised.VAL.WVC {
+		t.Fatalf("revised interpretation is not GOV-ready: %#v", revised)
+	}
+
+	events, err := s.Events()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("events = %d want 2", len(events))
+	}
+	if events[0].Type != "C" || events[1].Type != "I" {
+		t.Fatalf(
+			"event sequence = [%q %q] want [C I]",
+			events[0].Type,
+			events[1].Type,
+		)
+	}
+
+	st, err := livefield.Rebuild(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	active, ok := st.AtGOV[original.IDN]
+	if !ok {
+		t.Fatal("corrected interpretation missing from AtGOV")
+	}
+	if active.MEM.Summary != "corrected interpretation" {
+		t.Fatalf("active summary = %q", active.MEM.Summary)
+	}
+}

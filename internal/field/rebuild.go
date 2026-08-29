@@ -23,6 +23,47 @@ func Rebuild(events []core.Event) (core.State, error) {
 				return st, fmt.Errorf("duplicate candidate %s", ev.EmergION.IDN)
 			}
 			st.AtGOV[ev.EmergION.IDN] = *ev.EmergION
+		case "I":
+			if ev.EmergION == nil {
+				return st, fmt.Errorf("interpretation revision event missing EmergION")
+			}
+
+			revised := *ev.EmergION
+			current, ok := st.AtGOV[revised.IDN]
+			if !ok {
+				return st, fmt.Errorf(
+					"interpretation revision target not at GOV: %s",
+					revised.IDN,
+				)
+			}
+
+			if revised.IDN != current.IDN ||
+				revised.MEM.SourceHash != current.MEM.SourceHash ||
+				revised.MEM.Bytes != current.MEM.Bytes ||
+				revised.MEM.Stored != current.MEM.Stored ||
+				revised.MEM.Codec != current.MEM.Codec ||
+				revised.MEM.Provenance != current.MEM.Provenance {
+				return st, fmt.Errorf("interpretation revision changed evidence identity")
+			}
+
+			if revised.STA != core.StateAtGOV ||
+				!revised.VAL.Recoil ||
+				!revised.VAL.WVC ||
+				revised.EVO.Version < 1 {
+				return st, fmt.Errorf("interpretation revision is not GOV-ready")
+			}
+
+			if revised.EVO.Metadata == nil {
+				return st, fmt.Errorf("interpretation revision metadata missing")
+			}
+			if err := revised.EVO.Metadata.Validate(); err != nil {
+				return st, fmt.Errorf(
+					"interpretation revision metadata invalid: %w",
+					err,
+				)
+			}
+
+			st.AtGOV[revised.IDN] = revised
 		case "D":
 			if ev.Decision == nil {
 				return st, fmt.Errorf("decision event missing receipt")

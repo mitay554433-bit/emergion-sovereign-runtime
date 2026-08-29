@@ -1345,6 +1345,10 @@ func (r Runtime) admitAnalyzedCandidate(
 	if em.REL == nil {
 		em.REL = map[string]string{}
 	}
+	if provenance == "saw_projection" {
+		em.REL["source_name"] = name
+	}
+
 	if runtimeOrigin != "" {
 		em.REL["origin"] = runtimeOrigin
 	}
@@ -1428,6 +1432,91 @@ func (r Runtime) admitAnalyzedCandidate(
 	}
 
 	return em, false, nil
+}
+
+func (r Runtime) RevalidateInterpretation(
+	ctx context.Context,
+	id string,
+	name string,
+) (core.EmergION, error) {
+	if r.Store == nil || r.Reasoner == nil {
+		return core.EmergION{}, fmt.Errorf("runtime dependencies missing")
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return core.EmergION{}, fmt.Errorf("interpretation revision target required")
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return core.EmergION{}, fmt.Errorf("original source name required")
+	}
+
+	events, err := r.Store.Events()
+	if err != nil {
+		return core.EmergION{}, err
+	}
+	st, err := livefield.Rebuild(events)
+	if err != nil {
+		return core.EmergION{}, err
+	}
+
+	current, ok := st.AtGOV[id]
+	if !ok {
+		return core.EmergION{}, fmt.Errorf(
+			"interpretation revision target not at GOV: %s",
+			id,
+		)
+	}
+
+	b, err := r.Store.ReadEvidence(current.MEM.SourceHash)
+	if err != nil {
+		return core.EmergION{}, err
+	}
+
+	boundary, governedState, err := r.governedStateContext()
+	if err != nil {
+		return core.EmergION{}, err
+	}
+
+	analysis, err := r.Reasoner.Analyze(ctx, reason.Input{
+		Name:          name,
+		Content:       b,
+		GovernedState: governedState,
+	})
+	if err != nil {
+		return core.EmergION{}, err
+	}
+
+	revised, _, err := r.admitAnalyzedCandidate(
+		ctx,
+		name,
+		b,
+		current.MEM.Provenance,
+		boundary,
+		governedState,
+		"",
+		analysis,
+	)
+	if err != nil {
+		return core.EmergION{}, err
+	}
+
+	if revised.IDN != current.IDN ||
+		revised.MEM.SourceHash != current.MEM.SourceHash ||
+		revised.MEM.Bytes != current.MEM.Bytes ||
+		revised.MEM.Stored != current.MEM.Stored ||
+		revised.MEM.Codec != current.MEM.Codec ||
+		revised.MEM.Provenance != current.MEM.Provenance {
+		return core.EmergION{}, fmt.Errorf(
+			"interpretation revision changed evidence identity",
+		)
+	}
+
+	if _, err := r.Store.SaveInterpretationRevision(revised); err != nil {
+		return core.EmergION{}, err
+	}
+
+	return revised, nil
 }
 
 type fixedReasoner struct {

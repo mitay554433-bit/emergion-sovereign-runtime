@@ -260,6 +260,40 @@ func (s *Store) SaveCandidate(em core.EmergION) (string, error) {
 	}
 	return s.append("C", em.IDN, &em, nil, nil, nil)
 }
+func (s *Store) SaveInterpretationRevision(em core.EmergION) (string, error) {
+	if em.STA != core.StateAtGOV || !em.VAL.Recoil || !em.VAL.WVC || em.EVO.Version < 1 {
+		return "", fmt.Errorf("interpretation revision is not GOV-ready")
+	}
+	if em.EVO.Metadata == nil {
+		return "", fmt.Errorf("interpretation revision metadata missing")
+	}
+	if err := em.EVO.Metadata.Validate(); err != nil {
+		return "", fmt.Errorf("interpretation revision metadata invalid: %w", err)
+	}
+
+	existing, ok, err := s.FindBySourceHash(em.MEM.SourceHash)
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return "", fmt.Errorf(
+			"interpretation revision source not found: %s",
+			em.MEM.SourceHash,
+		)
+	}
+
+	if em.IDN != existing.IDN ||
+		em.MEM.SourceHash != existing.MEM.SourceHash ||
+		em.MEM.Bytes != existing.MEM.Bytes ||
+		em.MEM.Stored != existing.MEM.Stored ||
+		em.MEM.Codec != existing.MEM.Codec ||
+		em.MEM.Provenance != existing.MEM.Provenance {
+		return "", fmt.Errorf("interpretation revision changed evidence identity")
+	}
+
+	return s.append("I", em.IDN, &em, nil, nil, nil)
+}
+
 func (s *Store) SaveDecision(r core.DecisionReceipt) (string, error) {
 	return s.append("D", r.EmergIONID, nil, &r, nil, nil)
 }

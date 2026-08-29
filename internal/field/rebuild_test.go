@@ -875,3 +875,147 @@ func TestREGReplayRejectsArchonymReuseAfterReturnWithoutReturnedKinLink(t *testi
 		t.Fatal("unlinked EmergION reused governed returned Archonym")
 	}
 }
+
+func TestInterpretationRevisionReplacesActiveAtGOV(t *testing.T) {
+	now := time.Now().UTC()
+
+	original := core.EmergION{
+		IDN: "E-INTERPRETATION-REVISION",
+		STA: core.StateAtGOV,
+		MEM: core.Memory{
+			SourceHash: "same-source-hash",
+			Codec:      "gzip",
+			Bytes:      128,
+			Stored:     64,
+			Summary:    "malformed interpretation",
+			Provenance: "saw_projection",
+		},
+		VAL: core.Validation{
+			Facts:  []string{"malformed fact"},
+			Recoil: true,
+			WVC:    true,
+		},
+		EVO: core.Evolution{
+			Version: 1,
+			Metadata: &core.Metadata{
+				Topology:     core.TopologyDodecahedronV1,
+				CapturedAt:   now,
+				PromptSchema: "MXPD/2",
+			},
+		},
+	}
+
+	revised := original
+	revised.MEM.Summary = "corrected interpretation"
+	revised.VAL.Facts = []string{"corrected fact"}
+
+	decision := core.DecisionReceipt{
+		EmergIONID: revised.IDN,
+		Decision:   "APPROVE",
+		Authority:  "HUMAN_FINAL",
+		At:         now,
+	}
+
+	st, err := Rebuild([]core.Event{
+		{Type: "C", ID: "EV-C", EmergION: &original},
+		{Type: "I", ID: "EV-I", EmergION: &revised},
+		{Type: "D", ID: "EV-D", Decision: &decision},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	approved, ok := st.Approved[revised.IDN]
+	if !ok {
+		t.Fatalf("revised interpretation was not HUMAN_FINAL approved")
+	}
+	if approved.MEM.Summary != "corrected interpretation" {
+		t.Fatalf("summary = %q", approved.MEM.Summary)
+	}
+	if len(approved.VAL.Facts) != 1 || approved.VAL.Facts[0] != "corrected fact" {
+		t.Fatalf("facts = %#v", approved.VAL.Facts)
+	}
+	if len(st.AtGOV) != 0 {
+		t.Fatalf("AtGOV = %#v", st.AtGOV)
+	}
+}
+
+func TestInterpretationRevisionRejectsTargetNoLongerAtGOV(t *testing.T) {
+	now := time.Now().UTC()
+
+	original := core.EmergION{
+		IDN: "E-INTERPRETATION-LEFT-GOV",
+		STA: core.StateAtGOV,
+		MEM: core.Memory{
+			SourceHash: "same-source-hash",
+			Codec:      "gzip",
+			Bytes:      128,
+			Stored:     64,
+			Provenance: "saw_projection",
+		},
+		VAL: core.Validation{Recoil: true, WVC: true},
+		EVO: core.Evolution{
+			Version: 1,
+			Metadata: &core.Metadata{
+				Topology:     core.TopologyDodecahedronV1,
+				CapturedAt:   now,
+				PromptSchema: "MXPD/2",
+			},
+		},
+	}
+
+	hold := core.DecisionReceipt{
+		EmergIONID: original.IDN,
+		Decision:   "HOLD",
+		Authority:  "HUMAN_FINAL",
+		At:         now,
+	}
+
+	revised := original
+	revised.MEM.Summary = "must not replace held state"
+
+	_, err := Rebuild([]core.Event{
+		{Type: "C", ID: "EV-C", EmergION: &original},
+		{Type: "D", ID: "EV-D", Decision: &hold},
+		{Type: "I", ID: "EV-I", EmergION: &revised},
+	})
+	if err == nil {
+		t.Fatal("expected interpretation revision of non-AtGOV target to fail")
+	}
+}
+
+func TestInterpretationRevisionRejectsEvidenceIdentityChange(t *testing.T) {
+	now := time.Now().UTC()
+
+	original := core.EmergION{
+		IDN: "E-INTERPRETATION-EVIDENCE",
+		STA: core.StateAtGOV,
+		MEM: core.Memory{
+			SourceHash: "same-source-hash",
+			Codec:      "gzip",
+			Bytes:      128,
+			Stored:     64,
+			Provenance: "saw_projection",
+		},
+		VAL: core.Validation{Recoil: true, WVC: true},
+		EVO: core.Evolution{
+			Version: 1,
+			Metadata: &core.Metadata{
+				Topology:     core.TopologyDodecahedronV1,
+				CapturedAt:   now,
+				PromptSchema: "MXPD/2",
+			},
+		},
+	}
+
+	revised := original
+	revised.MEM.Codec = "changed-codec"
+
+	_, err := Rebuild([]core.Event{
+		{Type: "C", ID: "EV-C", EmergION: &original},
+		{Type: "I", ID: "EV-I", EmergION: &revised},
+	})
+	if err == nil {
+		t.Fatal("expected evidence identity change to fail")
+	}
+}
