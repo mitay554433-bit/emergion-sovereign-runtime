@@ -179,6 +179,10 @@ func (s *Store) append(kind, subject string, em *core.EmergION, d *core.Decision
 		return "", err
 	}
 	defer unlock()
+	return s.appendLocked(kind, subject, em, d, r, q)
+}
+
+func (s *Store) appendLocked(kind, subject string, em *core.EmergION, d *core.DecisionReceipt, r *core.REGReceipt, q *core.ActionAuthorizationReceipt) (string, error) {
 	events, err := s.Events()
 	if err != nil {
 		return "", err
@@ -260,7 +264,12 @@ func (s *Store) SaveCandidate(em core.EmergION) (string, error) {
 	}
 	return s.append("C", em.IDN, &em, nil, nil, nil)
 }
-func (s *Store) SaveInterpretationRevision(em core.EmergION) (string, error) {
+
+// AppendInterpretationRevisionAtTip atomically appends an interpretation revision
+// only while the canonical ledger remains at expectedTip. Lifecycle eligibility
+// is proven by the caller from canonical replay before this storage operation.
+
+func (s *Store) AppendInterpretationRevisionAtTip(em core.EmergION, expectedTip string) (string, error) {
 	if em.STA != core.StateAtGOV || !em.VAL.Recoil || !em.VAL.WVC || em.EVO.Version < 1 {
 		return "", fmt.Errorf("interpretation revision is not GOV-ready")
 	}
@@ -269,6 +278,33 @@ func (s *Store) SaveInterpretationRevision(em core.EmergION) (string, error) {
 	}
 	if err := em.EVO.Metadata.Validate(); err != nil {
 		return "", fmt.Errorf("interpretation revision metadata invalid: %w", err)
+	}
+
+	expectedTip = strings.TrimSpace(expectedTip)
+	if expectedTip == "" {
+		return "", fmt.Errorf("interpretation revision state tip required")
+	}
+
+	unlock, err := s.lock()
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
+
+	events, err := s.Events()
+	if err != nil {
+		return "", err
+	}
+	currentTip := ""
+	if len(events) > 0 {
+		currentTip = events[len(events)-1].SelfHash
+	}
+	if currentTip != expectedTip {
+		return "", fmt.Errorf(
+			"interpretation revision state changed: expected tip %s got %s",
+			expectedTip,
+			currentTip,
+		)
 	}
 
 	existing, ok, err := s.FindBySourceHash(em.MEM.SourceHash)
@@ -291,7 +327,7 @@ func (s *Store) SaveInterpretationRevision(em core.EmergION) (string, error) {
 		return "", fmt.Errorf("interpretation revision changed evidence identity")
 	}
 
-	return s.append("I", em.IDN, &em, nil, nil, nil)
+	return s.appendLocked("I", em.IDN, &em, nil, nil, nil)
 }
 
 func (s *Store) SaveDecision(r core.DecisionReceipt) (string, error) {

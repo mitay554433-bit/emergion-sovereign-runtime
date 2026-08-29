@@ -1460,6 +1460,8 @@ func (r Runtime) RevalidateInterpretation(
 		return core.EmergION{}, err
 	}
 
+	provedTip := st.TipHash
+
 	current, ok := st.AtGOV[id]
 	if !ok {
 		return core.EmergION{}, fmt.Errorf(
@@ -1512,7 +1514,7 @@ func (r Runtime) RevalidateInterpretation(
 		)
 	}
 
-	if _, err := r.Store.SaveInterpretationRevision(revised); err != nil {
+	if _, err := r.Store.AppendInterpretationRevisionAtTip(revised, provedTip); err != nil {
 		return core.EmergION{}, err
 	}
 
