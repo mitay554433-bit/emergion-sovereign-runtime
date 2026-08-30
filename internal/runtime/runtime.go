@@ -1226,6 +1226,12 @@ func (r Runtime) CaptureIdleStateObservation(ctx context.Context, evidence []byt
 	return idleRuntime.CaptureBytes(ctx, "idle-state-observation", evidence, "governed_idle")
 }
 
+func (r Runtime) CaptureTargetComparison(ctx context.Context, target core.EmergION, evidence []byte) (core.EmergION, bool, error) {
+	comparisonRuntime := r
+	comparisonRuntime.Reasoner = fixedReasoner{name: "target-comparison", version: "v1", result: reason.Result{Summary: "bounded governed target comparison", Relationships: map[string]string{"source_kind": "TARGET_COMPARISON", "target_emergion": target.IDN, "target_state": strings.TrimSpace(target.REL["target_state"]), "comparison_state": "UNRESOLVED"}, Capabilities: []string{"CMP", "DIF", "PRJ"}, Facts: []string{"target_comparison_required"}, Risk: "L"}}
+	return comparisonRuntime.CaptureBytes(ctx, "target-comparison", evidence, "governed_target_comparison")
+}
+
 func (r Runtime) CaptureTarget(ctx context.Context, target string) (core.EmergION, bool, error) {
 	target = strings.TrimSpace(target)
 	if target == "" {

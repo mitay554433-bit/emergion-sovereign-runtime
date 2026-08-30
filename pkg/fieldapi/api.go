@@ -237,6 +237,33 @@ func (r *Runtime) Run(
 					if len(st.AtGOV) != 0 {
 						return nil
 					}
+					comparedTargets := map[string]bool{}
+					for _, em := range st.Accepted {
+						if em.REL["source_kind"] == "TARGET_COMPARISON" {
+							comparedTargets[em.REL["target_emergion"]] = true
+						}
+					}
+					var target core.EmergION
+					for id, em := range st.Accepted {
+						if em.REL["source_kind"] == "TARGET" && !comparedTargets[id] && (target.IDN == "" || id < target.IDN) {
+							target = em
+						}
+					}
+					if target.IDN != "" {
+						reality := make(map[string]core.EmergION)
+						for id, em := range st.Accepted {
+							kind := em.REL["source_kind"]
+							if kind != "TARGET" && kind != "TARGET_COMPARISON" && kind != "IDLE_STATE_OBSERVATION" {
+								reality[id] = em
+							}
+						}
+						evidence, marshalErr := json.Marshal(map[string]any{"target_emergion": target.IDN, "target_state": target.REL["target_state"], "reality": reality})
+						if marshalErr != nil {
+							return marshalErr
+						}
+						_, _, captureErr := (fieldruntime.Runtime{Store: r.store}).CaptureTargetComparison(cycleCtx, target, evidence)
+						return captureErr
+					}
 					accepted := make(map[string]core.EmergION)
 					for id, em := range st.Accepted {
 						if em.REL["source_kind"] != "IDLE_STATE_OBSERVATION" {
