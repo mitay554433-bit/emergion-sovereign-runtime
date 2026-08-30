@@ -129,6 +129,23 @@ func (g GemmaCLI) ProposeProgramPatch(ctx context.Context, in ProgramPatchInput)
 	}
 	var parseErr error
 	for _, candidate := range candidates {
+		if filepath.Base(g.Binary) == "llama-cli" {
+			if assistant := strings.LastIndex(candidate, "\nAssistant:\n"); assistant >= 0 {
+				candidate = candidate[assistant+len("\nAssistant:\n"):]
+			}
+
+			lines := strings.Split(candidate, "\n")
+			start := -1
+			for i, line := range lines {
+				switch strings.TrimSpace(line) {
+				case "EDIT/1", "NO_CHANGE":
+					start = i
+				}
+			}
+			if start >= 0 {
+				candidate = strings.Join(lines[start:], "\n")
+			}
+		}
 		oldText, newText, noChange, err := parseProgramEdit(candidate, target)
 		if err != nil {
 			parseErr = err
