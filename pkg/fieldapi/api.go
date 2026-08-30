@@ -218,17 +218,24 @@ func (r *Runtime) Run(
 		interval,
 		onCapture,
 		func(cycleCtx context.Context) error {
-			circulated, signal, executed, err :=
-				r.GovernedCycle(cycleCtx, gemma)
-			if err != nil {
-				return err
-			}
+			for {
+				circulated, signal, executed, err :=
+					r.GovernedCycle(cycleCtx, gemma)
+				if err != nil {
+					return err
+				}
 
-			if onCycle != nil {
-				onCycle(circulated, signal, executed)
-			}
+				if onCycle != nil {
+					onCycle(circulated, signal, executed)
+				}
 
-			return nil
+				if len(circulated) == 0 && !executed {
+					return nil
+				}
+				if cycleCtx.Err() != nil {
+					return nil
+				}
+			}
 		},
 	)
 }
