@@ -209,6 +209,21 @@ func main() {
 		} else {
 			fmt.Println(em.IDN, "AT_GOV")
 		}
+	case "target":
+		if len(args) < 2 {
+			fail(fmt.Errorf("target requires exact target text"))
+		}
+		rt := fieldruntime.Runtime{Store: s}
+		em, duplicate, err := rt.CaptureTarget(context.Background(), strings.Join(args[1:], " "))
+		if err != nil {
+			fail(err)
+		}
+		renderField(s, *output)
+		if duplicate {
+			fmt.Println(em.IDN, "AT_GOV", "DUPLICATE_SOURCE")
+		} else {
+			fmt.Println(em.IDN, "AT_GOV")
+		}
 	case "rework":
 		if len(args) < 3 {
 			fail(fmt.Errorf("rework <returned-id> <file>"))

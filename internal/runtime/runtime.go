@@ -1226,6 +1226,16 @@ func (r Runtime) CaptureIdleStateObservation(ctx context.Context, evidence []byt
 	return idleRuntime.CaptureBytes(ctx, "idle-state-observation", evidence, "governed_idle")
 }
 
+func (r Runtime) CaptureTarget(ctx context.Context, target string) (core.EmergION, bool, error) {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return core.EmergION{}, false, fmt.Errorf("empty target")
+	}
+	targetRuntime := r
+	targetRuntime.Reasoner = fixedReasoner{name: "target", version: "v1", result: reason.Result{Summary: "persistent governed target", Relationships: map[string]string{"source_kind": "TARGET", "target_state": target}, Capabilities: []string{"CMP", "DIF", "PRJ"}, Facts: []string{"persistent_governed_target"}, Risk: "L"}}
+	return targetRuntime.CaptureBytes(ctx, "target", []byte(target), "human_target")
+}
+
 func (r Runtime) CaptureBytes(
 	ctx context.Context,
 	name string,
