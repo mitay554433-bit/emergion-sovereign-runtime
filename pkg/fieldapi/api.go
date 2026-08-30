@@ -230,7 +230,25 @@ func (r *Runtime) Run(
 				}
 
 				if len(circulated) == 0 && !executed {
-					return nil
+					st, stateErr := r.state()
+					if stateErr != nil {
+						return stateErr
+					}
+					if len(st.AtGOV) != 0 {
+						return nil
+					}
+					accepted := make(map[string]core.EmergION)
+					for id, em := range st.Accepted {
+						if em.REL["source_kind"] != "IDLE_STATE_OBSERVATION" {
+							accepted[id] = em
+						}
+					}
+					evidence, marshalErr := json.Marshal(accepted)
+					if marshalErr != nil {
+						return marshalErr
+					}
+					_, _, captureErr := (fieldruntime.Runtime{Store: r.store}).CaptureIdleStateObservation(cycleCtx, evidence)
+					return captureErr
 				}
 				if cycleCtx.Err() != nil {
 					return nil

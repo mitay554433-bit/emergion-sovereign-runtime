@@ -1220,6 +1220,12 @@ func (r Runtime) Capture(ctx context.Context, path string, removeOnSuccess bool)
 	return em, duplicate, nil
 }
 
+func (r Runtime) CaptureIdleStateObservation(ctx context.Context, evidence []byte) (core.EmergION, bool, error) {
+	idleRuntime := r
+	idleRuntime.Reasoner = fixedReasoner{name: "idle-state-observation", version: "v1", result: reason.Result{Summary: "bounded governed idle state observation", Relationships: map[string]string{"source_kind": "IDLE_STATE_OBSERVATION"}, Capabilities: []string{"OBS", "CMP"}, Facts: []string{"governed_cycle_idle"}, Risk: "L"}}
+	return idleRuntime.CaptureBytes(ctx, "idle-state-observation", evidence, "governed_idle")
+}
+
 func (r Runtime) CaptureBytes(
 	ctx context.Context,
 	name string,

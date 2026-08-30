@@ -277,8 +277,6 @@ func main() {
 		)
 		defer stop()
 
-		rt := fieldruntime.Runtime{Store: s, Reasoner: mkReasoner()}
-
 		sawRuntime, err := fieldapi.Open(*state, mkReasoner())
 		if err != nil {
 			fail(err)
@@ -290,35 +288,24 @@ func main() {
 			"reasoner="+*reasonerName,
 		)
 
-		if err := rt.Run(
+		if err := sawRuntime.Run(
 			ctx,
 			*dropzone,
 			*poll,
+			gemma,
 			func(id string) {
 				receipt := renderField(s, *output)
 				fmt.Println(id, "AT_GOV", "PROJECTION_TIP", receipt.TipHash)
 			},
-			func(cycleCtx context.Context) error {
-				circulated, safeSignal, safeExecuted, err :=
-					sawRuntime.GovernedCycle(cycleCtx, gemma)
-				if err != nil {
-					return err
-				}
-
+			func(circulated []core.EmergION, safeSignal core.EmergION, safeExecuted bool) {
 				for _, em := range circulated {
 					renderField(s, *output)
 					fmt.Println(em.IDN, "SAW_AT_GOV")
 				}
-
 				if safeExecuted {
 					renderField(s, *output)
-					fmt.Println(
-						safeSignal.IDN,
-						"SAFE_ACTION_AT_GOV",
-					)
+					fmt.Println(safeSignal.IDN, "SAFE_ACTION_AT_GOV")
 				}
-
-				return nil
 			},
 		); err != nil {
 			fail(err)
