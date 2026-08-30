@@ -14,11 +14,12 @@ import (
 )
 
 type Evidence struct {
-	Hash       string
-	Bytes      int64
-	Stored     int64
-	Codec      string
-	Provenance string
+	RuntimeIdentity string
+	Hash            string
+	Bytes           int64
+	Stored          int64
+	Codec           string
+	Provenance      string
 }
 
 type Engine struct{ Reasoner reason.Reasoner }
@@ -60,7 +61,12 @@ func (e Engine) Emerge(ctx context.Context, in reason.Input, ev Evidence) (core.
 	if err != nil {
 		return core.EmergION{}, err
 	}
-	id := "E-" + strings.ToUpper(ev.Hash[:16])
+	id := strings.TrimSpace(ev.RuntimeIdentity)
+	if id == "" {
+		id = "E-" + strings.ToUpper(ev.Hash[:16])
+	} else if id != ev.RuntimeIdentity || !strings.HasPrefix(id, "E-") {
+		return core.EmergION{}, fmt.Errorf("invalid runtime EmergION identity %q", ev.RuntimeIdentity)
+	}
 	em := core.EmergION{
 		IDN: id,
 		STA: "",

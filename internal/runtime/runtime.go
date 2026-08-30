@@ -1234,6 +1234,7 @@ func (r Runtime) captureBytes(
 	name string,
 	b []byte,
 	provenance string,
+	runtimeIdentity ...string,
 ) (core.EmergION, bool, error) {
 	if r.Store == nil || r.Reasoner == nil {
 		return core.EmergION{}, false, fmt.Errorf("runtime not configured")
@@ -1275,6 +1276,7 @@ func (r Runtime) captureBytes(
 		governedState,
 		"",
 		analysis,
+		runtimeIdentity...,
 	)
 }
 
@@ -1287,8 +1289,12 @@ func (r Runtime) admitAnalyzedCandidate(
 	governedState string,
 	runtimeOrigin string,
 	analysis reason.Result,
+	runtimeIdentity ...string,
 ) (core.EmergION, bool, error) {
 	analysis = reason.Calibrate(analysis)
+	if len(runtimeIdentity) > 1 {
+		return core.EmergION{}, false, fmt.Errorf("multiple runtime EmergION identities supplied")
+	}
 	fieldDelta := deriveFieldDelta(boundary.Accepted, analysis)
 	if err := r.validateLineage(&analysis); err != nil {
 		return core.EmergION{}, false, err
@@ -1309,6 +1315,12 @@ func (r Runtime) admitAnalyzedCandidate(
 		ctx,
 		reason.Input{Name: name, Content: b},
 		emerger.Evidence{
+			RuntimeIdentity: func() string {
+				if len(runtimeIdentity) == 1 {
+					return runtimeIdentity[0]
+				}
+				return ""
+			}(),
 			Hash:       ev.Hash,
 			Bytes:      ev.Bytes,
 			Stored:     ev.Stored,
@@ -1792,13 +1804,38 @@ func (r Runtime) ExecuteOneSafeAction(
 				Gemma: gemma,
 			}
 
+			observationStarted := time.Now()
+			observationDone := make(chan struct{})
+			observationSamples := make(chan int, 1)
+			go func() {
+				ticker := time.NewTicker(25 * time.Millisecond)
+				defer ticker.Stop()
+				n := 1
+				for {
+					select {
+					case <-ticker.C:
+						n++
+					case <-observationDone:
+						observationSamples <- n
+						return
+					}
+				}
+			}()
 			result, execErr := executor.Execute(request)
+			close(observationDone)
+			sampleCount := <-observationSamples
+			observationFinished := time.Now()
+			observationRuntime := r
+			observationRuntime.Reasoner = fixedReasoner{name: "execution-observation", version: "v1", result: reason.Result{Summary: "bounded concurrent execution observation", Relationships: map[string]string{"source_kind": "EXECUTION_OBSERVATION", "parent_emergion": request.EmergIONID, "adapter": request.Adapter, "action": request.Action}, Capabilities: []string{"OBS", "CMP"}, Facts: []string{"execution_observed_concurrently"}, Risk: "L"}}
+			observationContent := fmt.Sprintf("XS/1\nK=XO\nP=%s\nH=%s\nD=%s\nX=%s\nB=%s\nE=%s\nN=%d\n", request.EmergIONID, request.SourceHash, request.Adapter, request.Action, observationStarted.UTC().Format(time.RFC3339Nano), observationFinished.UTC().Format(time.RFC3339Nano), sampleCount)
+			_, _, observationErr := observationRuntime.captureBytes(ctx, "execution-observation", []byte(observationContent), "execution_observation", request.TransitionEmergIONID)
+			if observationErr != nil {
+				return core.EmergION{}, false, observationErr
+			}
 			if execErr != nil && result.Error == "" {
 				result.Error = execErr.Error()
 			}
-
 			result = adapters.BindExecutionResult(request, result)
-
 			signal, duplicate, err :=
 				r.CaptureGovernedExecutionResult(
 					ctx,

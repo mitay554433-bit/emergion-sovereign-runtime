@@ -4132,6 +4132,42 @@ func TestAnalyzedCandidateAdmissionPreservesDistinctProviderTrajectoryIdentities
 		Risk:         "L",
 	}
 
+        runtimeID := "E-RUNTIME-IDENTITY-TEST"
+        runtimeBound, runtimeDuplicate, err := r.admitAnalyzedCandidate(
+                context.Background(),
+                "provider-trajectory-runtime-bound",
+                []byte("ANALYZE:E-ANALYZE-A,CMP:E-CMP-RUNTIME,RLT:E-RLT-A"),
+                "provider_population",
+                boundary,
+                "",
+                "",
+                analysisA,
+                runtimeID,
+        )
+        if err != nil {
+                t.Fatal(err)
+        }
+        if runtimeDuplicate {
+                t.Fatal("runtime-bound provider trajectory unexpectedly duplicate")
+        }
+        if runtimeBound.IDN != runtimeID {
+                t.Fatalf("runtime identity = %q want %q", runtimeBound.IDN, runtimeID)
+        }
+        if _, _, err := r.admitAnalyzedCandidate(
+                context.Background(),
+                "provider-trajectory-invalid-runtime-id",
+                []byte("ANALYZE:E-ANALYZE-A,CMP:E-CMP-INVALID,RLT:E-RLT-A"),
+                "provider_population",
+                boundary,
+                "",
+                "",
+                analysisA,
+                "BAD-RUNTIME-IDENTITY",
+        ); err == nil {
+                t.Fatal("invalid runtime identity unexpectedly admitted")
+        }
+
+
 	a, duplicate, err := r.admitAnalyzedCandidate(
 		context.Background(),
 		"provider-trajectory-a",
