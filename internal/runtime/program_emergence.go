@@ -68,7 +68,7 @@ func (r Runtime) ProposeOneProgramPatch(
 		patch, err := gemma.ProposeProgramPatch(ctx, reason.ProgramPatchInput{
 			Name:          target,
 			Content:       content,
-			GovernedState: governedState,
+			GovernedState: programGovernedState(parent),
 		})
 		if err != nil {
 			return core.EmergION{}, false, err
@@ -117,6 +117,16 @@ func (r Runtime) ProposeOneProgramPatch(
 }
 
 func acceptedProgramActionEnabled(em core.EmergION, localGemma bool) bool {
+	var explicitProgram bool
+	for _, capability := range em.CAP {
+		if capability == "PROGRAM" {
+			explicitProgram = true
+			break
+		}
+	}
+	if !explicitProgram {
+		return false
+	}
 	var facets []string
 	if em.EVO.Metadata != nil {
 		for _, facet := range em.EVO.Metadata.Facets {
@@ -217,4 +227,31 @@ func containsExact(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func programGovernedState(parent core.EmergION) string {
+	var b strings.Builder
+	write := func(key, value string) { fmt.Fprintf(&b, "%s=%d:%s\n", key, len(value), value) }
+	write("I", parent.IDN)
+	write("S", parent.MEM.Summary)
+	for _, capability := range parent.CAP {
+		write("C", capability)
+	}
+	keys := make([]string, 0, len(parent.REL))
+	for key := range parent.REL {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		write("K", key)
+		write("V", parent.REL[key])
+	}
+	if parent.EVO.Metadata != nil {
+		for _, facet := range parent.EVO.Metadata.Facets {
+			write("F", string(facet))
+		}
+		write("T", string(parent.EVO.Metadata.Topology))
+	}
+	write("Z", parent.IDN)
+	return b.String()
 }
