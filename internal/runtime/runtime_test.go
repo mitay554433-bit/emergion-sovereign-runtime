@@ -4132,41 +4132,40 @@ func TestAnalyzedCandidateAdmissionPreservesDistinctProviderTrajectoryIdentities
 		Risk:         "L",
 	}
 
-        runtimeID := "E-RUNTIME-IDENTITY-TEST"
-        runtimeBound, runtimeDuplicate, err := r.admitAnalyzedCandidate(
-                context.Background(),
-                "provider-trajectory-runtime-bound",
-                []byte("ANALYZE:E-ANALYZE-A,CMP:E-CMP-RUNTIME,RLT:E-RLT-A"),
-                "provider_population",
-                boundary,
-                "",
-                "",
-                analysisA,
-                runtimeID,
-        )
-        if err != nil {
-                t.Fatal(err)
-        }
-        if runtimeDuplicate {
-                t.Fatal("runtime-bound provider trajectory unexpectedly duplicate")
-        }
-        if runtimeBound.IDN != runtimeID {
-                t.Fatalf("runtime identity = %q want %q", runtimeBound.IDN, runtimeID)
-        }
-        if _, _, err := r.admitAnalyzedCandidate(
-                context.Background(),
-                "provider-trajectory-invalid-runtime-id",
-                []byte("ANALYZE:E-ANALYZE-A,CMP:E-CMP-INVALID,RLT:E-RLT-A"),
-                "provider_population",
-                boundary,
-                "",
-                "",
-                analysisA,
-                "BAD-RUNTIME-IDENTITY",
-        ); err == nil {
-                t.Fatal("invalid runtime identity unexpectedly admitted")
-        }
-
+	runtimeID := "E-RUNTIME-IDENTITY-TEST"
+	runtimeBound, runtimeDuplicate, err := r.admitAnalyzedCandidate(
+		context.Background(),
+		"provider-trajectory-runtime-bound",
+		[]byte("ANALYZE:E-ANALYZE-A,CMP:E-CMP-RUNTIME,RLT:E-RLT-A"),
+		"provider_population",
+		boundary,
+		"",
+		"",
+		analysisA,
+		runtimeID,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtimeDuplicate {
+		t.Fatal("runtime-bound provider trajectory unexpectedly duplicate")
+	}
+	if runtimeBound.IDN != runtimeID {
+		t.Fatalf("runtime identity = %q want %q", runtimeBound.IDN, runtimeID)
+	}
+	if _, _, err := r.admitAnalyzedCandidate(
+		context.Background(),
+		"provider-trajectory-invalid-runtime-id",
+		[]byte("ANALYZE:E-ANALYZE-A,CMP:E-CMP-INVALID,RLT:E-RLT-A"),
+		"provider_population",
+		boundary,
+		"",
+		"",
+		analysisA,
+		"BAD-RUNTIME-IDENTITY",
+	); err == nil {
+		t.Fatal("invalid runtime identity unexpectedly admitted")
+	}
 
 	a, duplicate, err := r.admitAnalyzedCandidate(
 		context.Background(),
@@ -5118,5 +5117,94 @@ func TestRevalidateInterpretationReanalyzesPreservedEvidence(t *testing.T) {
 	}
 	if active.MEM.Summary != "corrected interpretation" {
 		t.Fatalf("active summary = %q", active.MEM.Summary)
+	}
+}
+
+func TestCaptureTargetComparison(t *testing.T) {
+	root := t.TempDir()
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	targetText := "persistent governed target"
+	targetRuntime := Runtime{Store: s, Reasoner: &interpretationRevisionReasoner{
+		result: reason.Result{
+			Summary: "unused",
+			Relationships: map[string]string{
+				"source_kind": "unused",
+			},
+			Capabilities: []string{"CMP"},
+			Facts:        []string{"unused"},
+			Risk:         "L",
+		},
+	}}
+
+	target, _, err := targetRuntime.CaptureTarget(context.Background(), targetText)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	evidence := []byte("target comparison evidence")
+	comparison, duplicate, err := targetRuntime.CaptureTargetComparison(
+		context.Background(),
+		target,
+		evidence,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate {
+		t.Fatal("target comparison unexpectedly reported duplicate")
+	}
+
+	if comparison.STA != core.StateAtGOV {
+		t.Fatalf("state = %q want %q", comparison.STA, core.StateAtGOV)
+	}
+	if comparison.REL["source_kind"] != "TARGET_COMPARISON" {
+		t.Fatalf("source_kind = %q", comparison.REL["source_kind"])
+	}
+	if comparison.REL["target_emergion"] != target.IDN {
+		t.Fatalf("target_emergion = %q want %q", comparison.REL["target_emergion"], target.IDN)
+	}
+	if comparison.REL["target_state"] != targetText {
+		t.Fatalf("target_state = %q want %q", comparison.REL["target_state"], targetText)
+	}
+	if comparison.REL["comparison_state"] != "UNRESOLVED" {
+		t.Fatalf("comparison_state = %q want UNRESOLVED", comparison.REL["comparison_state"])
+	}
+
+	foundFact := false
+	for _, fact := range comparison.VAL.Facts {
+		if fact == "target_comparison_required" {
+			foundFact = true
+			break
+		}
+	}
+	if !foundFact {
+		t.Fatalf("target_comparison_required fact missing: %#v", comparison.VAL.Facts)
+	}
+
+	events, err := s.Events()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("events = %d want 2", len(events))
+	}
+	if events[0].Type != "C" || events[1].Type != "C" {
+		t.Fatalf("event sequence = [%q %q] want [C C]", events[0].Type, events[1].Type)
+	}
+
+	st, err := livefield.Rebuild(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	active, ok := st.AtGOV[comparison.IDN]
+	if !ok {
+		t.Fatal("target comparison missing from AtGOV")
+	}
+	if active.REL["comparison_state"] != "UNRESOLVED" {
+		t.Fatalf("active comparison_state = %q", active.REL["comparison_state"])
 	}
 }

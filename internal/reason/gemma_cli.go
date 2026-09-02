@@ -488,36 +488,31 @@ func rejectPromptPlaceholders(r Result, source string) error {
 
 func buildPrompt(name, content, governedState string) string {
 	return `@L:MXPD/2
-@T:REDUCE
-
+@T:OBSERVE
 SOURCE:` + filepath.Base(name) + `
 ` + content + `
 
-Produce one bounded MXPD machine record from SOURCE.
+Observe SOURCE and emit only source-grounded structure.
 
-S = concise natural-language statement of the main meaning proved by SOURCE.
+S = the direct meaning established by SOURCE.
 K = L, M, or H.
-F = one concrete source-supported observation or verified state.
-C = one reusable behavior, mechanism, or operational ability evidenced by SOURCE.
-T = optional canonical operational facet evidenced by SOURCE.
+F = concrete evidence or verified state explicitly established by SOURCE.
+C = a reusable capability only when SOURCE explicitly establishes one.
+T = an operational facet only when SOURCE explicitly establishes one.
 Z = final terminator.
 
-S, F, C, and T MUST come from SOURCE.
-S must state SOURCE meaning directly and must not repeat instruction wording such as
-"summary supported by SOURCE", "meaningful natural-language summary", or field definitions.
-F must describe what is evidenced or verified.
-C must describe what the system can repeatedly do because of that evidence.
-A test result alone is a fact, not a capability.
-Examples of capability form include verifying integrity, preserving evidence,
-preventing duplicate candidates, enforcing governed admission, or rebuilding projection state.
-Do not use protocol tokens, governance tokens, record keys, field labels,
-single letters, AX, GOV, REG, NI, or FC as S, F, or C values.
-Do not invent facts, capabilities, relationships, or authority.
+Every semantic value MUST be grounded directly in SOURCE.
+Do not invent facts, capabilities, relationships, authority, state, or intent.
+Do not infer a capability merely because SOURCE contains a test, description, filename, or code.
+Do not treat absence of evidence as evidence of absence.
+Preserve uncertainty rather than filling missing structure.
+Do not collapse multiple distinct source-supported observations into one invented claim.
+If a field is not established by SOURCE, omit it where the grammar permits omission.
+The runtime, not Gemma, determines governance, admission, verification, canonical state, and lineage.
 
 GOVERNED_STATE is comparison context only:
 ` + governedState + `
 
-AX[S!=T;M!=T;GOV>D;REG>A;NI;FC]
 Generated structure is constrained by the runtime grammar.
 No markdown or explanatory prose.`
 }
