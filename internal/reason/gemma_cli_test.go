@@ -55,7 +55,6 @@ func TestGemmaArgsEnforceOneShotExecution(t *testing.T) {
 		"--color",
 		"--single-turn",
 		"--no-display-prompt",
-		"--output-file",
 	}
 
 	for _, arg := range required {

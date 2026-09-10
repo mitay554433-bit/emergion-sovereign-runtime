@@ -223,13 +223,10 @@ func gemmaArgs(g GemmaCLI, prompt string) []string {
 	args = append(args,
 		"--color", "off",
 		"--grammar", mxpdGrammar,
+		"--simple-io",
 		"--single-turn",
 		"--no-display-prompt",
 	)
-
-	if filepath.Base(g.Binary) != "llama-completion" {
-		args = append(args, "--output-file", "/dev/stdout")
-	}
 
 	return args
 }
