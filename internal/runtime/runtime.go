@@ -1228,7 +1228,7 @@ func (r Runtime) CaptureIdleStateObservation(ctx context.Context, evidence []byt
 
 func (r Runtime) CaptureTargetComparison(ctx context.Context, target core.EmergION, evidence []byte) (core.EmergION, bool, error) {
 	comparisonRuntime := r
-	comparisonRuntime.Reasoner = fixedReasoner{name: "target-comparison", version: "v1", result: reason.Result{Summary: "bounded governed target comparison", Relationships: map[string]string{"source_kind": "TARGET_COMPARISON", "target_emergion": target.IDN, "target_state": strings.TrimSpace(target.REL["target_state"]), "comparison_state": "UNRESOLVED"}, Capabilities: []string{"CMP", "DIF", "PRJ"}, Facts: []string{"target_comparison_required"}, Risk: "L"}}
+	comparisonRuntime.Reasoner = fixedReasoner{name: "target-comparison", version: "v1", result: reason.Result{Summary: "bounded governed target comparison", Relationships: map[string]string{"source_kind": "TARGET_COMPARISON", "target_emergion": target.IDN, "target_state": strings.TrimSpace(target.REL["target_state"]), "comparison_state": "UNRESOLVED", "next_probe": "CMP+DIF"}, Capabilities: []string{"CMP", "DIF", "PRJ"}, Facts: []string{"target_comparison_required", "next_probe_derived"}, Risk: "L"}}
 	return comparisonRuntime.CaptureBytes(ctx, "target-comparison", evidence, "governed_target_comparison")
 }
 
@@ -1848,7 +1848,7 @@ func (r Runtime) ExecuteOneSafeAction(
 			sampleCount := <-observationSamples
 			observationFinished := time.Now()
 			observationRuntime := r
-			observationRuntime.Reasoner = fixedReasoner{name: "execution-observation", version: "v1", result: reason.Result{Summary: "bounded concurrent execution observation", Relationships: map[string]string{"source_kind": "EXECUTION_OBSERVATION", "parent_emergion": request.EmergIONID, "adapter": request.Adapter, "action": request.Action}, Capabilities: []string{"OBS", "CMP"}, Facts: []string{"execution_observed_concurrently"}, Risk: "L"}}
+			observationRuntime.Reasoner = fixedReasoner{name: "execution-signal", version: "v1", result: reason.Result{Summary: "bounded concurrent execution observation", Relationships: map[string]string{"source_kind": "EXECUTION_OBSERVATION", "parent_emergion": request.EmergIONID, "adapter": request.Adapter, "action": request.Action}, Capabilities: []string{"OBS", "CMP"}, Facts: []string{"execution_observed_concurrently"}, Risk: "L"}}
 			observationContent := fmt.Sprintf("XS/1\nK=XO\nP=%s\nH=%s\nD=%s\nX=%s\nB=%s\nE=%s\nN=%d\n", request.EmergIONID, request.SourceHash, request.Adapter, request.Action, observationStarted.UTC().Format(time.RFC3339Nano), observationFinished.UTC().Format(time.RFC3339Nano), sampleCount)
 			_, _, observationErr := observationRuntime.captureBytes(ctx, "execution-observation", []byte(observationContent), "execution_observation", request.TransitionEmergIONID)
 			if observationErr != nil {

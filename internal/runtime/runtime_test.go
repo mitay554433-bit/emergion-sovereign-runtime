@@ -2441,6 +2441,145 @@ func (validatingGemmaCapabilityReasoner) Validate() error {
 	return nil
 }
 
+func TestCoverageRecaptureResolvesExistingAcceptedCapabilityProviders(t *testing.T) {
+	root := t.TempDir()
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, provider := range []core.EmergION{
+		{
+			IDN: "E-ANALYZE",
+			STA: core.StateAtGOV,
+			CAP: []string{"ANALYZE"},
+		},
+		{
+			IDN: "E-CMP",
+			STA: core.StateAtGOV,
+			CAP: []string{"CMP"},
+		},
+		{
+			IDN: "E-RLT",
+			STA: core.StateAtGOV,
+			CAP: []string{"RLT"},
+		},
+	} {
+		provider.MEM.SourceHash = store.Hash([]byte(provider.IDN))
+		provider.MEM.Codec = "test"
+		provider.MEM.Bytes = int64(len(provider.IDN))
+		provider.MEM.Stored = int64(len(provider.IDN))
+		provider.MEM.Summary = "accepted capability provider"
+		provider.REL = map[string]string{
+			"protector": "NO_EXTERNAL_AUTHORITY_CLAIMED",
+		}
+		provider.VAL = core.Validation{
+			Facts:  []string{"provider proof"},
+			Risk:   "L",
+			Recoil: true,
+			WVC:    true,
+		}
+		provider.EVO = core.Evolution{
+			Version: 1,
+			Metadata: &core.Metadata{
+				Topology:     core.TopologyDodecahedronV1,
+				CapturedAt:   time.Now().UTC(),
+				AIIntegrated: false,
+				PromptSchema: "MXPD/2",
+			},
+		}
+
+		if _, err := s.Preserve([]byte(provider.IDN)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.SaveCandidate(provider); err != nil {
+			t.Fatal(err)
+		}
+
+		approved, decision, err := gov.Decide(
+			provider,
+			gov.Approve,
+			"HUMAN_FINAL",
+			"accept capability provider",
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		decisionID, err := s.SaveDecision(decision)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, receipt, err := reg.Accept(approved, decisionID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.SaveAccepted(receipt); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	r := Runtime{
+		Store:    s,
+		Reasoner: reason.Heuristic{},
+	}
+
+	_, cause := pivot.Observe(
+		"COVERAGE",
+		"CANDIDATE_COVERAGE_CLAIM",
+		"BRIDGEGAP_OBSERVATION",
+		"NO_UNRESOLVED_BRIDGEGAP",
+		func() error {
+			return errors.New("COVERAGE failed: BRIDGEGAP:capabilities")
+		},
+	)
+	if cause == nil {
+		t.Fatal("expected COVERAGE divergence")
+	}
+
+	em, duplicate, err := r.recapture(
+		context.Background(),
+		"",
+		nil,
+		cause,
+	)
+	if duplicate {
+		t.Fatal("RECAPTURE unexpectedly reported duplicate")
+	}
+
+	var recaptured *RecaptureError
+	if !errors.As(err, &recaptured) {
+		t.Fatalf("expected RecaptureError, got %T: %v", err, err)
+	}
+
+	if em.REL["required_capability"] != "DERIVE_CAPABILITY" {
+		t.Fatalf(
+			"required_capability = %q want DERIVE_CAPABILITY",
+			em.REL["required_capability"],
+		)
+	}
+	if em.REL["capability_resolution"] != "COMPOSABLE_CANDIDATE" {
+		t.Fatalf(
+			"capability_resolution = %q want COMPOSABLE_CANDIDATE",
+			em.REL["capability_resolution"],
+		)
+	}
+	if em.REL["capability_composition"] != "ANALYZE+CMP+RLT" {
+		t.Fatalf(
+			"capability_composition = %q want ANALYZE+CMP+RLT",
+			em.REL["capability_composition"],
+		)
+	}
+
+	want := "ANALYZE:E-ANALYZE,CMP:E-CMP,RLT:E-RLT"
+	if em.REL["capability_providers"] != want {
+		t.Fatalf(
+			"capability_providers = %q want %q",
+			em.REL["capability_providers"],
+			want,
+		)
+	}
+}
+
 func TestRequiredCapabilityRemainsUnresolvedWhenCompositionIncomplete(t *testing.T) {
 	em := core.EmergION{
 		REL: map[string]string{
@@ -5185,6 +5324,10 @@ func TestCaptureTargetComparison(t *testing.T) {
 		t.Fatalf("target_comparison_required fact missing: %#v", comparison.VAL.Facts)
 	}
 
+	if comparison.REL["next_probe"] != "CMP+DIF" {
+		t.Fatalf("next_probe = %q want CMP+DIF", comparison.REL["next_probe"])
+	}
+
 	events, err := s.Events()
 	if err != nil {
 		t.Fatal(err)
@@ -5206,5 +5349,46 @@ func TestCaptureTargetComparison(t *testing.T) {
 	}
 	if active.REL["comparison_state"] != "UNRESOLVED" {
 		t.Fatalf("active comparison_state = %q", active.REL["comparison_state"])
+	}
+
+	reopened, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reopenedEvents, err := reopened.Events()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rebuilt, err := livefield.Rebuild(reopenedEvents)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	recovered, ok := rebuilt.AtGOV[target.IDN]
+	if !ok {
+		t.Fatalf("target missing after reopen/rebuild: %s", target.IDN)
+	}
+
+	if recovered.IDN != target.IDN {
+		t.Fatalf("target identity changed after reopen/rebuild: got %q want %q", recovered.IDN, target.IDN)
+	}
+
+	if recovered.REL["source_kind"] != "TARGET" {
+		t.Fatalf("recovered source_kind = %q want TARGET", recovered.REL["source_kind"])
+	}
+
+	if recovered.REL["target_state"] != targetText {
+		t.Fatalf("recovered target_state = %q want %q", recovered.REL["target_state"], targetText)
+	}
+
+	reopenedRuntime := Runtime{Store: reopened, Reasoner: targetRuntime.Reasoner}
+	_, duplicate, err = reopenedRuntime.CaptureTarget(context.Background(), targetText)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !duplicate {
+		t.Fatal("recaptured target after reopen was not recognized as duplicate")
 	}
 }
