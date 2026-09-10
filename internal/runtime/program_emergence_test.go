@@ -38,12 +38,17 @@ func TestProposeOneProgramPatchAdmitsPatchAtGOVWithRuntimeOrigin(t *testing.T) {
 	if out, err := exec.Command("git", "init", repo).CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v: %s", err, out)
 	}
+		moduleFile := filepath.Join(repo, "go.mod")
+		if err := os.WriteFile(moduleFile, []byte("module program-emergence-proof\n\ngo 1.23\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
 	target := "internal/a.go"
 	original := []byte("package internal\n\nconst value = 1\n")
 	if err := os.WriteFile(filepath.Join(repo, target), original, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("git", "-C", repo, "add", target)
+	cmd := exec.Command("git", "-C", repo, "add", target, "go.mod")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git add: %v: %s", err, out)
 	}
@@ -159,4 +164,97 @@ func TestProposeOneProgramPatchAdmitsPatchAtGOVWithRuntimeOrigin(t *testing.T) {
 	if _, ok := state.Accepted[em.IDN]; ok {
 		t.Fatal("proposal self-authorized into REG")
 	}
+        approvedPatch, decision, err := gov.Decide(
+                em,
+                gov.Approve,
+                "HUMAN_FINAL",
+                "approve generated PROGRAM patch",
+        )
+        if err != nil {
+                t.Fatal(err)
+        }
+
+        decisionID, err = s.SaveDecision(decision)
+        if err != nil {
+                t.Fatal(err)
+        }
+
+        acceptedPatch, receipt, err := reg.Accept(approvedPatch, decisionID)
+        if err != nil {
+                t.Fatal(err)
+        }
+        if _, err := s.SaveAccepted(receipt); err != nil {
+                t.Fatal(err)
+        }
+
+        if _, err := r.AuthorizeAction(
+                acceptedPatch.IDN,
+                "GITHUB",
+                "PROGRAM",
+                "authorize generated PROGRAM patch",
+                false,
+        ); err != nil {
+                t.Fatal(err)
+        }
+
+        oldDir, err := os.Getwd()
+        if err != nil {
+                t.Fatal(err)
+        }
+        if err := os.Chdir(repo); err != nil {
+                t.Fatal(err)
+        }
+        defer os.Chdir(oldDir)
+
+        request, result, signal, duplicate, err := r.ExecuteAction(
+                context.Background(),
+                acceptedPatch.IDN,
+                "GITHUB",
+                "PROGRAM",
+                reason.GemmaCLI{},
+        )
+        if err != nil {
+                t.Fatal(err)
+        }
+        if duplicate {
+                t.Fatal("PROGRAM execution RECAPTURE unexpectedly duplicate")
+        }
+        if !result.Succeeded {
+                t.Fatalf("PROGRAM execution did not succeed: %#v", result)
+        }
+        if request.AuthorizationID == "" {
+                t.Fatal("PROGRAM execution missing authorization identity")
+        }
+        if signal.STA != core.StateAtGOV {
+                t.Fatalf("PROGRAM execution RECAPTURE state = %q want %q", signal.STA, core.StateAtGOV)
+        }
+        if !signal.VAL.Recoil || !signal.VAL.WVC {
+                t.Fatal("PROGRAM execution RECAPTURE did not pass RECOIL/WVC")
+        }
+        if signal.REL["parent_emergion"] != acceptedPatch.IDN {
+                t.Fatalf(
+                        "PROGRAM execution parent = %q want %q",
+                        signal.REL["parent_emergion"],
+                        acceptedPatch.IDN,
+                )
+        }
+
+        finalSource, err := os.ReadFile(filepath.Join(repo, target))
+        if err != nil {
+                t.Fatal(err)
+        }
+        if string(finalSource) != "package internal\n\nconst value = 2\n" {
+                t.Fatalf("PROGRAM patch did not change source: %s", finalSource)
+        }
+
+        finalState, err := livefield.Rebuild(mustEvents(t, s))
+        if err != nil {
+                t.Fatal(err)
+        }
+        if _, ok := finalState.Accepted[acceptedPatch.IDN]; !ok {
+                t.Fatal("accepted PROGRAM patch disappeared from FIELD")
+        }
+        if _, ok := finalState.AtGOV[signal.IDN]; !ok {
+                t.Fatal("PROGRAM execution RECAPTURE did not return to GOV")
+        }
 }
