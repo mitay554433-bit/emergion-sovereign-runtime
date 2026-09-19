@@ -493,13 +493,20 @@ func TestGovernedCycleCirculatesAndExecutesExistingSafeWork(t *testing.T) {
 		},
 	}
 
+	compositionEvidence := []byte("governed cycle composition source")
+	compositionStored, err := rt.store.Preserve(compositionEvidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	compositionSource := core.EmergION{
 		IDN: "E-GOVERNED-CYCLE-COMPOSITION",
 		STA: core.StateAtGOV,
 		MEM: core.Memory{
-			SourceHash: "governed-cycle-composition-source",
-			Bytes:      1,
-			Stored:     1,
+			SourceHash: compositionStored.Hash,
+			Codec:      compositionStored.Codec,
+			Bytes:      compositionStored.Bytes,
+			Stored:     compositionStored.Stored,
 			Summary:    "governed cycle composition source",
 		},
 		REL: map[string]string{
