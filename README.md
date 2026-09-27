@@ -1,48 +1,69 @@
 # EmergION Sovereign Runtime
 
-A separate local-first implementation of:
+A local-first governed runtime implementing the existing sovereign path:
 
 ```text
-EmergER → EmergION candidate → RECOIL → WVC → GOV/HUMAN_FINAL → REG → FIELD
+SOURCE
+→ EmergER
+→ EmergION
+→ RECOIL / WVC
+→ GOV / HUMAN_FINAL
+→ REG
+→ FIELD
 ```
 
-`EmergOX` is an alias for the live FIELD embodiment. It is not a layer, file, folder, server, or authority.
+`EmergOX` is an alias for the live FIELD embodiment. It is not a separate layer, file, folder, server, registry, or authority.
 
-## What is working
+## Canonical documentation
 
-- one native Go runtime using only the standard library,
-- no ChatGPT dependency,
-- no HTTP server,
-- local Gemma reasoning through `llama-cli`,
-- one GOV-ready EmergION per unique source,
-- one compressed evidence object per unique source,
-- one compact hash-chained COSL event stream,
-- automatic Dropzone capture and clearing,
-- explicit HUMAN_FINAL decisions,
-- REG acceptance only after approval,
-- deterministic FIELD reconstruction,
-- automatic JSON and HTML FIELD projections with a hash-bound current receipt,
-- operator-visible evidence proof and governance status,
-- CPU and FIELD analytics,
-- a native embedding API under `pkg/fieldapi`,
-- cross-platform native builds.
+- `docs/ARCHITECTURE.md` — canonical architecture and invariants.
+- `docs/SYSTEM_STATUS.md` — current verified state, operational AI boundary, projections, build state, and explicit unverified boundaries.
+- `REPOSITORY_MANIFEST.json` — repository/build manifest; regenerate it after source or documentation changes before treating its hashes as current.
 
-The Gemma adapter is incorporated. A compatible Gemma GGUF model and `llama-cli` executable are not bundled because the model is large and platform-specific. The runtime automatically searches common local paths and `PATH`; `field doctor` fails closed until both are found.
+## Current operating surface
 
-## Minimal persistence
+The existing Go runtime provides:
+
+- standard-library native runtime;
+- no ChatGPT dependency;
+- no required HTTP server;
+- local Gemma reasoning through `llama-cli`;
+- bounded structured AI output and deterministic validation;
+- one GOV-ready EmergION per unique source;
+- one compressed evidence object per unique source;
+- hash-chained COSL events;
+- governed Dropzone capture and clearing;
+- explicit HUMAN_FINAL decisions;
+- REG acceptance only after approval;
+- deterministic FIELD reconstruction;
+- JSON/HTML projections with a hash-bound current receipt;
+- evidence proof and governance-state separation;
+- CPU and FIELD analytics;
+- PRM → SAAB → CPSL → SAW → LIB projections;
+- governed execution-result recapture;
+- native `pkg/fieldapi` embedding seam;
+- native release builds for the existing supported targets.
+
+## AI boundary
+
+Gemma is an embodiment of the existing `Reasoner` interface. It may analyze, compare, relate, draft, simulate, and propose bounded capabilities. It cannot independently approve GOV state, accept at REG, or bypass HUMAN_FINAL.
+
+The action catalog derives capabilities from accepted EmergION declarations and facets. Consequential actions such as `PROGRAM`, `SEND`, `TRANSFER`, `DEPLOY`, `CONTRACT`, and `ACQUIRE` remain HUMAN_FINAL-gated.
+
+## Persistence
 
 ```text
-.field/field.cosl     compact append-only semantic and governance events
-.field/o/<sha>.gz     one compressed lossless source object per unique hash
-dropzone/             transient intake; cleared after verified capture
+.field/field.cosl     canonical append-only semantic/governance events
+.field/o/<sha>.gz     compressed source evidence by SHA-256
+dropzone/             transient intake
 outputs/              rebuildable FIELD projections
 ```
 
-No SOURCE, KIN, EmergER, RECOIL, or WVC stage files are persisted.
+No source, KIN, EmergER, RECOIL, or WVC stage files are required as semantic authority.
 
 ## Local Gemma discovery
 
-The runtime first checks `GEMMA_BIN` and `GEMMA_MODEL`, then searches `PATH` and common local model directories. Explicit configuration remains available:
+The runtime checks explicit configuration first and then local executable/model paths:
 
 ```text
 GEMMA_BIN=/path/to/llama-cli
@@ -68,31 +89,42 @@ field doctor
 field run
 ```
 
-Files placed in the Dropzone are analyzed by local Gemma, reduced to one EmergION candidate, verified through RECOIL/WVC, persisted at GOV, and removed from the Dropzone. The runtime then waits for HUMAN_FINAL.
+The live Termux environment has verified a real local Gemma executable/model path and the full Go test suite has passed there. The phone remains the authoritative environment for final local build verification.
+
+Approval remains explicit:
 
 ```text
 field decide E-... APPROVE "reason"
 ```
 
-Approval creates a GOV receipt and a separate REG acceptance receipt. FIELD projections are refreshed automatically.
+Approval creates the governed decision/REG acceptance path and refreshes FIELD projections.
 
-The current projection boundary is `outputs/projection.current.json`. It is
-written after `field.json` and `field.html` and binds both files to the current
-COSL tip with SHA-256 hashes. Operator clients should accept a projection only
-when it matches that receipt.
-
-To create a complete, verified lineage artifact at an already authorized local
-transfer directory:
+The current projection boundary is:
 
 ```text
-field export-lineage /sdcard/Download
+outputs/projection.current.json
 ```
 
-The command prints the exact bundle path, branch, HEAD, SHA-256, and export
-time. It does not upload externally or expand authority.
+It binds the JSON and HTML projection hashes to the current COSL tip. It is a freshness/integrity receipt, not semantic authority.
+
+## Governed modification
+
+The existing runtime already contains the governed PROGRAM path:
+
+```text
+REG-accepted EmergION
+→ PROGRAM capability
+→ HUMAN_FINAL authorization
+→ existing GITHUB PROGRAM executor
+→ execution result
+→ governed recapture
+→ FIELD
+```
+
+Completing the executor's live worktree binding is therefore an implementation step inside the existing architecture, not a new AI or registry layer.
 
 ## Independence
 
-Termux is only one possible current host. The core does not import or depend on Termux. Native binaries are built for Linux AMD64, Linux ARM64, and Windows AMD64. `pkg/fieldapi` allows a future Android, desktop, or embedded native shell to use the same runtime without a CLI or server.
+Termux is the current verified host, not the runtime architecture. The Go core does not import or depend on Termux. `pkg/fieldapi` is the existing native embedding seam for future Android, desktop, or embedded shells.
 
-A truly Termux-free Android deployment still requires a native Android shell and a platform build of the local inference engine. That packaging is not yet completed.
+A Termux-free Android shell and platform-packaged inference engine remain explicitly unverified and are not represented as complete capabilities.
