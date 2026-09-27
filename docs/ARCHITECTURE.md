@@ -1,113 +1,286 @@
-# Architecture
+# EmergION Sovereign Runtime — Canonical Architecture
 
-## Identity
+**Architecture state:** finalized through the currently verified governed-demand-v1 implementation boundary.
+
+**Canonical rule:** existing runtime, COSL/REG authority, FIELD reconstruction, lineage, and HUMAN_FINAL governance remain authoritative. Documentation describes the implemented tree; it does not create a parallel architecture.
+
+## 1. Sovereign identity
 
 ```text
-EmergER → EmergION → EmergOX/FIELD
+SOURCE
+  ↓
+EmergER
+  ↓
+EmergION
+  ↓
+RECOIL / WVC
+  ↓
+GOV / HUMAN_FINAL
+  ↓
+REG
+  ↓
+FIELD
 ```
 
-- **EmergER** is the transient semantic emergence process.
-- **EmergION** is the sovereign persistent semantic entity:
-  `<IDN, STA, MEM, REL, CAP, VAL, EVO>`.
-- **EmergOX** is an alias for the live FIELD embodiment formed by REG-accepted EmergIONs.
-- **HUMAN_FINAL** governs reality.
+- **EmergER** is transient semantic emergence.
+- **EmergION** is the sovereign persistent semantic entity: `<IDN, STA, MEM, REL, CAP, VAL, EVO>`.
+- **EmergOX** is an alias for the live FIELD embodiment; it is not a separate authority, layer, server, or registry.
+- **HUMAN_FINAL** is the final authority over consequential reality-changing transitions.
+- Files, binaries, evidence objects, models, projections, adapters, and external systems are embodiments or evidence, never sovereign identity or authority.
 
-Files, binaries, event streams, compressed objects, models, projections, plugins, and adapters are embodiments. They are never identity or authority.
+## 2. Legal/semantic operators
 
-## Legal operators
+The existing bounded operator vocabulary is:
 
 ```text
 OBS CMP RLT VLD COM DIF PRJ EVL
 ```
 
-## Admission
+AI operates inside this bounded semantic surface. It does not become GOV or REG authority merely by producing an answer.
+
+## 3. Admission and persistence
 
 ```text
 SOURCE
-→ transient OBS/CMP/RLT/DIF/COM/VLD/EVL
-→ one EmergION candidate
+→ OBS/CMP/RLT/DIF/COM/VLD/EVL
+→ bounded EmergION candidate
 → RECOIL
 → WVC
-→ GOV/HUMAN_FINAL
+→ GOV
+→ HUMAN_FINAL
 → REG
-→ LIB/PROJ
-→ FIELD
+→ FIELD / LIB / projections
 ```
 
-The runtime persists only the completed GOV-ready EmergION. Intermediate stages exist in memory and disappear after validation.
+The runtime does not persist an uncontrolled chain of intermediate semantic stages. Durable semantic transitions are represented through the existing COSL event stream and verified evidence store.
 
-## Dodecahedral metadata projection
-
-Optional metadata is carried inside `EVO`, preserving the canonical
-`<IDN, STA, MEM, REL, CAP, VAL, EVO>` identity and the existing COSL/REG lineage.
-It timestamps capture, records the logical prompt schema and AI integration state,
-and may hold source-supported build-graph and monetization attributes. Capability
-classification is bounded to twelve faces: FIELD Command, Emergence Capture,
-Program Forge, Product/Store, Customers/Sales, Communications, Payments/Finance,
-Grant/Funding, Patent/IP, M&A/Partnerships, Documentation/Projection, and
-Analytics/Forecasting. The Evolution Engine governs those faces; it is not a
-thirteenth face. Metadata remains a GOV candidate until HUMAN_FINAL and REG.
-Before persistence, the runtime bounds and validates facets, graph nodes, graph
-edges and monetization text. REG reconstruction also verifies that every
-acceptance receipt names the exact HUMAN_FINAL approval event.
-
-## Persistence embodiment
-
-The implementation uses:
+Persistence is intentionally minimal:
 
 ```text
-one COSL event stream
-+ one compressed evidence object per unique source
-+ rebuildable projections with an atomic current receipt
+.field/field.cosl     append-only semantic/governance events
+.field/o/<sha>.gz     one compressed source object per unique SHA-256
+.dropzone/            transient intake
+outputs/              rebuildable projections
 ```
 
-Candidate, decision, and REG events are the only durable semantic transitions. Source objects are deduplicated by SHA-256 and gzip-compressed. The Dropzone is deleted after verified capture. Orphan evidence is removed by verification.
+`projection.current.json` is a projection/freshness receipt. It is not semantic authority.
 
-`projection.current.json` is published last and binds the JSON and HTML
-projection hashes to the reconstructed COSL tip. It is a freshness/projection
-receipt, never semantic authority. The operator projection keeps evidence proof
-separate from HUMAN_FINAL and REG governance status.
+## 4. Canonical state machine
 
-## Reasoning
+The implemented state boundary is:
 
-Gemma is a bounded CAP embodiment through the `Reasoner` interface. It may analyze, compare, relate, draft, and simulate. It cannot decide at GOV or accept at REG.
+```text
+candidate
+   │
+   ├── GOV / RETURN → controlled rework with exact predecessor lineage
+   │
+   └── GOV / APPROVE
+          ↓
+       REG ACCEPT
+          ↓
+       FIELD accepted state
+```
+
+REG acceptance requires an approved EmergION and the approving decision identity. REG produces its own receipt. Accepted state is therefore distinct from projection state.
+
+The existing implementation enforces that an execution target must already be REG-accepted before execution preparation. fileciteturn8file0
+
+## 5. FIELD is the live state
+
+FIELD is reconstructed from the canonical event stream. Projections are derived views:
+
+```text
+COSL events
+   ↓
+FIELD rebuild
+   ├── JSON projection
+   ├── HTML projection
+   ├── current projection receipt
+   ├── analytics / metrics
+   └── operator views
+```
+
+A projection may be regenerated. It cannot override the underlying governed event history.
+
+## 6. Dodecahedral metadata
+
+`EVO` carries bounded optional metadata while preserving the canonical EmergION identity.
+
+The current twelve-face classification is:
+
+1. FIELD Command
+2. Emergence Capture
+3. Program Forge
+4. Product / Store
+5. Customers / Sales
+6. Communications
+7. Payments / Finance
+8. Grant / Funding
+9. Patent / IP
+10. M&A / Partnerships
+11. Documentation / Projection
+12. Analytics / Forecasting
+
+The Evolution Engine is an operating mechanism over these faces, not a thirteenth authority face.
+
+Metadata may carry source-supported timestamps, logical prompt schema, AI integration state, build-graph attributes, relationships, and monetization attributes. Those attributes remain governed candidates until HUMAN_FINAL and REG where the transition is consequential.
+
+## 7. AI operating boundary
 
 ```text
 local source
-→ Gemma analysis
-→ deterministic structural validation
-→ EmergION candidate
+   ↓
+local Gemma / Reasoner
+   ↓
+bounded structured result
+   ↓
+deterministic validation
+   ↓
+EmergION candidate
 ```
 
-The default reasoner is Gemma. The heuristic reasoner exists only as an explicit diagnostic and test fallback.
+Gemma is an implementation of the existing `Reasoner` boundary. It may analyze, compare, relate, draft, simulate, and propose bounded capability structures. It does not directly become GOV authority, REG authority, or HUMAN_FINAL.
 
-## Living FIELD
+The repository's MXPD grammar and structural tests constrain model output rather than accepting unrestricted natural-language capability generation.
 
-The local event loop is not a server. It observes the Dropzone, performs local reasoning, persists one candidate, clears transient input, updates projections, and waits at GOV.
+The heuristic reasoner remains an explicit diagnostic/test fallback; it is not the sovereign AI authority.
+
+## 8. Capability and action architecture
+
+Action capability is derived from the accepted EmergION's declared capabilities and metadata facets through the existing `DeriveActionCandidates` catalog.
+
+Current governed capability families include:
 
 ```text
-FIELD observes
-→ EmergER activates
-→ candidate emerges
-→ HUMAN_FINAL governs
-→ REG accepts
-→ FIELD changes
+PROGRAM_FORGE
+PRODUCT_STORE
+CUSTOMERS_SALES
+COMMUNICATIONS
+PAYMENTS_FINANCE
+GRANT_FUNDING
+PATENT_IP
+MA_PARTNERSHIPS
+DOCS_PROJECTION
+ANALYTICS_FORECAST
 ```
 
-## External capability boundary
+The action catalog already classifies consequential actions such as `PROGRAM`, `SEND`, `TRANSFER`, `DEPLOY`, `CONTRACT`, and `ACQUIRE` as HUMAN_FINAL actions. `PROGRAM` may be exposed through the existing GitHub adapter and remains HUMAN_FINAL-gated. fileciteturn9file0
 
-Programs, patents, mergers and acquisitions, websites, stores, email, payments, customers, products, and sales will be added as bounded CAP adapters. Read, analysis, drafting, simulation, and testing may be automated. Sending, payment movement, contracts, acquisitions, deployment, and REG acceptance remain gated.
+## 9. Governed execution
 
-Local lineage transfer uses the existing Git repository as evidence: a bounded
-command creates and verifies a complete bundle in a human-authorized local
-directory. It does not create a second registry, background uploader, or new
-authority.
+The current execution path is:
 
-## Independence path
+```text
+REG-accepted EmergION
+       ↓
+DeriveActionCandidates
+       ↓
+PrepareExecution
+       ↓
+HUMAN_FINAL authorization when required
+       ↓
+existing adapter executor
+       ↓
+BindExecutionResult
+       ↓
+CaptureGovernedExecutionResult
+       ↓
+new governed execution signal / FIELD rebuild
+```
 
-1. Native Go core — implemented.
-2. Local Gemma CLI adapter — implemented.
-3. Native embedding API — implemented.
-4. Desktop/native shell — not yet implemented.
-5. Android shell with embedded inference engine — not yet implemented.
-6. External business adapters — not yet implemented.
+The existing runtime implements both local Gemma execution and the GitHub PROGRAM executor through `ExecuteAction`. Execution results are rebound to the exact request and recaptured into the governed pipeline. fileciteturn8file0
+
+## 10. Safe autonomous operation
+
+The existing `ExecuteOneSafeAction` path is deliberately narrower than general PROGRAM execution. It selects an enabled, `CAP_ONLY`, non-HUMAN_FINAL `LOCAL_GEMMA:ANALYZE` action and skips actions for which an execution observation already exists.
+
+This is the correct autonomy boundary for unattended analysis: analysis can circulate; consequential programming or external-world actions remain governed.
+
+## 11. Live-tree modification boundary
+
+The repository already contains the governed PROGRAM capability and GitHub execution adapter. The remaining live-tree integration boundary is therefore an implementation detail of the existing executor/worktree contract, not a new architecture.
+
+The intended path is:
+
+```text
+accepted EmergION
+→ explicit PROGRAM capability
+→ HUMAN_FINAL authorization
+→ existing GITHUB PROGRAM executor
+→ authorized repository worktree
+→ execution result
+→ governed recapture
+→ FIELD
+```
+
+No background uploader, second registry, shadow authority, or replacement execution system is introduced.
+
+## 12. Build graph and commercial projection
+
+The governed metadata path supports the existing projection chain:
+
+```text
+REG-accepted state
+→ PRM
+→ SAAB
+→ CPSL
+→ SAW
+→ LIB index
+```
+
+Explicit governed `COMPOSITION_KIN` relationships derive SAAB structures. CPSL is deterministic. SAWs and LIB are projections and do not become authority.
+
+Commercial/monetization metadata propagates through this projection chain while remaining source-supported and governed.
+
+## 13. Provenance and lineage
+
+Execution lineage is bound to the actual runtime request rather than supplied by the model. The canonical execution identity includes:
+
+```text
+EmergION ID
+Source hash
+Authorization event when present
+Authority
+Adapter
+Action
+```
+
+Execution observations and execution results return through the same governed capture mechanism. The resulting lineage is therefore part of the existing COSL/REG/FIELD architecture rather than a separate activity log.
+
+## 14. Projection integrity
+
+`projection.current.json` is written after the JSON and HTML projections and binds their SHA-256 hashes to the reconstructed COSL tip. Consumers must treat the receipt as a freshness/integrity check, not as semantic authority.
+
+FIELD JSON/HTML, analytics, SAW, LIB, and operator projections are all rebuildable from canonical state.
+
+## 15. Current host and independence boundary
+
+The verified live host is the user's Android/Termux environment. The Go runtime itself remains host-independent and uses the standard library.
+
+Current verified local AI path:
+
+```text
+llama-cli
+→ local Gemma GGUF
+→ Reasoner
+→ governed runtime
+```
+
+The repository also exposes `pkg/fieldapi` as the existing native embedding seam.
+
+A Termux-free Android shell and platform-packaged inference engine are not claimed complete by this architecture document because they have not been verified in the current tree.
+
+## 16. Non-negotiable invariants
+
+1. FIELD is reconstructed state, not an authority replacement.
+2. COSL/REG remain canonical governance lineage.
+3. HUMAN_FINAL remains final authority for consequential transitions.
+4. AI proposes/analyses within bounded schemas; it does not self-authorize.
+5. Execution must originate from an accepted EmergION.
+6. Consequential actions require their existing HUMAN_FINAL gate.
+7. Execution results return to the governed capture pipeline.
+8. Projections remain rebuildable and non-authoritative.
+9. Evidence is content-addressed and deduplicated.
+10. No parallel registry, shadow ledger, or replacement runtime is introduced.
+11. The existing code path is modified only where required to complete an existing contract.
+12. Verified completion is distinguished from unverified future packaging or external integrations.
