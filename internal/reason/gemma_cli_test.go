@@ -188,7 +188,7 @@ func TestGemmaCLIAnalyzeInstalledRuntime(t *testing.T) {
 
 	got, err := g.Analyze(context.Background(), Input{
 		Name:    "gemma-integration-probe",
-		Content: []byte("Local inference execution probe."),
+		Content: []byte("The local inference execution probe confirms that Gemma inference executes through llama-cli."),
 	})
 	if err != nil {
 		t.Fatal(err)

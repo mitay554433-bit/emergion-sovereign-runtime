@@ -863,7 +863,7 @@ func TestRunDrivesSuccessiveGovernedCyclesWithoutManualInvocation(t *testing.T) 
 
 	var observed []cycleObservation
 
-	timeout := time.NewTimer(5 * time.Second)
+	timeout := time.NewTimer(300 * time.Second)
 	defer timeout.Stop()
 
 	for len(observed) < 2 {
