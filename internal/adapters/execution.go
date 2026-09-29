@@ -135,6 +135,14 @@ func PrepareExecution(
 				action,
 			)
 		}
+
+		if strings.TrimSpace(authorization.EventID) == "" {
+			return ExecutionRequest{}, fmt.Errorf(
+				"action %s:%s authorization is missing exact COSL Q event identity",
+				adapter,
+				action,
+			)
+		}
 	}
 
 	request := ExecutionRequest{
