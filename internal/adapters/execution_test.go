@@ -113,6 +113,32 @@ func TestPrepareExecutionAcceptsHumanFinalQ(t *testing.T) {
 	}
 }
 
+func TestPrepareExecutionRejectsGatedActionWithoutExactQEventID(t *testing.T) {
+	st := executionProofState()
+
+	st.ActionAuthorizations = append(
+		st.ActionAuthorizations,
+		core.ActionAuthorizationReceipt{
+			EmergIONID: "E-EXEC-PROOF",
+			Adapter:    "EMAIL",
+			Action:     "SEND",
+			Authority:  "HUMAN_FINAL",
+			Authorized: true,
+			At:         time.Now().UTC(),
+		},
+	)
+
+	if _, err := PrepareExecution(
+		st,
+		"E-EXEC-PROOF",
+		"EMAIL",
+		"SEND",
+		false,
+	); err == nil {
+		t.Fatal("gated execution unexpectedly prepared without exact COSL Q event identity")
+	}
+}
+
 func TestPrepareExecutionDoesNotMutateAuthorizationState(t *testing.T) {
 	st := executionProofState()
 
