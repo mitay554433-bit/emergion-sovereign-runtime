@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"emergion-sovereign-runtime/internal/core"
+	livefield "emergion-sovereign-runtime/internal/field"
 	fieldruntime "emergion-sovereign-runtime/internal/runtime"
 	"emergion-sovereign-runtime/internal/store"
 )
@@ -43,7 +44,6 @@ func TestPersistentTargetSurvivesRebuildRestartAndDuplicateCapture(t *testing.T)
 		t.Fatal("persistent target has no source hash")
 	}
 
-	// Explicit HUMAN_FINAL authority uses the existing fieldapi decision path.
 	api, err := Open(stateRoot, sawCirculationReasoner{})
 	if err != nil {
 		t.Fatal(err)
@@ -52,17 +52,15 @@ func TestPersistentTargetSurvivesRebuildRestartAndDuplicateCapture(t *testing.T)
 		t.Fatal(err)
 	}
 
-	// Reopen the same canonical state root: FIELD must reconstruct the target
-	// from COSL rather than from process memory.
 	reopened, err := store.Open(stateRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
-	st, err := reopened.Events()
+	events, err := reopened.Events()
 	if err != nil {
 		t.Fatal(err)
 	}
-	state, err := fieldruntimeState(st)
+	state, err := livefield.Rebuild(events)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,8 +76,6 @@ func TestPersistentTargetSurvivesRebuildRestartAndDuplicateCapture(t *testing.T)
 		t.Fatal("target relationships changed across restart")
 	}
 
-	// Same target content must resolve to the existing canonical identity and
-	// must not append a second candidate.
 	rt2 := fieldruntime.Runtime{Store: reopened, Reasoner: sawCirculationReasoner{}}
 	duplicateTarget, duplicate, err := rt2.CaptureTarget(ctx, "TARGET: governed persistent objective")
 	if err != nil {
@@ -105,8 +101,4 @@ func TestPersistentTargetSurvivesRebuildRestartAndDuplicateCapture(t *testing.T)
 	if candidateCount != 1 {
 		t.Fatalf("persistent target candidate count = %d want 1", candidateCount)
 	}
-}
-
-func fieldruntimeState(events []core.Event) (core.State, error) {
-	return rebuildFieldState(events)
 }
