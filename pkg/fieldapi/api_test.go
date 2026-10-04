@@ -742,7 +742,7 @@ func TestRunDrivesSuccessiveGovernedCyclesWithoutManualInvocation(t *testing.T) 
 		reasoner: sawCirculationReasoner{},
 	}
 
-	accept := func(em core.EmergION, reasonText string) {
+	accept := func(em core.EmergION, reasonText string, evidence []byte) {
 		t.Helper()
 
 		em.STA = core.StateAtGOV
@@ -760,7 +760,11 @@ func TestRunDrivesSuccessiveGovernedCyclesWithoutManualInvocation(t *testing.T) 
 			}
 		}
 
-		evidence := []byte(em.IDN)
+		if len(evidence) == 0 {
+
+			evidence = []byte(em.IDN)
+
+		}
 		preserved, err := s.Preserve(evidence)
 		if err != nil {
 			t.Fatal(err)
@@ -816,7 +820,7 @@ func TestRunDrivesSuccessiveGovernedCyclesWithoutManualInvocation(t *testing.T) 
 		},
 	}
 
-	accept(safeWork, "accept unattended run safe work")
+	accept(safeWork, "accept unattended run safe work", []byte("This preserved source is an analytics forecast workload for analysis."))
 
 	gemma := reason.GemmaCLI{
 		Binary:    binary,
@@ -1080,5 +1084,221 @@ func TestGovernedCycleCirculatesSAWBeforeProgramProposalFailure(t *testing.T) {
 		if _, ok := state.Accepted[em.IDN]; ok {
 			t.Fatalf("circulated SAW %s self-authorized into REG", em.IDN)
 		}
+	}
+}
+
+func TestRunRecomparesPersistentTargetWhenAcceptedRealityChanges(t *testing.T) {
+	root := t.TempDir()
+
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt := &Runtime{
+		store:    s,
+		reasoner: sawCirculationReasoner{},
+	}
+	if rt.store == nil {
+		t.Fatal("runtime store not initialized")
+	}
+
+	model := filepath.Join(root, "model.gguf")
+	if err := os.WriteFile(model, []byte("test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	fake := filepath.Join(root, "fake-gemma")
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\nexit 7\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	gemma := reason.GemmaCLI{
+		Binary:    fake,
+		Model:     model,
+		Context:   2048,
+		MaxTokens: 80,
+		Threads:   1,
+		Timeout:   5 * time.Second,
+	}
+	if err := gemma.Validate(); err != nil {
+		t.Fatalf("fake Gemma validation failed: %v", err)
+	}
+	accept := func(em core.EmergION) {
+		if _, err := rt.store.SaveCandidate(em); err != nil {
+			t.Fatal(err)
+		}
+		approved, decision, err := gov.Decide(
+			em,
+			gov.Approve,
+			"HUMAN_FINAL",
+			"deterministic target recurrence proof",
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		decisionID, err := rt.store.SaveDecision(decision)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, receipt, err := reg.Accept(approved, decisionID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := rt.store.SaveAccepted(receipt); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	target := core.EmergION{
+		IDN: "E-RUN-TARGET",
+		MEM: core.Memory{SourceHash: "run-target-source", Bytes: 1, Stored: 1, Summary: "persistent target"},
+		STA: core.StateAtGOV,
+		REL: map[string]string{
+			"source_kind":  "TARGET",
+			"target_state": "runtime deployment state is deployed",
+		},
+		VAL: core.Validation{Recoil: true, WVC: true},
+		EVO: core.Evolution{Version: 1},
+	}
+	reality0 := core.EmergION{
+		IDN: "E-RUN-REALITY-0",
+		MEM: core.Memory{SourceHash: "run-reality-0-source", Bytes: 1, Stored: 1, Summary: "accepted reality zero"},
+		STA: core.StateAtGOV,
+		REL: map[string]string{"source_kind": "SOURCE"},
+		VAL: core.Validation{
+			Facts:  []string{"runtime deployment state is observation-only"},
+			Recoil: true,
+			WVC:    true,
+		},
+		EVO: core.Evolution{Version: 1},
+	}
+
+	accept(target)
+	accept(reality0)
+
+	st, err := rt.state()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(st.Accepted) != 2 {
+		t.Fatalf("accepted fixture count = %d want 2", len(st.Accepted))
+	}
+
+	runUntilComparison := func(excludeID string) core.EmergION {
+		t.Helper()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		runErr := make(chan error, 1)
+
+		go func() {
+			runErr <- rt.Run(
+				ctx,
+				filepath.Join(root, "dropzone"),
+				10*time.Millisecond,
+				gemma,
+				nil,
+				nil,
+			)
+		}()
+
+		var found core.EmergION
+		deadline := time.Now().Add(2 * time.Second)
+
+		for time.Now().Before(deadline) {
+			state, stateErr := rt.state()
+			if stateErr != nil {
+				cancel()
+				t.Fatal(stateErr)
+			}
+
+			for _, em := range state.AtGOV {
+				if em.REL["source_kind"] == "TARGET_COMPARISON" &&
+					em.REL["target_emergion"] == target.IDN &&
+					em.IDN != excludeID {
+					found = em
+					break
+				}
+			}
+
+			if found.IDN != "" {
+				break
+			}
+
+			time.Sleep(10 * time.Millisecond)
+		}
+
+		cancel()
+
+		select {
+		case err := <-runErr:
+			if err != nil && err != context.Canceled {
+				t.Fatalf("Run cancellation error = %v", err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("Run did not stop after context cancellation")
+		}
+
+		if found.IDN == "" {
+			t.Fatal("Run did not produce governed TARGET_COMPARISON")
+		}
+
+		return found
+	}
+
+	comparison0 := runUntilComparison("")
+	if comparison0.STA != core.StateAtGOV {
+		t.Fatalf(
+			"target comparison state = %q want %q",
+			comparison0.STA,
+			core.StateAtGOV,
+		)
+	}
+	if !comparison0.VAL.Recoil || !comparison0.VAL.WVC {
+		t.Fatal("target comparison bypassed RECOIL/WVC")
+	}
+
+	// HUMAN_FINAL accepts the first comparison before accepted reality changes.
+	accept(comparison0)
+
+	reality1 := core.EmergION{
+		IDN: "E-RUN-REALITY-1",
+		STA: core.StateAtGOV,
+		MEM: core.Memory{
+			SourceHash: "run-reality-1-source",
+			Bytes:      1,
+			Stored:     1,
+			Summary:    "accepted reality one",
+		},
+		REL: map[string]string{"source_kind": "SOURCE"},
+		VAL: core.Validation{
+			Facts:  []string{"runtime deployment state is staged"},
+			Recoil: true,
+			WVC:    true,
+		},
+		EVO: core.Evolution{Version: 1},
+	}
+	accept(reality1)
+
+	comparison1 := runUntilComparison(comparison0.IDN)
+
+	if comparison1.IDN == comparison0.IDN {
+		t.Fatal("changed accepted reality reused previous target comparison")
+	}
+	if comparison1.REL["target_emergion"] != target.IDN {
+		t.Fatalf(
+			"recomparison target = %q want %q",
+			comparison1.REL["target_emergion"],
+			target.IDN,
+		)
+	}
+	if comparison1.STA != core.StateAtGOV {
+		t.Fatalf(
+			"recomparison state = %q want %q",
+			comparison1.STA,
+			core.StateAtGOV,
+		)
+	}
+	if !comparison1.VAL.Recoil || !comparison1.VAL.WVC {
+		t.Fatal("recomparison bypassed RECOIL/WVC")
 	}
 }

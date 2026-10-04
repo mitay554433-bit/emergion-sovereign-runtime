@@ -26,6 +26,7 @@ type Memory struct {
 
 type Validation struct {
 	Facts       []string `json:"f,omitempty"`
+	Differences []string `json:"x,omitempty"`
 	Gaps        []string `json:"g,omitempty"`
 	Risk        string   `json:"r,omitempty"`
 	Recoil      bool     `json:"c"`

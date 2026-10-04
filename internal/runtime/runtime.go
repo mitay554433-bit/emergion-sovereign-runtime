@@ -1226,10 +1226,143 @@ func (r Runtime) CaptureIdleStateObservation(ctx context.Context, evidence []byt
 	return idleRuntime.CaptureBytes(ctx, "idle-state-observation", evidence, "governed_idle")
 }
 
-func (r Runtime) CaptureTargetComparison(ctx context.Context, target core.EmergION, evidence []byte) (core.EmergION, bool, error) {
+func (r Runtime) CaptureImplementationEvidence(
+	ctx context.Context,
+	evidence []byte,
+) (core.EmergION, bool, error) {
+	if len(evidence) == 0 {
+		return core.EmergION{}, false, fmt.Errorf("empty implementation evidence")
+	}
+
+	evidenceRuntime := r
+	evidenceRuntime.Reasoner = fixedReasoner{
+		name:    "implementation-evidence",
+		version: "v1",
+		result: reason.Result{
+			Summary: "bounded governed implementation evidence",
+			Relationships: map[string]string{
+				"source_kind": "IMPLEMENTATION_EVIDENCE",
+			},
+			Capabilities: []string{"OBS", "VLD"},
+			Facts:        []string{"implementation_evidence_observed"},
+			Risk:         "L",
+		},
+	}
+
+	return evidenceRuntime.CaptureBytes(
+		ctx,
+		"implementation-evidence",
+		evidence,
+		"governed_implementation_evidence",
+	)
+}
+
+func observeAcceptedReality(reality map[string]core.EmergION) string {
+	ids := make([]string, 0, len(reality))
+	for id := range reality {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
+	var b strings.Builder
+	for _, id := range ids {
+		em := reality[id]
+		b.WriteString(em.Symbolic())
+
+		facts := append([]string(nil), em.VAL.Facts...)
+		sort.Strings(facts)
+		for _, fact := range facts {
+			fact = strings.TrimSpace(fact)
+			if fact == "" {
+				continue
+			}
+			b.WriteString("ACCEPTED_FACT:")
+			b.WriteString(fact)
+			b.WriteByte('\n')
+		}
+	}
+	return b.String()
+}
+
+func targetComparisonEvidence(target core.EmergION, reality map[string]core.EmergION) []byte {
+	var b strings.Builder
+	b.WriteString("TARGET_COMPARISON/1\n")
+	b.WriteString("TARGET_EMERGION:")
+	b.WriteString(target.IDN)
+	b.WriteString("\nTARGET_STATE:\n")
+	b.WriteString(strings.TrimSpace(target.REL["target_state"]))
+	b.WriteString("\nREALITY:\n")
+	b.WriteString(observeAcceptedReality(reality))
+	b.WriteString("Z\n")
+	return []byte(b.String())
+}
+
+type targetComparisonReasoner struct {
+	observer reason.Reasoner
+	target   core.EmergION
+}
+
+func (t targetComparisonReasoner) Analyze(ctx context.Context, in reason.Input) (reason.Result, error) {
+	if t.observer == nil {
+		return reason.Result{}, fmt.Errorf("target comparison observer required")
+	}
+
+	observed, err := t.observer.Analyze(ctx, in)
+	if err != nil {
+		return reason.Result{}, err
+	}
+	observed = reason.Calibrate(observed)
+
+	facts := append([]string(nil), observed.Facts...)
+	differences := append([]string(nil), observed.Differences...)
+
+	relationships := map[string]string{
+		"source_kind":      "TARGET_COMPARISON",
+		"target_emergion":  t.target.IDN,
+		"target_state":     strings.TrimSpace(t.target.REL["target_state"]),
+		"comparison_state": "UNRESOLVED",
+	}
+	if len(differences) > 0 && len(observed.Requirements) == 1 {
+		relationships["required_capability"] = observed.Requirements[0]
+	}
+
+	return reason.Result{
+		Summary:       "bounded governed target comparison: " + strings.TrimSpace(observed.Summary),
+		Relationships: relationships,
+		Capabilities:  []string{"CMP", "DIF", "PRJ"},
+		Facts:         facts,
+		Differences:   differences,
+		Risk:          observed.Risk,
+	}, nil
+}
+
+func (t targetComparisonReasoner) Name() string {
+	return "target-comparison"
+}
+
+func (t targetComparisonReasoner) Version(ctx context.Context) string {
+	return "v1+" + t.observer.Version(ctx)
+}
+
+func (r Runtime) CaptureTargetComparison(ctx context.Context, target core.EmergION, reality map[string]core.EmergION, evidence []byte) (core.EmergION, bool, error) {
+	if r.Reasoner == nil {
+		return core.EmergION{}, false, fmt.Errorf("target comparison observer required")
+	}
+
+	comparisonEvidence := targetComparisonEvidence(target, reality)
+
 	comparisonRuntime := r
-	comparisonRuntime.Reasoner = fixedReasoner{name: "target-comparison", version: "v1", result: reason.Result{Summary: "bounded governed target comparison", Relationships: map[string]string{"source_kind": "TARGET_COMPARISON", "target_emergion": target.IDN, "target_state": strings.TrimSpace(target.REL["target_state"]), "comparison_state": "UNRESOLVED", "next_probe": "CMP+DIF"}, Capabilities: []string{"CMP", "DIF", "PRJ"}, Facts: []string{"target_comparison_required", "next_probe_derived"}, Risk: "L"}}
-	return comparisonRuntime.CaptureBytes(ctx, "target-comparison", evidence, "governed_target_comparison")
+	comparisonRuntime.Reasoner = targetComparisonReasoner{
+		observer: r.Reasoner,
+		target:   target,
+	}
+
+	return comparisonRuntime.CaptureBytes(
+		ctx,
+		"target-comparison",
+		comparisonEvidence,
+		"governed_target_comparison",
+	)
 }
 
 func (r Runtime) CaptureTarget(ctx context.Context, target string) (core.EmergION, bool, error) {

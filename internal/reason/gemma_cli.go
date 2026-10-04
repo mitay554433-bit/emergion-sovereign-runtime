@@ -173,10 +173,12 @@ func (g GemmaCLI) Validate() error {
 	return nil
 }
 
-const mxpdGrammar = `root ::= summary risk fact relationship? capability? facet? end
+const mxpdGrammar = `root ::= summary risk fact difference? requirement? relationship? capability? facet? end
 summary ::= "S|" text "\n"
 risk ::= "K|" ("L" | "M" | "H") "\n"
 fact ::= "F|" text "\n"
+difference ::= "D|" text "\n"
+requirement ::= "R|" ("ESTABLISH_FACT" | "DERIVE_RELATIONSHIP" | "DERIVE_CAPABILITY") "\n"
 capability ::= "C|" capability-token "\n"
 capability-token ::= "OBS" | "CMP" | "RLT" | "VLD" | "REASON" | "ANALYZE" | "DRAFT" | "SIMULATE" | "PROGRAM" | "VERSION" | "PATENT_EVIDENCE" | "READ" | "SEND" | "PRODUCT" | "PRICE" | "LINK" | "RECEIPT" | "TRANSFER" | "CUSTOMER" | "LEAD" | "SALE" | "SUPPORT" | "SITE" | "STORE" | "DEPLOY" | "PATENT" | "GRANT" | "MARKET" | "MA"
 relationship ::= "L|COMPOSITION_KIN|" text "\n"
@@ -339,7 +341,7 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 					"\n\nRETRY:\n" +
 					"Regenerate from SOURCE only. " +
 					"Do not describe validation, rejection, retry, prompt text, or GOVERNED_STATE. " +
-					"Return only source-supported S, F, and C values."
+					"Return only source-supported S, F, and C values. Outside TARGET_COMPARISON/1, never emit D or R. For TARGET_COMPARISON/1, D may be emitted only when grounded by TARGET_STATE and REALITY, and R only when a grounded D is also emitted."
 				continue
 			}
 			return Result{}, validationErr
@@ -403,6 +405,43 @@ func sourceSupportsFact(source, fact string) bool {
 	return matched >= 2
 }
 
+func sourceSupportsDifference(source, difference string) bool {
+	source = strings.TrimSpace(source)
+	difference = strings.TrimSpace(difference)
+	if source == "" || difference == "" {
+		return false
+	}
+
+	if !strings.HasPrefix(source, "TARGET_COMPARISON/1\n") {
+		return false
+	}
+
+	targetMarker := "\nTARGET_STATE:\n"
+	realityMarker := "\nREALITY:\n"
+	targetAt := strings.Index(source, targetMarker)
+	realityAt := strings.Index(source, realityMarker)
+	if targetAt < 0 || realityAt < 0 || realityAt <= targetAt {
+		return false
+	}
+
+	targetStart := targetAt + len(targetMarker)
+	target := strings.TrimSpace(source[targetStart:realityAt])
+
+	realityStart := realityAt + len(realityMarker)
+	reality := strings.TrimSpace(source[realityStart:])
+	reality = strings.TrimSpace(strings.TrimSuffix(reality, "Z"))
+
+	if strings.EqualFold(target, reality) {
+		return false
+	}
+
+	if target == "" || reality == "" {
+		return false
+	}
+
+	return sourceSupportsFact(target+"\n"+reality, difference)
+}
+
 func rejectPromptPlaceholders(r Result, source string) error {
 	if strings.EqualFold(strings.TrimSpace(r.Summary), "one sentence summary") {
 		return fmt.Errorf("Gemma output rejected: prompt placeholder summary")
@@ -422,12 +461,27 @@ func rejectPromptPlaceholders(r Result, source string) error {
 
 	for _, fact := range r.Facts {
 		if !sourceSupportsFact(source, fact) {
-			return fmt.Errorf("Gemma output rejected: fact lacks source support")
+			return fmt.Errorf("Gemma output rejected: fact lacks source support: %q", fact)
+		}
+	}
+
+	for _, difference := range r.Differences {
+		if !sourceSupportsDifference(source, difference) {
+			return fmt.Errorf("Gemma output rejected: Difference lacks target-comparison support: %q", difference)
+		}
+	}
+
+	if len(r.Requirements) > 0 {
+		if !strings.HasPrefix(strings.TrimSpace(source), "TARGET_COMPARISON/1\n") {
+			return fmt.Errorf("Gemma output rejected: Requirement outside target comparison")
+		}
+		if len(r.Differences) == 0 {
+			return fmt.Errorf("Gemma output rejected: Requirement lacks grounded Difference")
 		}
 	}
 
 	upperSummary := strings.ToUpper(strings.TrimSpace(r.Summary))
-	for _, prefix := range []string{"S:", "F:", "C:", "K:", "G:", "L:", "H:", "U:", "T:", "N:", "E:", "M:", "F,C:", "C,F:", "S,F:", "S,C:"} {
+	for _, prefix := range []string{"S:", "F:", "C:", "K:", "G:", "L:", "H:", "U:", "T:", "N:", "E:", "M:", "R:", "F,C:", "C,F:", "S,F:", "S,C:"} {
 		if strings.HasPrefix(upperSummary, prefix) {
 			return fmt.Errorf("Gemma output rejected: summary begins with field label %s", prefix)
 		}
@@ -451,7 +505,7 @@ func rejectPromptPlaceholders(r Result, source string) error {
 		onlyFieldTokens := true
 		for _, field := range fields {
 			switch field {
-			case "S", "F", "C", "K", "G", "L", "H", "U", "T", "N", "E", "M":
+			case "S", "F", "D", "C", "K", "G", "L", "H", "U", "T", "N", "E", "M", "R":
 			default:
 				onlyFieldTokens = false
 			}
@@ -486,7 +540,8 @@ func rejectPromptPlaceholders(r Result, source string) error {
 func buildPrompt(name, content, governedState string) string {
 	return `@L:MXPD/2
 @T:OBSERVE
-SOURCE:` + filepath.Base(name) + `
+SOURCE_NAME:` + filepath.Base(name) + `
+SOURCE:
 ` + content + `
 
 Observe SOURCE and emit only source-grounded structure.
@@ -494,6 +549,15 @@ Observe SOURCE and emit only source-grounded structure.
 S = the direct meaning established by SOURCE.
 K = L, M, or H.
 F = concrete evidence or verified state explicitly established by SOURCE.
+D = a target-relative Difference only for TARGET_COMPARISON/1.
+Outside TARGET_COMPARISON/1, never emit D.
+For TARGET_COMPARISON/1, compare TARGET_STATE with source-grounded ACCEPTED_FACT values inside REALITY.
+If that comparison explicitly establishes a difference, emit D describing only that grounded difference.
+If it does not establish a difference, omit D.
+R = one bounded semantic requirement only for TARGET_COMPARISON/1 and only when a grounded D is emitted.
+Outside TARGET_COMPARISON/1, never emit R.
+R must be exactly ESTABLISH_FACT, DERIVE_RELATIONSHIP, or DERIVE_CAPABILITY.
+Do not emit R merely because TARGET_STATE and REALITY differ. Omit R unless SOURCE establishes which bounded requirement is needed.
 C = a reusable capability only when SOURCE explicitly establishes one.
 T = an operational facet only when SOURCE explicitly establishes one.
 Z = final terminator.
@@ -505,6 +569,8 @@ Do not treat absence of evidence as evidence of absence.
 Preserve uncertainty rather than filling missing structure.
 Do not collapse multiple distinct source-supported observations into one invented claim.
 If a field is not established by SOURCE, omit it where the grammar permits omission.
+Never emit null, none, unknown, N/A, or placeholder text as a semantic field value.
+For optional D, R, C, L, or T fields, omission means SOURCE did not establish that field.
 The runtime, not Gemma, determines governance, admission, verification, canonical state, and lineage.
 
 GOVERNED_STATE is comparison context only:
@@ -513,6 +579,15 @@ GOVERNED_STATE is comparison context only:
 Generated structure is constrained by the runtime grammar.
 No markdown or explanatory prose.`
 }
+func isMXPDAbsentOptionalValue(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "null", "none", "n/a":
+		return true
+	default:
+		return false
+	}
+}
+
 func parseResult(s string) (Result, error) {
 	s = strings.TrimSpace(s)
 	s = strings.TrimSpace(strings.TrimSuffix(s, "[end of text]"))
@@ -541,7 +616,25 @@ func parseResult(s string) (Result, error) {
 			}
 		case "FACT", "F":
 			if len(p) >= 2 {
-				r.Facts = append(r.Facts, strings.TrimSpace(strings.Join(p[1:], "|")))
+				value := strings.TrimSpace(strings.Join(p[1:], "|"))
+				if !isMXPDAbsentOptionalValue(value) {
+					r.Facts = append(r.Facts, value)
+				}
+			}
+		case "DIFFERENCE", "D":
+			if len(p) >= 2 {
+				value := strings.TrimSpace(strings.Join(p[1:], "|"))
+				if !isMXPDAbsentOptionalValue(value) {
+					r.Differences = append(r.Differences, value)
+				}
+			}
+		case "REQUIREMENT", "R":
+			if len(p) == 2 {
+				value := strings.ToUpper(strings.TrimSpace(p[1]))
+				switch value {
+				case "ESTABLISH_FACT", "DERIVE_RELATIONSHIP", "DERIVE_CAPABILITY":
+					r.Requirements = append(r.Requirements, value)
+				}
 			}
 		case "GAP", "G":
 			if len(p) >= 2 {
@@ -616,6 +709,14 @@ func FormatResult(r Result) string {
 		fmt.Fprintf(&b, "F|%s\n", value)
 	}
 
+	for _, value := range r.Differences {
+		fmt.Fprintf(&b, "D|%s\n", value)
+	}
+
+	for _, value := range r.Requirements {
+		fmt.Fprintf(&b, "R|%s\n", value)
+	}
+
 	for _, value := range r.Gaps {
 		fmt.Fprintf(&b, "G|%s\n", value)
 	}
@@ -670,6 +771,8 @@ func Calibrate(r Result) Result {
 	}
 	r.Capabilities = clean(r.Capabilities, 16)
 	r.Facts = clean(r.Facts, 24)
+	r.Differences = clean(r.Differences, 24)
+	r.Requirements = clean(r.Requirements, 3)
 	r.Gaps = clean(r.Gaps, 24)
 	r.Supersedes = cleanText(r.Supersedes, 80)
 	if strings.EqualFold(r.Supersedes, "null") {

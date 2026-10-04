@@ -244,6 +244,10 @@ func writeEmergION(b *strings.Builder, value *core.EmergION) {
 	writeString(b, value.VAL.Reasoner)
 	b.WriteString(";V=")
 	writeString(b, value.VAL.ReasonerVer)
+	if len(value.VAL.Differences) > 0 {
+		b.WriteString(";X=")
+		writeStrings(b, value.VAL.Differences)
+	}
 	b.WriteByte('}')
 
 	b.WriteString(";EVO{V=")
@@ -954,6 +958,16 @@ func (p *parser) emergionValue() (*core.EmergION, error) {
 	if err != nil {
 		return nil, err
 	}
+	var differences []string
+	if strings.HasPrefix(p.s[p.i:], ";X=") {
+		if err := p.take(";X="); err != nil {
+			return nil, err
+		}
+		differences, err = p.stringsValue()
+		if err != nil {
+			return nil, err
+		}
+	}
 	if err := p.take("}"); err != nil {
 		return nil, err
 	}
@@ -1009,6 +1023,7 @@ func (p *parser) emergionValue() (*core.EmergION, error) {
 		CAP: capabilities,
 		VAL: core.Validation{
 			Facts:       facts,
+			Differences: differences,
 			Gaps:        gaps,
 			Risk:        risk,
 			Recoil:      recoil,

@@ -237,15 +237,9 @@ func (r *Runtime) Run(
 					if len(st.AtGOV) != 0 {
 						return nil
 					}
-					comparedTargets := map[string]bool{}
-					for _, em := range st.Accepted {
-						if em.REL["source_kind"] == "TARGET_COMPARISON" {
-							comparedTargets[em.REL["target_emergion"]] = true
-						}
-					}
 					var target core.EmergION
 					for id, em := range st.Accepted {
-						if em.REL["source_kind"] == "TARGET" && !comparedTargets[id] && (target.IDN == "" || id < target.IDN) {
+						if em.REL["source_kind"] == "TARGET" && (target.IDN == "" || id < target.IDN) {
 							target = em
 						}
 					}
@@ -261,8 +255,13 @@ func (r *Runtime) Run(
 						if marshalErr != nil {
 							return marshalErr
 						}
-						_, _, captureErr := (fieldruntime.Runtime{Store: r.store}).CaptureTargetComparison(cycleCtx, target, evidence)
-						return captureErr
+						_, duplicate, captureErr := (fieldruntime.Runtime{Store: r.store, Reasoner: r.reasoner}).CaptureTargetComparison(cycleCtx, target, reality, evidence)
+						if captureErr != nil {
+							return captureErr
+						}
+						if !duplicate {
+							return nil
+						}
 					}
 					accepted := make(map[string]core.EmergION)
 					for id, em := range st.Accepted {

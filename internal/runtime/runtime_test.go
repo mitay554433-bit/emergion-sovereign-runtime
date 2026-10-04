@@ -5259,6 +5259,85 @@ func TestRevalidateInterpretationReanalyzesPreservedEvidence(t *testing.T) {
 	}
 }
 
+type recordingTargetComparisonReasoner struct {
+	input  reason.Input
+	called bool
+}
+
+func (r *recordingTargetComparisonReasoner) Analyze(_ context.Context, in reason.Input) (reason.Result, error) {
+	r.called = true
+	r.input = in
+	return reason.Result{
+		Summary: "accepted reality differs from the persistent governed target",
+		Facts: []string{
+			"persistent governed target differs from accepted reality",
+		},
+		Differences: []string{
+			"TARGET_STATE!=ACCEPTED_REALITY",
+		},
+		Requirements: []string{"ESTABLISH_FACT"},
+		Risk:         "L",
+	}, nil
+}
+
+func (*recordingTargetComparisonReasoner) Name() string {
+	return "recording-target-comparison"
+}
+
+func (*recordingTargetComparisonReasoner) Version(context.Context) string {
+	return "1"
+}
+
+func TestTargetComparisonReasonerPreservesTypedDifference(t *testing.T) {
+	observer := &recordingTargetComparisonReasoner{}
+	wrapper := targetComparisonReasoner{
+		observer: observer,
+		target: core.EmergION{
+			IDN: "E-TARGET",
+			REL: map[string]string{
+				"target_state": "persistent governed target",
+			},
+		},
+	}
+
+	got, err := wrapper.Analyze(
+		context.Background(),
+		reason.Input{
+			Name:    "target-comparison",
+			Content: []byte("TARGET_COMPARISON/1"),
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(got.Differences) != 1 ||
+		got.Differences[0] != "TARGET_STATE!=ACCEPTED_REALITY" {
+		t.Fatalf(
+			"typed target-relative Difference not preserved: %#v",
+			got.Differences,
+		)
+	}
+
+	if got.Relationships["required_capability"] != "ESTABLISH_FACT" {
+		t.Fatalf("required_capability = %q want ESTABLISH_FACT", got.Relationships["required_capability"])
+	}
+
+	if len(got.Gaps) != 0 {
+		t.Fatalf(
+			"typed Difference leaked into BRIDGEGAP carrier: %#v",
+			got.Gaps,
+		)
+	}
+
+	if len(got.Delta) != 0 {
+		t.Fatalf(
+			"typed Difference leaked into evolution Delta: %#v",
+			got.Delta,
+		)
+	}
+}
+
 func TestCaptureTargetComparison(t *testing.T) {
 	root := t.TempDir()
 	s, err := store.Open(filepath.Join(root, "state"))
@@ -5267,17 +5346,8 @@ func TestCaptureTargetComparison(t *testing.T) {
 	}
 
 	targetText := "persistent governed target"
-	targetRuntime := Runtime{Store: s, Reasoner: &interpretationRevisionReasoner{
-		result: reason.Result{
-			Summary: "unused",
-			Relationships: map[string]string{
-				"source_kind": "unused",
-			},
-			Capabilities: []string{"CMP"},
-			Facts:        []string{"unused"},
-			Risk:         "L",
-		},
-	}}
+	observer := &recordingTargetComparisonReasoner{}
+	targetRuntime := Runtime{Store: s, Reasoner: observer}
 
 	target, _, err := targetRuntime.CaptureTarget(context.Background(), targetText)
 	if err != nil {
@@ -5288,6 +5358,10 @@ func TestCaptureTargetComparison(t *testing.T) {
 	comparison, duplicate, err := targetRuntime.CaptureTargetComparison(
 		context.Background(),
 		target,
+		map[string]core.EmergION{
+			"REALITY-B": {IDN: "REALITY-B"},
+			"REALITY-A": {IDN: "REALITY-A"},
+		},
 		evidence,
 	)
 	if err != nil {
@@ -5313,19 +5387,80 @@ func TestCaptureTargetComparison(t *testing.T) {
 		t.Fatalf("comparison_state = %q want UNRESOLVED", comparison.REL["comparison_state"])
 	}
 
-	foundFact := false
+	if comparison.REL["required_capability"] != "ESTABLISH_FACT" {
+		t.Fatalf("required_capability = %q want ESTABLISH_FACT", comparison.REL["required_capability"])
+	}
+	if comparison.REL["capability_resolution"] != "UNRESOLVED" {
+		t.Fatalf("capability_resolution = %q want UNRESOLVED", comparison.REL["capability_resolution"])
+	}
+	if got := comparison.REL["capability_composition"]; got != "" {
+		t.Fatalf("unresolved target comparison invented capability composition: %q", got)
+	}
+	if got := comparison.REL["capability_providers"]; got != "" {
+		t.Fatalf("unresolved target comparison invented capability providers: %q", got)
+	}
+
+	if len(comparison.VAL.Differences) != 1 ||
+		comparison.VAL.Differences[0] != "TARGET_STATE!=ACCEPTED_REALITY" {
+		t.Fatalf("typed Difference missing from captured EmergION: %#v", comparison.VAL.Differences)
+	}
+	if len(comparison.VAL.Gaps) != 0 {
+		t.Fatalf("Difference leaked into Gaps: %#v", comparison.VAL.Gaps)
+	}
+	if len(comparison.EVO.Delta) != 0 {
+		t.Fatalf("Difference leaked into Delta: %#v", comparison.EVO.Delta)
+	}
+
+	differenceObserved := false
 	for _, fact := range comparison.VAL.Facts {
-		if fact == "target_comparison_required" {
-			foundFact = true
+		if fact == "persistent governed target differs from accepted reality" {
+			differenceObserved = true
 			break
 		}
 	}
-	if !foundFact {
-		t.Fatalf("target_comparison_required fact missing: %#v", comparison.VAL.Facts)
+	if !differenceObserved {
+		t.Fatalf(
+			"target-relative Difference observation missing: %#v",
+			comparison.VAL.Facts,
+		)
 	}
 
-	if comparison.REL["next_probe"] != "CMP+DIF" {
-		t.Fatalf("next_probe = %q want CMP+DIF", comparison.REL["next_probe"])
+	if !observer.called {
+		t.Fatal("target comparison observer was not invoked")
+	}
+
+	content := string(observer.input.Content)
+
+	if !strings.Contains(content, "TARGET_COMPARISON/1\n") {
+		t.Fatalf("comparison evidence header missing: %q", content)
+	}
+	if !strings.Contains(content, "TARGET_EMERGION:"+target.IDN) {
+		t.Fatalf("target identity missing from comparison evidence: %q", content)
+	}
+	if !strings.Contains(content, "\nTARGET_STATE:\n"+targetText) {
+		t.Fatalf("target state missing from comparison evidence: %q", content)
+	}
+	if !strings.Contains(content, "\nREALITY:\n") {
+		t.Fatalf("reality boundary missing from comparison evidence: %q", content)
+	}
+
+	posA := strings.Index(content, "REALITY-A")
+	posB := strings.Index(content, "REALITY-B")
+	if posA < 0 || posB < 0 {
+		t.Fatalf("accepted reality operands missing from comparison evidence: %q", content)
+	}
+	if posA >= posB {
+		t.Fatalf("accepted reality is not deterministically ordered: %q", content)
+	}
+
+	if _, ok := comparison.REL["next_probe"]; ok {
+		t.Fatalf("target comparison predeclared next_probe: %#v", comparison.REL)
+	}
+
+	for _, fact := range comparison.VAL.Facts {
+		if fact == "next_probe_derived" {
+			t.Fatalf("target comparison falsely claimed next_probe_derived: %#v", comparison.VAL.Facts)
+		}
 	}
 
 	events, err := s.Events()
@@ -5351,6 +5486,30 @@ func TestCaptureTargetComparison(t *testing.T) {
 		t.Fatalf("active comparison_state = %q", active.REL["comparison_state"])
 	}
 
+	if active.REL["required_capability"] != "ESTABLISH_FACT" {
+		t.Fatalf("FIELD replay required_capability = %q want ESTABLISH_FACT", active.REL["required_capability"])
+	}
+	if active.REL["capability_resolution"] != "UNRESOLVED" {
+		t.Fatalf("FIELD replay capability_resolution = %q want UNRESOLVED", active.REL["capability_resolution"])
+	}
+	if got := active.REL["capability_composition"]; got != "" {
+		t.Fatalf("FIELD replay invented capability composition: %q", got)
+	}
+	if got := active.REL["capability_providers"]; got != "" {
+		t.Fatalf("FIELD replay invented capability providers: %q", got)
+	}
+
+	if len(active.VAL.Differences) != 1 ||
+		active.VAL.Differences[0] != "TARGET_STATE!=ACCEPTED_REALITY" {
+		t.Fatalf("FIELD replay lost typed Difference: %#v", active.VAL.Differences)
+	}
+	if len(active.VAL.Gaps) != 0 {
+		t.Fatalf("FIELD replay moved Difference into Gaps: %#v", active.VAL.Gaps)
+	}
+	if len(active.EVO.Delta) != 0 {
+		t.Fatalf("FIELD replay moved Difference into Delta: %#v", active.EVO.Delta)
+	}
+
 	reopened, err := store.Open(filepath.Join(root, "state"))
 	if err != nil {
 		t.Fatal(err)
@@ -5364,6 +5523,34 @@ func TestCaptureTargetComparison(t *testing.T) {
 	rebuilt, err := livefield.Rebuild(reopenedEvents)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	recoveredComparison, ok := rebuilt.AtGOV[comparison.IDN]
+	if !ok {
+		t.Fatalf("target comparison missing after reopen/rebuild: %s", comparison.IDN)
+	}
+	if recoveredComparison.REL["required_capability"] != "ESTABLISH_FACT" {
+		t.Fatalf("disk reopen required_capability = %q want ESTABLISH_FACT", recoveredComparison.REL["required_capability"])
+	}
+	if recoveredComparison.REL["capability_resolution"] != "UNRESOLVED" {
+		t.Fatalf("disk reopen capability_resolution = %q want UNRESOLVED", recoveredComparison.REL["capability_resolution"])
+	}
+	if got := recoveredComparison.REL["capability_composition"]; got != "" {
+		t.Fatalf("disk reopen invented capability composition: %q", got)
+	}
+	if got := recoveredComparison.REL["capability_providers"]; got != "" {
+		t.Fatalf("disk reopen invented capability providers: %q", got)
+	}
+
+	if len(recoveredComparison.VAL.Differences) != 1 ||
+		recoveredComparison.VAL.Differences[0] != "TARGET_STATE!=ACCEPTED_REALITY" {
+		t.Fatalf("disk reopen lost typed Difference: %#v", recoveredComparison.VAL.Differences)
+	}
+	if len(recoveredComparison.VAL.Gaps) != 0 {
+		t.Fatalf("disk reopen moved Difference into Gaps: %#v", recoveredComparison.VAL.Gaps)
+	}
+	if len(recoveredComparison.EVO.Delta) != 0 {
+		t.Fatalf("disk reopen moved Difference into Delta: %#v", recoveredComparison.EVO.Delta)
 	}
 
 	recovered, ok := rebuilt.AtGOV[target.IDN]
@@ -5390,5 +5577,372 @@ func TestCaptureTargetComparison(t *testing.T) {
 	}
 	if !duplicate {
 		t.Fatal("recaptured target after reopen was not recognized as duplicate")
+	}
+}
+
+func TestObserveAcceptedRealityIsDeterministicAndStatePreserving(t *testing.T) {
+	reality := map[string]core.EmergION{
+		"E-B": {
+			IDN: "E-B",
+			STA: core.StateAccepted,
+			MEM: core.Memory{
+				SourceHash: "hash-b",
+			},
+			VAL: core.Validation{
+				Recoil: true,
+				WVC:    true,
+			},
+		},
+		"E-A": {
+			IDN: "E-A",
+			STA: core.StateAccepted,
+			MEM: core.Memory{
+				SourceHash: "hash-a",
+			},
+			VAL: core.Validation{
+				Recoil: true,
+				WVC:    true,
+			},
+		},
+	}
+
+	beforeA := reality["E-A"].Symbolic()
+	beforeB := reality["E-B"].Symbolic()
+
+	first := observeAcceptedReality(reality)
+	second := observeAcceptedReality(reality)
+
+	if first != second {
+		t.Fatal("accepted reality observation is not deterministic")
+	}
+
+	want := beforeA + beforeB
+	if first != want {
+		t.Fatalf("accepted reality observation mismatch\nwant:\n%s\ngot:\n%s", want, first)
+	}
+
+	if reality["E-A"].Symbolic() != beforeA ||
+		reality["E-B"].Symbolic() != beforeB {
+		t.Fatal("accepted reality observation mutated governed reality")
+	}
+}
+
+func TestCaptureImplementationEvidenceUsesGovernedCandidatePath(t *testing.T) {
+	root := t.TempDir()
+
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rt := Runtime{
+		Store: s,
+		Reasoner: &interpretationRevisionReasoner{
+			result: reason.Result{
+				Summary: "unused external observer",
+				Risk:    "L",
+			},
+		},
+	}
+
+	evidence := []byte(
+		"UNIFUSION_IMPLEMENTATION_EVIDENCE/1\n" +
+			"STATUS:VERIFIED_RUNTIME\n" +
+			"HEAD:c82e7cafdab45992115afd2a646fe5dd395868c8\n" +
+			"FINDING:target comparison observes deterministic target plus accepted reality\n" +
+			"FINDING:comparison remains unresolved pending semantic Difference\n",
+	)
+
+	em, duplicate, err := rt.CaptureImplementationEvidence(
+		context.Background(),
+		evidence,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate {
+		t.Fatal("first implementation evidence capture was duplicate")
+	}
+
+	if em.STA != core.StateAtGOV {
+		t.Fatalf("state = %s want %s", em.STA, core.StateAtGOV)
+	}
+	if em.REL["source_kind"] != "IMPLEMENTATION_EVIDENCE" {
+		t.Fatalf("source_kind = %q", em.REL["source_kind"])
+	}
+	if !em.VAL.Recoil {
+		t.Fatal("implementation evidence did not pass RECOIL")
+	}
+	if !em.VAL.WVC {
+		t.Fatal("implementation evidence did not pass WVC")
+	}
+
+	events, err := s.Events()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("events = %d want 1", len(events))
+	}
+	if events[0].Type != "C" {
+		t.Fatalf("event type = %q want C", events[0].Type)
+	}
+
+	st, err := livefield.Rebuild(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := st.AtGOV[em.IDN]; !ok {
+		t.Fatal("implementation evidence missing from AtGOV")
+	}
+	if _, ok := st.Accepted[em.IDN]; ok {
+		t.Fatal("implementation evidence self-authorized into REG")
+	}
+
+	again, duplicate, err := rt.CaptureImplementationEvidence(
+		context.Background(),
+		evidence,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !duplicate {
+		t.Fatal("identical implementation evidence was not deduplicated")
+	}
+	if again.IDN != em.IDN {
+		t.Fatalf("duplicate identity = %q want %q", again.IDN, em.IDN)
+	}
+
+	eventsAfterDuplicate, err := s.Events()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(eventsAfterDuplicate) != len(events) {
+		t.Fatalf(
+			"duplicate capture changed ledger event count: %d -> %d",
+			len(events),
+			len(eventsAfterDuplicate),
+		)
+	}
+}
+
+func TestCaptureTargetComparisonInstalledGemma(t *testing.T) {
+	binary := os.Getenv("GEMMA_BIN")
+	model := os.Getenv("GEMMA_MODEL")
+	if binary == "" || model == "" {
+		t.Skip("set GEMMA_BIN and GEMMA_MODEL for target-comparison integration test")
+	}
+
+	root := t.TempDir()
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gemma := reason.GemmaCLI{
+		Binary:    binary,
+		Model:     model,
+		Threads:   4,
+		Context:   2048,
+		MaxTokens: 120,
+		Timeout:   180 * time.Second,
+	}
+
+	r := Runtime{
+		Store:    s,
+		Reasoner: gemma,
+	}
+
+	target := core.EmergION{
+		IDN: "E-TARGET-INTEGRATION",
+		REL: map[string]string{
+			"target_state": "runtime deployment state is deployed",
+		},
+	}
+
+	reality := map[string]core.EmergION{
+		"E-REALITY-INTEGRATION": {
+			IDN: "E-REALITY-INTEGRATION",
+			STA: core.StateAccepted,
+			VAL: core.Validation{
+				Facts: []string{
+					"runtime deployment state is observation-only",
+				},
+			},
+		},
+	}
+
+	comparison, duplicate, err := r.CaptureTargetComparison(
+		context.Background(),
+		target,
+		reality,
+		[]byte("installed Gemma target-comparison integration evidence"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate {
+		t.Fatal("real Gemma target comparison unexpectedly reported duplicate")
+	}
+
+	if comparison.STA != core.StateAtGOV {
+		t.Fatalf("state = %q want %q", comparison.STA, core.StateAtGOV)
+	}
+
+	if len(comparison.VAL.Gaps) != 0 {
+		t.Fatalf(
+			"real Gemma Difference leaked into BRIDGEGAP carrier: %#v",
+			comparison.VAL.Gaps,
+		)
+	}
+
+	if len(comparison.EVO.Delta) != 0 {
+		t.Fatalf(
+			"real Gemma Difference leaked into evolution Delta: %#v",
+			comparison.EVO.Delta,
+		)
+	}
+
+	events, err := s.Events()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := livefield.Rebuild(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	active, ok := st.AtGOV[comparison.IDN]
+	if !ok {
+		t.Fatalf("real Gemma comparison missing from AtGOV: %s", comparison.IDN)
+	}
+
+	if len(active.VAL.Differences) != len(comparison.VAL.Differences) || (len(comparison.VAL.Differences) > 0 && !reflect.DeepEqual(active.VAL.Differences, comparison.VAL.Differences)) {
+		t.Fatalf("FIELD replay changed real Gemma Differences: got %#v want %#v", active.VAL.Differences, comparison.VAL.Differences)
+	}
+
+	reopened, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reopenedEvents, err := reopened.Events()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rebuilt, err := livefield.Rebuild(reopenedEvents)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	recovered, ok := rebuilt.AtGOV[comparison.IDN]
+	if !ok {
+		t.Fatalf("real Gemma comparison missing after disk reopen: %s", comparison.IDN)
+	}
+
+	if len(recovered.VAL.Differences) != len(comparison.VAL.Differences) || (len(comparison.VAL.Differences) > 0 && !reflect.DeepEqual(recovered.VAL.Differences, comparison.VAL.Differences)) {
+		t.Fatalf("disk reopen changed real Gemma Differences: got %#v want %#v", recovered.VAL.Differences, comparison.VAL.Differences)
+	}
+
+	t.Logf("real Gemma Difference: %#v", recovered.VAL.Differences)
+}
+
+func TestEstablishFactRequirementUsesAcceptedProviders(t *testing.T) {
+	st := core.EmptyState()
+	st.Accepted["E-OBS"] = core.EmergION{
+		IDN: "E-OBS", STA: core.StateAccepted, CAP: []string{"OBS"},
+	}
+	st.Accepted["E-VLD"] = core.EmergION{
+		IDN: "E-VLD", STA: core.StateAccepted, CAP: []string{"VLD"},
+	}
+
+	em := core.EmergION{
+		REL: map[string]string{"required_capability": "ESTABLISH_FACT"},
+	}
+
+	r := Runtime{}
+	r.resolveRequiredCapability(&em, st)
+
+	if em.REL["capability_resolution"] != "COMPOSABLE_CANDIDATE" {
+		t.Fatalf("resolution = %q", em.REL["capability_resolution"])
+	}
+	if em.REL["capability_composition"] != "OBS+VLD" {
+		t.Fatalf("composition = %q", em.REL["capability_composition"])
+	}
+	if em.REL["capability_providers"] != "OBS:E-OBS,VLD:E-VLD" {
+		t.Fatalf("providers = %q", em.REL["capability_providers"])
+	}
+}
+
+func TestTargetComparisonDeduplicatesSameRealityButReopensOnRealityChange(t *testing.T) {
+	s, err := store.Open(filepath.Join(t.TempDir(), "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	observer := &recordingTargetComparisonReasoner{}
+	rt := Runtime{Store: s, Reasoner: observer}
+
+	target := core.EmergION{
+		IDN: "E-TARGET-RECOMPARE",
+		REL: map[string]string{
+			"target_state": "runtime deployment state is deployed",
+		},
+	}
+
+	reality := map[string]core.EmergION{
+		"E-REALITY": {
+			IDN: "E-REALITY",
+			STA: core.StateAccepted,
+			VAL: core.Validation{
+				Facts: []string{"runtime deployment state is observation-only"},
+			},
+		},
+	}
+
+	first, duplicate, err := rt.CaptureTargetComparison(
+		context.Background(), target, reality, nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate {
+		t.Fatal("first target comparison was duplicate")
+	}
+
+	again, duplicate, err := rt.CaptureTargetComparison(
+		context.Background(), target, reality, nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !duplicate {
+		t.Fatal("unchanged target/reality comparison was not deduplicated")
+	}
+	if again.IDN != first.IDN {
+		t.Fatalf("duplicate identity changed: got %q want %q", again.IDN, first.IDN)
+	}
+
+	reality["E-REALITY"] = core.EmergION{
+		IDN: "E-REALITY",
+		STA: core.StateAccepted,
+		VAL: core.Validation{
+			Facts: []string{"runtime deployment state is deployment-ready"},
+		},
+	}
+
+	changed, duplicate, err := rt.CaptureTargetComparison(
+		context.Background(), target, reality, nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate {
+		t.Fatal("changed accepted reality was incorrectly deduplicated")
+	}
+	if changed.IDN == first.IDN {
+		t.Fatal("changed accepted reality reused previous comparison identity")
 	}
 }

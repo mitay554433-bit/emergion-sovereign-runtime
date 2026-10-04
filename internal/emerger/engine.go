@@ -73,7 +73,7 @@ func (e Engine) Emerge(ctx context.Context, in reason.Input, ev Evidence) (core.
 		MEM: core.Memory{SourceHash: ev.Hash, Codec: ev.Codec, Bytes: ev.Bytes, Stored: ev.Stored, Summary: result.Summary, Provenance: ev.Provenance},
 		REL: result.Relationships,
 		CAP: result.Capabilities,
-		VAL: core.Validation{Facts: result.Facts, Gaps: result.Gaps, Risk: result.Risk, Recoil: false, WVC: false, Reasoner: e.Reasoner.Name(), ReasonerVer: e.Reasoner.Version(ctx)},
+		VAL: core.Validation{Facts: result.Facts, Differences: result.Differences, Gaps: result.Gaps, Risk: result.Risk, Recoil: false, WVC: false, Reasoner: e.Reasoner.Name(), ReasonerVer: e.Reasoner.Version(ctx)},
 		EVO: core.Evolution{
 			Version:    1,
 			Supersedes: result.Supersedes,

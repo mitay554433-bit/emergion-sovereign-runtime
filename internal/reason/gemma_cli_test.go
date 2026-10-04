@@ -429,7 +429,7 @@ func TestMXPDGrammarOwnsKnownBadLeadingLexicalForms(t *testing.T) {
 func TestMXPDGrammarMakesCapabilityOptionalAndCanonical(t *testing.T) {
 	if !strings.Contains(
 		mxpdGrammar,
-		`root ::= summary risk fact relationship? capability? facet? end`,
+		`root ::= summary risk fact difference? requirement? relationship? capability? facet? end`,
 	) {
 		t.Fatal("MXPD grammar still requires a capability")
 	}
@@ -472,7 +472,7 @@ func TestMXPDGrammarMakesCapabilityOptionalAndCanonical(t *testing.T) {
 func TestMXPDGrammarAllowsGovernedCompositionRelationship(t *testing.T) {
 	if !strings.Contains(
 		mxpdGrammar,
-		`root ::= summary risk fact relationship? capability? facet? end`,
+		`root ::= summary risk fact difference? requirement? relationship? capability? facet? end`,
 	) {
 		t.Fatal("MXPD grammar does not permit an optional governed relationship")
 	}
@@ -683,5 +683,216 @@ OUT
 	}
 	if len(result.Facets) != 1 || result.Facets[0] != "DOCS_PROJECTION" {
 		t.Fatalf("facets = %#v", result.Facets)
+	}
+}
+
+func TestMXPDDifferencePrimitiveRoundTrip(t *testing.T) {
+	want := Result{
+		Summary:     "bounded target comparison",
+		Risk:        "L",
+		Facts:       []string{"target and accepted reality observed"},
+		Differences: []string{"TARGET_STATE!=ACCEPTED_REALITY"},
+	}
+
+	wire := FormatResult(want)
+
+	if !strings.Contains(wire, "D|TARGET_STATE!=ACCEPTED_REALITY\n") {
+		t.Fatalf("formatted MXPD missing typed Difference: %q", wire)
+	}
+
+	got, err := parseResult(wire)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(got.Differences) != 1 ||
+		got.Differences[0] != "TARGET_STATE!=ACCEPTED_REALITY" {
+		t.Fatalf("Difference roundtrip = %#v want %#v", got.Differences, want.Differences)
+	}
+
+	if len(got.Gaps) != 0 {
+		t.Fatalf("Difference leaked into Gaps: %#v", got.Gaps)
+	}
+
+	if len(got.Delta) != 0 {
+		t.Fatalf("Difference leaked into Delta: %#v", got.Delta)
+	}
+}
+
+func TestMXPDRequirementPrimitiveRoundTrip(t *testing.T) {
+	want := Result{
+		Summary:      "bounded semantic requirement",
+		Risk:         "L",
+		Requirements: []string{"ESTABLISH_FACT"},
+	}
+
+	wire := FormatResult(want)
+
+	if !strings.Contains(wire, "R|ESTABLISH_FACT\n") {
+		t.Fatalf("formatted MXPD missing typed Requirement: %q", wire)
+	}
+
+	got, err := parseResult(wire)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(got.Requirements) != 1 ||
+		got.Requirements[0] != "ESTABLISH_FACT" {
+		t.Fatalf("Requirement roundtrip = %#v want %#v", got.Requirements, want.Requirements)
+	}
+
+	if len(got.Differences) != 0 {
+		t.Fatalf("Requirement leaked into Differences: %#v", got.Differences)
+	}
+	if len(got.Gaps) != 0 {
+		t.Fatalf("Requirement leaked into Gaps: %#v", got.Gaps)
+	}
+	if len(got.Delta) != 0 {
+		t.Fatalf("Requirement leaked into Delta: %#v", got.Delta)
+	}
+}
+
+func TestMXPDRequirementRejectsUnknownValueAndPreservesNodeToken(t *testing.T) {
+	got, err := parseResult("S|bounded semantic result\nK|L\nR|UNKNOWN_REQUIREMENT\nN|node-1|runtime|ready\nZ")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(got.Requirements) != 0 {
+		t.Fatalf("invalid Requirement admitted: %#v", got.Requirements)
+	}
+	if len(got.BuildNodes) != 1 {
+		t.Fatalf("NODE primitive not preserved: %#v", got.BuildNodes)
+	}
+	if got.BuildNodes[0].ID != "node-1" {
+		t.Fatalf("NODE identity changed: %#v", got.BuildNodes[0])
+	}
+}
+
+func TestDifferenceGroundingRejectsOrdinarySource(t *testing.T) {
+	source := "TARGET_STATE and ACCEPTED_REALITY are different."
+
+	if sourceSupportsDifference(source, "TARGET_STATE!=ACCEPTED_REALITY") {
+		t.Fatal("ordinary SOURCE admitted a target-relative Difference")
+	}
+}
+
+func TestDifferenceGroundingRejectsMissingOperands(t *testing.T) {
+	tests := []string{
+		"TARGET_COMPARISON/1\nTARGET_STATE:\ndesired state\nREALITY:\nZ\n",
+		"TARGET_COMPARISON/1\nTARGET_STATE:\n\nREALITY:\naccepted reality\nZ\n",
+		"TARGET_COMPARISON/1\nTARGET_STATE:\ndesired state\nZ\n",
+	}
+
+	for _, source := range tests {
+		if sourceSupportsDifference(source, "desired state differs from accepted reality") {
+			t.Fatalf("Difference admitted without complete operands: %q", source)
+		}
+	}
+}
+
+func TestDifferenceGroundingRejectsUnsupportedDifference(t *testing.T) {
+	source := "TARGET_COMPARISON/1\n" +
+		"TARGET_EMERGION:E-TARGET\n" +
+		"TARGET_STATE:\n" +
+		"deploy governed local runtime\n" +
+		"REALITY:\n" +
+		"accepted runtime currently performs observation only\n" +
+		"Z\n"
+
+	if sourceSupportsDifference(source, "payments automatically transfer to customers") {
+		t.Fatal("unsupported Difference was admitted")
+	}
+}
+
+func TestDifferenceGroundingAcceptsSupportedTargetComparison(t *testing.T) {
+	source := "TARGET_COMPARISON/1\n" +
+		"TARGET_EMERGION:E-TARGET\n" +
+		"TARGET_STATE:\n" +
+		"deploy governed local runtime\n" +
+		"REALITY:\n" +
+		"accepted runtime currently performs observation only\n" +
+		"Z\n"
+
+	if !sourceSupportsDifference(
+		source,
+		"governed local runtime differs from accepted runtime observation",
+	) {
+		t.Fatal("grounded target-relative Difference was rejected")
+	}
+}
+
+func TestDifferenceGroundingRejectsIdenticalOperands(t *testing.T) {
+	source := "TARGET_COMPARISON/1\n" +
+		"TARGET_EMERGION:E-TARGET\n" +
+		"TARGET_STATE:\n" +
+		"deploy governed local runtime\n" +
+		"REALITY:\n" +
+		"deploy governed local runtime\n" +
+		"Z\n"
+
+	if sourceSupportsDifference(
+		source,
+		"governed local runtime differs from governed local runtime",
+	) {
+		t.Fatal("Difference admitted even though TARGET_STATE equals REALITY")
+	}
+}
+
+func TestMXPDDifferenceAbsenceMarkersAreOmitted(t *testing.T) {
+	for _, value := range []string{"null", "NULL", "none", "N/A"} {
+		wire := "S|bounded observation\nK|L\nF|source observation\nD|" + value + "\nZ"
+
+		got, err := parseResult(wire)
+		if err != nil {
+			t.Fatalf("%q: %v", value, err)
+		}
+
+		if len(got.Differences) != 0 {
+			t.Fatalf("%q became semantic Difference: %#v", value, got.Differences)
+		}
+	}
+}
+
+func TestMXPDRealDifferenceIsNotOmitted(t *testing.T) {
+	wire := "S|bounded comparison\nK|L\nF|target and reality observed\nD|TARGET_STATE differs from REALITY\nZ"
+
+	got, err := parseResult(wire)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(got.Differences) != 1 ||
+		got.Differences[0] != "TARGET_STATE differs from REALITY" {
+		t.Fatalf("real Difference lost: %#v", got.Differences)
+	}
+}
+
+func TestMXPDFactAbsenceMarkersAreOmitted(t *testing.T) {
+	for _, value := range []string{"null", "NULL", "none", "N/A"} {
+		wire := "S|bounded observation\nK|L\nF|" + value + "\nZ"
+
+		got, err := parseResult(wire)
+		if err != nil {
+			t.Fatalf("%q: %v", value, err)
+		}
+
+		if len(got.Facts) != 0 {
+			t.Fatalf("%q became semantic Fact: %#v", value, got.Facts)
+		}
+	}
+}
+
+func TestMXPDRealFactIsNotOmitted(t *testing.T) {
+	wire := "S|bounded observation\nK|L\nF|source evidence is preserved\nZ"
+
+	got, err := parseResult(wire)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(got.Facts) != 1 || got.Facts[0] != "source evidence is preserved" {
+		t.Fatalf("real Fact lost: %#v", got.Facts)
 	}
 }

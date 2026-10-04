@@ -14,6 +14,8 @@ type Result struct {
 	Relationships map[string]string
 	Capabilities  []string
 	Facts         []string
+	Differences   []string
+	Requirements  []string
 	Gaps          []string
 	Risk          string
 	Supersedes    string

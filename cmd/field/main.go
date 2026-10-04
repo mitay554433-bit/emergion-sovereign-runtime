@@ -209,6 +209,47 @@ func main() {
 		} else {
 			fmt.Println(em.IDN, "AT_GOV")
 		}
+	case "implementation-evidence":
+		if len(args) != 2 {
+			fail(fmt.Errorf("implementation-evidence requires a file"))
+		}
+
+		evidence, err := os.ReadFile(args[1])
+		if err != nil {
+			fail(err)
+		}
+
+		rt := fieldruntime.Runtime{
+			Store:    s,
+			Reasoner: mkReasoner(),
+		}
+		em, duplicate, err := rt.CaptureImplementationEvidence(
+			context.Background(),
+			evidence,
+		)
+		if err != nil {
+			fail(err)
+		}
+
+		receipt := renderField(s, *output)
+		if duplicate {
+			fmt.Println(
+				em.IDN,
+				"AT_GOV",
+				"DUPLICATE_SOURCE",
+				"PROJECTION_TIP",
+				receipt.TipHash,
+			)
+		} else {
+			fmt.Println(
+				em.IDN,
+				"AT_GOV",
+				"IMPLEMENTATION_EVIDENCE",
+				"PROJECTION_TIP",
+				receipt.TipHash,
+			)
+		}
+
 	case "target":
 		if len(args) < 2 {
 			fail(fmt.Errorf("target requires exact target text"))
@@ -565,6 +606,7 @@ Commands:
   init                         initialize local state and dropzone
   doctor                       verify state, COSL chain, evidence, Gemma runtime and model
   capture <file>               analyze with local Gemma and create one GOV-ready EmergION
+  implementation-evidence <file> preserve bounded implementation evidence as one GOV-ready EmergION
   rework <returned-id> <file>   re-enter a HUMAN_FINAL RETURNED EmergION with corrected source
   once                         process and clear the dropzone once
   run                          run the local living FIELD event loop; no server
