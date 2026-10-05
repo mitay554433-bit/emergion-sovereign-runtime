@@ -1416,3 +1416,93 @@ func TestGovernedRecursiveEmergenceTinyLoop(t *testing.T) {
 		t.Fatal("accepted SAW EmergION disappeared during circulation")
 	}
 }
+
+func TestAcceptedSuccessfulExecutionMaterializesVerifiedDeliverable(t *testing.T) {
+	root := t.TempDir()
+
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	request := adapters.ExecutionRequest{
+		EmergIONID:      "E-DELIVERABLE-SOURCE",
+		SourceHash:      "SOURCE-DELIVERABLE-PROOF",
+		AuthorizationID: "EV-Q-DELIVERABLE",
+		Authority:       "HUMAN_FINAL",
+		Adapter:         "LOCAL_GEMMA",
+		Action:          "ANALYZE",
+	}
+	request.TransitionEmergIONID = adapters.ExecutionTransitionID(request)
+
+	const output = "deliverable line one\nline=two:preserved\nline three"
+
+	result := adapters.BindExecutionResult(
+		request,
+		adapters.ExecutionResult{
+			Succeeded: true,
+			Output:    output,
+		},
+	)
+
+	rt := Runtime{Store: s}
+
+	signal, duplicate, err := rt.CaptureGovernedExecutionResult(
+		context.Background(),
+		request,
+		result,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate {
+		t.Fatal("deliverable execution signal unexpectedly duplicate")
+	}
+
+	approved, decision, err := gov.Decide(
+		signal,
+		gov.Approve,
+		"HUMAN_FINAL",
+		"accept deliverable proof",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	decisionID, err := s.SaveDecision(decision)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	accepted, receipt, err := reg.Accept(approved, decisionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveAccepted(receipt); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := rt.MaterializeAcceptedExecutionResult(accepted.IDN)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got.Output != output {
+		t.Fatalf("deliverable output = %q want %q", got.Output, output)
+	}
+	if got.EvidenceHash != accepted.MEM.SourceHash {
+		t.Fatal("deliverable lost immutable evidence identity")
+	}
+	if got.SourceEmergIONID != request.EmergIONID {
+		t.Fatal("deliverable lost source EmergION lineage")
+	}
+	if got.TransitionEmergIONID != request.TransitionEmergIONID {
+		t.Fatal("deliverable lost travelling transition identity")
+	}
+	if got.AuthorizationID != request.AuthorizationID {
+		t.Fatal("deliverable lost authorization identity")
+	}
+	if got.FieldTip == "" {
+		t.Fatal("deliverable missing FIELD tip")
+	}
+}

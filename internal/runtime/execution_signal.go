@@ -35,24 +35,7 @@ func (r Runtime) CaptureExecutionResult(
 		)
 	}
 
-	var content strings.Builder
-	writeField := func(key, value string) {
-		fmt.Fprintf(&content, "%s=%d:", key, len(value))
-		content.WriteString(value)
-		content.WriteByte('\n')
-	}
-
-	writeField("S", "XS/1")
-	writeField("K", "XR")
-	writeField("P", request.EmergIONID)
-	writeField("H", request.SourceHash)
-	writeField("Q", request.AuthorizationID)
-	writeField("A", request.Authority)
-	writeField("D", request.Adapter)
-	writeField("X", request.Action)
-	writeField("Y", fmt.Sprintf("%t", result.Succeeded))
-	writeField("O", result.Output)
-	writeField("E", result.Error)
+	content := adapters.ExecutionResultBytes(request, result)
 
 	facts := []string{
 		"execution_result_observed",
@@ -107,7 +90,7 @@ func (r Runtime) CaptureExecutionResult(
 	return signalRuntime.captureBytes(
 		ctx,
 		"execution-result",
-		[]byte(content.String()),
+		content,
 		"execution_signal",
 	)
 }

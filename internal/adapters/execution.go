@@ -1,7 +1,9 @@
 package adapters
 
 import (
+	"bytes"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"emergion-sovereign-runtime/internal/core"
@@ -29,6 +31,81 @@ type ExecutionResult struct {
 	Succeeded            bool
 	Output               string
 	Error                string
+}
+
+func ExecutionResultBytes(request ExecutionRequest, result ExecutionResult) []byte {
+	var content strings.Builder
+	writeField := func(key, value string) {
+		fmt.Fprintf(&content, "%s=%d:", key, len(value))
+		content.WriteString(value)
+		content.WriteByte('\n')
+	}
+	writeField("S", "XS/1")
+	writeField("K", "XR")
+	writeField("P", request.EmergIONID)
+	writeField("H", request.SourceHash)
+	writeField("Q", request.AuthorizationID)
+	writeField("A", request.Authority)
+	writeField("D", request.Adapter)
+	writeField("X", request.Action)
+	writeField("Y", fmt.Sprintf("%t", result.Succeeded))
+	writeField("O", result.Output)
+	writeField("E", result.Error)
+	return []byte(content.String())
+}
+
+func ParseExecutionResultBytes(content []byte) (ExecutionResult, error) {
+	fields := make(map[string]string)
+	rest := content
+	for len(rest) > 0 {
+		eq := bytes.IndexByte(rest, '=')
+		if eq <= 0 {
+			return ExecutionResult{}, fmt.Errorf("invalid execution result field")
+		}
+		key := string(rest[:eq])
+		rest = rest[eq+1:]
+		colon := bytes.IndexByte(rest, ':')
+		if colon <= 0 {
+			return ExecutionResult{}, fmt.Errorf("invalid execution result length for %s", key)
+		}
+		n, err := strconv.Atoi(string(rest[:colon]))
+		if err != nil || n < 0 {
+			return ExecutionResult{}, fmt.Errorf("invalid execution result length for %s", key)
+		}
+		rest = rest[colon+1:]
+		if len(rest) < n+1 || rest[n] != '\n' {
+			return ExecutionResult{}, fmt.Errorf("truncated execution result field %s", key)
+		}
+		if _, exists := fields[key]; exists {
+			return ExecutionResult{}, fmt.Errorf("duplicate execution result field %s", key)
+		}
+		fields[key] = string(rest[:n])
+		rest = rest[n+1:]
+	}
+
+	if fields["S"] != "XS/1" || fields["K"] != "XR" {
+		return ExecutionResult{}, fmt.Errorf("not an XS/1 execution result")
+	}
+	for _, key := range []string{"P", "H", "A", "D", "X", "Y", "O", "E"} {
+		if _, ok := fields[key]; !ok {
+			return ExecutionResult{}, fmt.Errorf("execution result missing field %s", key)
+		}
+	}
+	succeeded, err := strconv.ParseBool(fields["Y"])
+	if err != nil {
+		return ExecutionResult{}, fmt.Errorf("invalid execution result success value: %w", err)
+	}
+	return ExecutionResult{
+		EmergIONID:      fields["P"],
+		SourceHash:      fields["H"],
+		AuthorizationID: fields["Q"],
+		Authority:       fields["A"],
+		Adapter:         fields["D"],
+		Action:          fields["X"],
+		Succeeded:       succeeded,
+		Output:          fields["O"],
+		Error:           fields["E"],
+	}, nil
 }
 
 type Executor interface {

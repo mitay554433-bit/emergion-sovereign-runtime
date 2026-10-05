@@ -157,6 +157,81 @@ func exportLineage(destination string) (lineageExportReceipt, error) {
 	return lineageExportReceipt{Bundle: final, SHA256: hash, Head: head, Branch: branch, ExportedAt: time.Now().UTC()}, nil
 }
 
+type deliverableReceipt struct {
+	EmergIONID           string    `json:"emergion_id"`
+	EvidenceHash         string    `json:"evidence_sha256"`
+	SourceEmergIONID     string    `json:"source_emergion_id"`
+	SourceHash           string    `json:"source_hash"`
+	TransitionEmergIONID string    `json:"transition_emergion_id"`
+	AuthorizationID      string    `json:"authorization_event"`
+	Authority            string    `json:"authority"`
+	Adapter              string    `json:"adapter"`
+	Action               string    `json:"action"`
+	OutputSHA256         string    `json:"output_sha256"`
+	FieldTip             string    `json:"field_tip"`
+	PublishedAt          time.Time `json:"published_at"`
+}
+
+func publishDeliverable(root string, d fieldruntime.Deliverable) (deliverableReceipt, string, error) {
+	dir := filepath.Join(root, "deliverables", d.EmergIONID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return deliverableReceipt{}, "", err
+	}
+
+	tmp, err := os.MkdirTemp(dir, ".publish-*")
+	if err != nil {
+		return deliverableReceipt{}, "", err
+	}
+	defer os.RemoveAll(tmp)
+
+	outputTmp := filepath.Join(tmp, "output")
+	if err := os.WriteFile(outputTmp, []byte(d.Output), 0o644); err != nil {
+		return deliverableReceipt{}, "", err
+	}
+
+	outputHash, err := hashFile(outputTmp)
+	if err != nil {
+		return deliverableReceipt{}, "", err
+	}
+
+	receipt := deliverableReceipt{
+		EmergIONID:           d.EmergIONID,
+		EvidenceHash:         d.EvidenceHash,
+		SourceEmergIONID:     d.SourceEmergIONID,
+		SourceHash:           d.SourceHash,
+		TransitionEmergIONID: d.TransitionEmergIONID,
+		AuthorizationID:      d.AuthorizationID,
+		Authority:            d.Authority,
+		Adapter:              d.Adapter,
+		Action:               d.Action,
+		OutputSHA256:         outputHash,
+		FieldTip:             d.FieldTip,
+		PublishedAt:          time.Now().UTC(),
+	}
+
+	receiptBytes, err := json.MarshalIndent(receipt, "", "  ")
+	if err != nil {
+		return deliverableReceipt{}, "", err
+	}
+
+	receiptTmp := filepath.Join(tmp, "receipt.json")
+	if err := os.WriteFile(receiptTmp, receiptBytes, 0o644); err != nil {
+		return deliverableReceipt{}, "", err
+	}
+
+	outputFinal := filepath.Join(dir, "output")
+	receiptFinal := filepath.Join(dir, "receipt.json")
+
+	if err := os.Rename(outputTmp, outputFinal); err != nil {
+		return deliverableReceipt{}, "", fmt.Errorf("publish deliverable output: %w", err)
+	}
+	if err := os.Rename(receiptTmp, receiptFinal); err != nil {
+		return deliverableReceipt{}, "", fmt.Errorf("publish deliverable receipt: %w", err)
+	}
+
+	return receipt, outputFinal, nil
+}
+
 func main() {
 	state := flag.String("state", envOr("FIELD_HOME", ".field"), "local runtime state")
 	reasonerName := flag.String("reasoner", envOr("FIELD_REASONER", "gemma"), "gemma or heuristic")
@@ -548,6 +623,24 @@ func main() {
 			})
 		}
 
+	case "materialize":
+		if len(args) != 2 {
+			fail(fmt.Errorf("usage: field materialize <accepted-execution-result-id>"))
+		}
+		deliverable, err := (fieldruntime.Runtime{Store: s}).MaterializeAcceptedExecutionResult(args[1])
+		if err != nil {
+			fail(err)
+		}
+		receipt, artifact, err := publishDeliverable(*output, deliverable)
+		if err != nil {
+			fail(err)
+		}
+		printJSON(map[string]any{
+			"artifact": artifact,
+			"receipt":  filepath.Join(filepath.Dir(artifact), "receipt.json"),
+			"lineage":  receipt,
+		})
+
 	case "render":
 		out := *output
 		if len(args) > 1 {
@@ -618,6 +711,7 @@ Commands:
   authorize <id> <adapter> <action> [why] HUMAN_FINAL authorization for a derivable gated action
   execute <id> <adapter> <action> execute one governed local action and recapture its result
   safe-action                  execute at most one eligible bounded CAP_ONLY action
+  materialize <accepted-execution-result-id>  read verified output from a REG-accepted successful execution result
   render [directory]           static JSON and HTML FIELD projection
   verify                       verify chain/evidence and remove orphan objects
   export-lineage [directory]   create and verify a complete named Git bundle for transfer

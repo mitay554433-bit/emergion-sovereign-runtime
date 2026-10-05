@@ -254,3 +254,36 @@ func TestPrepareExecutionBirthsTravellingEmergIONIdentity(t *testing.T) {
 		t.Fatal("PrepareExecution did not birth travelling EmergION identity")
 	}
 }
+
+func TestExecutionResultBytesRoundTripPreservesBoundedOutput(t *testing.T) {
+	request := ExecutionRequest{
+		EmergIONID:           "E-XR-PROOF",
+		SourceHash:           "SOURCE-XR-PROOF",
+		AuthorizationID:      "EV-Q-XR-PROOF",
+		TransitionEmergIONID: "E-TRANSITION-XR-PROOF",
+		Authority:            "HUMAN_FINAL",
+		Adapter:              "LOCAL_GEMMA",
+		Action:               "ANALYZE",
+	}
+
+	want := BindExecutionResult(
+		request,
+		ExecutionResult{
+			Succeeded: true,
+			Output:    "line one\nline=two:still-output\nline three",
+		},
+	)
+
+	want.TransitionEmergIONID = ""
+
+	wire := ExecutionResultBytes(request, want)
+
+	got, err := ParseExecutionResultBytes(wire)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got != want {
+		t.Fatalf("decoded execution result = %#v want %#v", got, want)
+	}
+}
