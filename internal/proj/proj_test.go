@@ -1004,7 +1004,6 @@ func TestSAWSourceIsDeterministicAndNonAuthoritative(t *testing.T) {
 	}
 }
 
-
 func TestHTMLProjectsVerifiedDeliveriesWithoutChangingFieldState(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "field.html")
@@ -1025,6 +1024,8 @@ func TestHTMLProjectsVerifiedDeliveriesWithoutChangingFieldState(t *testing.T) {
 	for _, want := range []string{
 		"VERIFIED DELIVERIES",
 		"deliverables/index.json",
+		"data-field-tip=\"tip-delivery-ui\"",
+		"delivery projection FIELD tip mismatch",
 		"deliverables/",
 		"Operator projection only.",
 		"canonical authority remains COSL + REG",
