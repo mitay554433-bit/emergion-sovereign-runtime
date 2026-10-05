@@ -438,7 +438,7 @@ th,td{padding:.5rem;font-size:.9rem}
 
 <h2>VERIFIED DELIVERIES</h2>
 <p class="small">Operator projection only. Entries are published from REG-accepted successful execution results; canonical authority remains COSL + REG.</p>
-<div id="deliveries" class="panel"><span class="muted">Loading verified deliveries…</span></div>
+<div id="deliveries" class="panel" data-field-tip="{{.TipHash}}"><span class="muted">Loading verified deliveries…</span></div>
 
 <script>
 function deliveryText(value) {
@@ -451,6 +451,10 @@ async function loadDeliveries() {
     const response = await fetch("deliverables/index.json", {cache: "no-store"});
     if (!response.ok) throw new Error("delivery index unavailable");
     const index = await response.json();
+    const expectedTip = deliveryText(target.dataset.fieldTip);
+    if (deliveryText(index.field_tip) !== expectedTip) {
+      throw new Error("delivery projection FIELD tip mismatch");
+    }
     const items = Array.isArray(index.deliverables) ? index.deliverables : [];
     if (items.length === 0) {
       target.innerHTML = '<span class="muted">No verified deliverables published.</span>';
