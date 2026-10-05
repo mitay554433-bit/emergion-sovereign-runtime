@@ -1003,3 +1003,38 @@ func TestSAWSourceIsDeterministicAndNonAuthoritative(t *testing.T) {
 		t.Fatal("SAW source projection mutated authoritative state")
 	}
 }
+
+
+func TestHTMLProjectsVerifiedDeliveriesWithoutChangingFieldState(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "field.html")
+	st := core.EmptyState()
+	st.Events = 3
+	st.TipHash = "tip-delivery-ui"
+
+	if err := HTML(path, st); err != nil {
+		t.Fatal(err)
+	}
+
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(b)
+
+	for _, want := range []string{
+		"VERIFIED DELIVERIES",
+		"deliverables/index.json",
+		"deliverables/",
+		"Operator projection only.",
+		"canonical authority remains COSL + REG",
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("field.html missing %q", want)
+		}
+	}
+
+	if st.Events != 3 || st.TipHash != "tip-delivery-ui" {
+		t.Fatalf("HTML projection mutated FIELD state: %#v", st)
+	}
+}
