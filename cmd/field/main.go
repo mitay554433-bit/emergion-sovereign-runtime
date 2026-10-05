@@ -174,6 +174,52 @@ type deliverableReceipt struct {
 	PublishedAt          time.Time `json:"published_at"`
 }
 
+type deliverableIndex struct {
+	FieldTip     string               `json:"field_tip"`
+	Deliverables []deliverableReceipt `json:"deliverables"`
+}
+
+func publishDeliverableIndex(root, fieldTip string, receipts []deliverableReceipt) (string, error) {
+	dir := filepath.Join(root, "deliverables")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+
+	index := deliverableIndex{
+		FieldTip:     fieldTip,
+		Deliverables: receipts,
+	}
+	b, err := json.MarshalIndent(index, "", "  ")
+	if err != nil {
+		return "", err
+	}
+
+	tmp, err := os.CreateTemp(dir, ".index-*.json")
+	if err != nil {
+		return "", err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+
+	if _, err := tmp.Write(b); err != nil {
+		tmp.Close()
+		return "", err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return "", err
+	}
+	if err := tmp.Close(); err != nil {
+		return "", err
+	}
+
+	final := filepath.Join(dir, "index.json")
+	if err := os.Rename(tmpPath, final); err != nil {
+		return "", fmt.Errorf("publish deliverable index: %w", err)
+	}
+	return final, nil
+}
+
 func publishAcceptedDeliverables(s *store.Store, out string) ([]string, error) {
 	st := loadState(s)
 
@@ -186,6 +232,7 @@ func publishAcceptedDeliverables(s *store.Store, out string) ([]string, error) {
 	sort.Strings(ids)
 
 	published := make([]string, 0, len(ids))
+	receipts := make([]deliverableReceipt, 0, len(ids))
 	rt := fieldruntime.Runtime{Store: s}
 
 	for _, id := range ids {
@@ -197,10 +244,16 @@ func publishAcceptedDeliverables(s *store.Store, out string) ([]string, error) {
 			return published, err
 		}
 
-		if _, _, err := publishDeliverable(out, deliverable); err != nil {
+		receipt, _, err := publishDeliverable(out, deliverable)
+		if err != nil {
 			return published, err
 		}
+		receipts = append(receipts, receipt)
 		published = append(published, id)
+	}
+
+	if _, err := publishDeliverableIndex(out, st.TipHash, receipts); err != nil {
+		return published, err
 	}
 
 	return published, nil
