@@ -436,7 +436,73 @@ th,td{padding:.5rem;font-size:.9rem}
 </tbody>
 </table>
 
+<h2>VERIFIED DELIVERIES</h2>
+<p class="small">Operator projection only. Entries are published from REG-accepted successful execution results; canonical authority remains COSL + REG.</p>
+<div id="deliveries" class="panel"><span class="muted">Loading verified deliveries…</span></div>
+
 <script>
+function deliveryText(value) {
+  return value == null ? "" : String(value);
+}
+
+async function loadDeliveries() {
+  const target = document.getElementById("deliveries");
+  try {
+    const response = await fetch("deliverables/index.json", {cache: "no-store"});
+    if (!response.ok) throw new Error("delivery index unavailable");
+    const index = await response.json();
+    const items = Array.isArray(index.deliverables) ? index.deliverables : [];
+    if (items.length === 0) {
+      target.innerHTML = '<span class="muted">No verified deliverables published.</span>';
+      return;
+    }
+
+    const table = document.createElement("table");
+    const head = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    ["EmergION", "Action", "Adapter", "Evidence", "Output", "Artifact"].forEach(function(label) {
+      const th = document.createElement("th");
+      th.textContent = label;
+      headRow.appendChild(th);
+    });
+    head.appendChild(headRow);
+    table.appendChild(head);
+
+    const body = document.createElement("tbody");
+    items.forEach(function(item) {
+      const row = document.createElement("tr");
+      [
+        deliveryText(item.emergion_id),
+        deliveryText(item.action),
+        deliveryText(item.adapter),
+        deliveryText(item.evidence_sha256),
+        deliveryText(item.output_sha256)
+      ].forEach(function(value) {
+        const td = document.createElement("td");
+        const code = document.createElement("code");
+        code.textContent = value;
+        td.appendChild(code);
+        row.appendChild(td);
+      });
+
+      const artifactCell = document.createElement("td");
+      const link = document.createElement("a");
+      link.href = "deliverables/" + encodeURIComponent(deliveryText(item.emergion_id)) + "/output";
+      link.textContent = "open";
+      artifactCell.appendChild(link);
+      row.appendChild(artifactCell);
+      body.appendChild(row);
+    });
+    table.appendChild(body);
+
+    target.replaceChildren(table);
+  } catch (err) {
+    target.innerHTML = '<span class="muted">Delivery projection unavailable.</span>';
+  }
+}
+
+loadDeliveries();
+
 async function humanFinal(id, decision) {
   if (!confirm(decision + " " + id + "?")) return;
   const response = await fetch("/decide", {
