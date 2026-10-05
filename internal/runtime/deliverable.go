@@ -1,11 +1,15 @@
 package runtime
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 
 	"emergion-sovereign-runtime/internal/adapters"
 	livefield "emergion-sovereign-runtime/internal/field"
 )
+
+var ErrExecutionResultUnsuccessful = errors.New("execution result did not succeed")
 
 type Deliverable struct {
 	EmergIONID           string
@@ -19,6 +23,40 @@ type Deliverable struct {
 	Action               string
 	Output               string
 	FieldTip             string
+}
+
+type historicalExecutionSignalV1 struct {
+	Schema         string `json:"schema"`
+	SourceKind     string `json:"source_kind"`
+	ParentEmergION string `json:"parent_emergion"`
+	SourceHash     string `json:"source_hash"`
+	Authority      string `json:"authority"`
+	Adapter        string `json:"adapter"`
+	Action         string `json:"action"`
+	Succeeded      bool   `json:"succeeded"`
+	Output         string `json:"output"`
+}
+
+func parseHistoricalExecutionSignalV1(content []byte) (adapters.ExecutionResult, error) {
+	var signal historicalExecutionSignalV1
+	if err := json.Unmarshal(content, &signal); err != nil {
+		return adapters.ExecutionResult{}, err
+	}
+	if signal.Schema != "EXECUTION_SIGNAL_V1" || signal.SourceKind != "EXECUTION_RESULT" {
+		return adapters.ExecutionResult{}, fmt.Errorf("not an EXECUTION_SIGNAL_V1 execution result")
+	}
+	if signal.ParentEmergION == "" || signal.SourceHash == "" || signal.Authority == "" || signal.Adapter == "" || signal.Action == "" {
+		return adapters.ExecutionResult{}, fmt.Errorf("incomplete EXECUTION_SIGNAL_V1 execution result")
+	}
+	return adapters.ExecutionResult{
+		EmergIONID: signal.ParentEmergION,
+		SourceHash: signal.SourceHash,
+		Authority:  signal.Authority,
+		Adapter:    signal.Adapter,
+		Action:     signal.Action,
+		Succeeded:  signal.Succeeded,
+		Output:     signal.Output,
+	}, nil
 }
 
 func (r Runtime) MaterializeAcceptedExecutionResult(id string) (Deliverable, error) {
@@ -49,10 +87,19 @@ func (r Runtime) MaterializeAcceptedExecutionResult(id string) (Deliverable, err
 	}
 	result, err := adapters.ParseExecutionResultBytes(evidence)
 	if err != nil {
-		return Deliverable{}, err
+		var envelope struct {
+			Schema string `json:"schema"`
+		}
+		if json.Unmarshal(evidence, &envelope) != nil || envelope.Schema != "EXECUTION_SIGNAL_V1" {
+			return Deliverable{}, err
+		}
+		result, err = parseHistoricalExecutionSignalV1(evidence)
+		if err != nil {
+			return Deliverable{}, err
+		}
 	}
 	if !result.Succeeded {
-		return Deliverable{}, fmt.Errorf("execution result did not succeed: %s", id)
+		return Deliverable{}, fmt.Errorf("%w: %s", ErrExecutionResultUnsuccessful, id)
 	}
 
 	if result.EmergIONID != em.REL["parent_emergion"] ||

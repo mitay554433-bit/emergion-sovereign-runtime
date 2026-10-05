@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -172,8 +174,69 @@ type deliverableReceipt struct {
 	PublishedAt          time.Time `json:"published_at"`
 }
 
+func publishAcceptedDeliverables(s *store.Store, out string) ([]string, error) {
+	st := loadState(s)
+
+	ids := make([]string, 0)
+	for id, em := range st.Accepted {
+		if em.REL["source_kind"] == "EXECUTION_RESULT" {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+
+	published := make([]string, 0, len(ids))
+	rt := fieldruntime.Runtime{Store: s}
+
+	for _, id := range ids {
+		deliverable, err := rt.MaterializeAcceptedExecutionResult(id)
+		if err != nil {
+			if errors.Is(err, fieldruntime.ErrExecutionResultUnsuccessful) {
+				continue
+			}
+			return published, err
+		}
+
+		if _, _, err := publishDeliverable(out, deliverable); err != nil {
+			return published, err
+		}
+		published = append(published, id)
+	}
+
+	return published, nil
+}
+
 func publishDeliverable(root string, d fieldruntime.Deliverable) (deliverableReceipt, string, error) {
 	dir := filepath.Join(root, "deliverables", d.EmergIONID)
+	outputFinal := filepath.Join(dir, "output")
+	receiptFinal := filepath.Join(dir, "receipt.json")
+
+	if receiptBytes, err := os.ReadFile(receiptFinal); err == nil {
+		var existing deliverableReceipt
+		if json.Unmarshal(receiptBytes, &existing) == nil {
+			outputHash, hashErr := hashFile(outputFinal)
+			expectedHash := sha256.Sum256([]byte(d.Output))
+			expectedOutputHash := fmt.Sprintf("%x", expectedHash[:])
+
+			if hashErr == nil &&
+				existing.EmergIONID == d.EmergIONID &&
+				existing.EvidenceHash == d.EvidenceHash &&
+				existing.SourceEmergIONID == d.SourceEmergIONID &&
+				existing.SourceHash == d.SourceHash &&
+				existing.TransitionEmergIONID == d.TransitionEmergIONID &&
+				existing.AuthorizationID == d.AuthorizationID &&
+				existing.Authority == d.Authority &&
+				existing.Adapter == d.Adapter &&
+				existing.Action == d.Action &&
+				existing.OutputSHA256 == outputHash &&
+				existing.OutputSHA256 == expectedOutputHash &&
+				existing.FieldTip != "" &&
+				!existing.PublishedAt.IsZero() {
+				return existing, outputFinal, nil
+			}
+		}
+	}
+
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return deliverableReceipt{}, "", err
 	}
@@ -219,9 +282,6 @@ func publishDeliverable(root string, d fieldruntime.Deliverable) (deliverableRec
 		return deliverableReceipt{}, "", err
 	}
 
-	outputFinal := filepath.Join(dir, "output")
-	receiptFinal := filepath.Join(dir, "receipt.json")
-
 	if err := os.Rename(outputTmp, outputFinal); err != nil {
 		return deliverableReceipt{}, "", fmt.Errorf("publish deliverable output: %w", err)
 	}
@@ -231,7 +291,6 @@ func publishDeliverable(root string, d fieldruntime.Deliverable) (deliverableRec
 
 	return receipt, outputFinal, nil
 }
-
 func main() {
 	state := flag.String("state", envOr("FIELD_HOME", ".field"), "local runtime state")
 	reasonerName := flag.String("reasoner", envOr("FIELD_REASONER", "gemma"), "gemma or heuristic")
@@ -436,6 +495,13 @@ func main() {
 				if safeExecuted {
 					renderField(s, *output)
 					fmt.Println(safeSignal.IDN, "SAFE_ACTION_AT_GOV")
+				}
+				published, err := publishAcceptedDeliverables(s, *output)
+				if err != nil {
+					fail(err)
+				}
+				for _, id := range published {
+					fmt.Println(id, "DELIVERABLE_READY")
 				}
 			},
 		); err != nil {

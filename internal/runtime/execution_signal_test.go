@@ -1506,3 +1506,107 @@ func TestAcceptedSuccessfulExecutionMaterializesVerifiedDeliverable(t *testing.T
 		t.Fatal("deliverable missing FIELD tip")
 	}
 }
+
+func TestHistoricalExecutionSignalV1MaterializesVerifiedDeliverable(t *testing.T) {
+	root := t.TempDir()
+
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const (
+		sourceID   = "E-HISTORICAL-SOURCE"
+		sourceHash = "SOURCE-HISTORICAL-PROOF"
+		output     = `{"summary":"historical verified output"}`
+	)
+
+	evidence := []byte(`{"schema":"EXECUTION_SIGNAL_V1","source_kind":"EXECUTION_RESULT","parent_emergion":"E-HISTORICAL-SOURCE","source_hash":"SOURCE-HISTORICAL-PROOF","authority":"CAP_ONLY","adapter":"LOCAL_GEMMA","action":"ANALYZE","succeeded":true,"output":"{\"summary\":\"historical verified output\"}"}`)
+
+	rt := Runtime{Store: s}
+	signalRuntime := rt
+	signalRuntime.Reasoner = fixedReasoner{
+		name:    "execution-signal",
+		version: "v1",
+		result: reason.Result{
+			Summary: "bounded execution result observation",
+			Relationships: map[string]string{
+				"source_kind":     "EXECUTION_RESULT",
+				"parent_emergion": sourceID,
+				"adapter":         "LOCAL_GEMMA",
+				"action":          "ANALYZE",
+			},
+			Capabilities: []string{"OBS", "CMP"},
+			Facts:        []string{"execution_result_observed", "execution_succeeded"},
+			Risk:         "L",
+		},
+	}
+
+	signal, duplicate, err := signalRuntime.captureBytes(
+		context.Background(),
+		"execution-result",
+		evidence,
+		"execution_signal",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate {
+		t.Fatal("historical execution signal unexpectedly duplicate")
+	}
+
+	approved, decision, err := gov.Decide(
+		signal,
+		gov.Approve,
+		"HUMAN_FINAL",
+		"accept historical deliverable proof",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	decisionID, err := s.SaveDecision(decision)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	accepted, receipt, err := reg.Accept(approved, decisionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveAccepted(receipt); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := rt.MaterializeAcceptedExecutionResult(accepted.IDN)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got.Output != output {
+		t.Fatalf("deliverable output = %q want %q", got.Output, output)
+	}
+	if got.EvidenceHash != accepted.MEM.SourceHash {
+		t.Fatal("deliverable lost immutable historical evidence identity")
+	}
+	if got.SourceEmergIONID != sourceID {
+		t.Fatal("deliverable lost historical source EmergION lineage")
+	}
+	if got.SourceHash != sourceHash {
+		t.Fatal("deliverable lost historical source hash")
+	}
+	if got.AuthorizationID != "" {
+		t.Fatalf("historical authorization fabricated: %q", got.AuthorizationID)
+	}
+	if got.TransitionEmergIONID != "" {
+		t.Fatalf("historical transition fabricated: %q", got.TransitionEmergIONID)
+	}
+	if got.Authority != "CAP_ONLY" ||
+		got.Adapter != "LOCAL_GEMMA" ||
+		got.Action != "ANALYZE" {
+		t.Fatal("historical execution identity changed")
+	}
+	if got.FieldTip == "" {
+		t.Fatal("deliverable missing FIELD tip")
+	}
+}
