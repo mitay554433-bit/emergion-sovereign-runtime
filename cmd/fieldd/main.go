@@ -191,6 +191,7 @@ _ = json.NewEncoder(w).Encode(resp)
 		})
 
 		go func() {
+                        mux.Handle("/deliverables/", http.StripPrefix("/deliverables/", http.FileServer(http.Dir(filepath.Join("outputs", "deliverables")))))
 			log.Printf("Field Sovereign HTTP status listening on %s", *httpAddr)
 			if err := http.ListenAndServe(*httpAddr, mux); err != nil {
 				log.Printf("HTTP status listener stopped: %v", err)
