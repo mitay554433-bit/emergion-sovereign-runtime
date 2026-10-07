@@ -237,6 +237,44 @@ func (r *Runtime) Run(
 					if len(st.AtGOV) != 0 {
 						return nil
 					}
+
+					// HUMAN_FINAL Returned candidates remain non-canonical.
+					// Deterministically derive one bounded evidence-bearing SOURCE
+					// and re-enter the existing Capture/rework admission path.
+					var returned core.EmergION
+					for id, em := range st.Returned {
+						if returned.IDN == "" || id < returned.IDN {
+							returned = em
+						}
+					}
+					if returned.IDN != "" {
+						evidence, marshalErr := json.Marshal(map[string]any{
+							"source_kind":       "RETURNED_CONTINUATION",
+							"returned_emergion": returned.IDN,
+							"returned_state":    returned.STA,
+							"source_hash":       returned.MEM.SourceHash,
+						})
+						if marshalErr != nil {
+							return marshalErr
+						}
+						_, duplicate, captureErr := (fieldruntime.Runtime{
+							Store:               r.store,
+							Reasoner:            r.reasoner,
+							ReturnedPredecessor: returned.IDN,
+						}).CaptureBytes(
+							cycleCtx,
+							"returned-continuation",
+							evidence,
+							"governed_returned_continuation",
+						)
+						if captureErr != nil {
+							return captureErr
+						}
+						if !duplicate {
+							return nil
+						}
+					}
+
 					var target core.EmergION
 					for id, em := range st.Accepted {
 						if em.REL["source_kind"] == "TARGET" && (target.IDN == "" || id < target.IDN) {

@@ -940,6 +940,151 @@ func TestRunDrivesSuccessiveGovernedCyclesWithoutManualInvocation(t *testing.T) 
 	}
 }
 
+func TestRunContinuesHumanFinalReturnedBeforeIdleProjection(t *testing.T) {
+	root := t.TempDir()
+
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt := &Runtime{
+		store:    s,
+		reasoner: sawCirculationReasoner{},
+	}
+
+	model := filepath.Join(root, "model.gguf")
+	if err := os.WriteFile(model, []byte("test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fake := filepath.Join(root, "fake-gemma")
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\nexit 7\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	gemma := reason.GemmaCLI{
+		Binary:    fake,
+		Model:     model,
+		Context:   2048,
+		MaxTokens: 80,
+		Threads:   1,
+		Timeout:   5 * time.Second,
+	}
+	if err := gemma.Validate(); err != nil {
+		t.Fatalf("fake Gemma validation failed: %v", err)
+	}
+
+	returned := core.EmergION{
+		IDN: "E-RUN-RETURNED-CONTINUATION",
+		STA: core.StateAtGOV,
+		MEM: core.Memory{
+			SourceHash: "run-returned-continuation-source",
+			Bytes:      1,
+			Stored:     1,
+			Summary:    "governed source requiring HUMAN_FINAL rework",
+		},
+		REL: map[string]string{
+			"source_kind": "SOURCE",
+		},
+		CAP: []string{"OBS", "CMP"},
+		VAL: core.Validation{
+			Facts:  []string{"bounded returned source"},
+			Recoil: true,
+			WVC:    true,
+		},
+		EVO: core.Evolution{Version: 1},
+	}
+
+	if _, err := rt.store.SaveCandidate(returned); err != nil {
+		t.Fatal(err)
+	}
+	_, decision, err := gov.Decide(
+		returned,
+		gov.Return,
+		"HUMAN_FINAL",
+		"return for bounded governed continuation",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rt.store.SaveDecision(decision); err != nil {
+		t.Fatal(err)
+	}
+
+	before, err := rt.state()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := before.Returned[returned.IDN]; !ok {
+		t.Fatal("HUMAN_FINAL RETURN was not reconstructed in FIELD")
+	}
+	if len(before.AtGOV) != 0 {
+		t.Fatalf("fixture has %d AtGOV candidates; want 0", len(before.AtGOV))
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	runErr := make(chan error, 1)
+	go func() {
+		runErr <- rt.Run(
+			ctx,
+			filepath.Join(root, "dropzone"),
+			10*time.Millisecond,
+			gemma,
+			nil,
+			nil,
+		)
+	}()
+
+	var continuation core.EmergION
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		state, stateErr := rt.state()
+		if stateErr != nil {
+			cancel()
+			t.Fatal(stateErr)
+		}
+		for _, em := range state.AtGOV {
+			if em.EVO.Supersedes == returned.IDN {
+				continuation = em
+				break
+			}
+		}
+		if continuation.IDN != "" {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	cancel()
+	select {
+	case err := <-runErr:
+		if err != nil && err != context.Canceled {
+			t.Fatalf("Run error = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run did not stop after context cancellation")
+	}
+
+	if continuation.IDN == "" {
+		t.Fatal("Run did not derive governed continuation from HUMAN_FINAL RETURNED source")
+	}
+	if continuation.STA != core.StateAtGOV {
+		t.Fatalf("continuation state = %q want %q", continuation.STA, core.StateAtGOV)
+	}
+	if !continuation.VAL.Recoil || !continuation.VAL.WVC {
+		t.Fatal("Returned continuation bypassed RECOIL/WVC")
+	}
+
+	after, err := rt.state()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := after.Accepted[continuation.IDN]; ok {
+		t.Fatal("Returned continuation self-authorized into REG")
+	}
+	if _, ok := after.Returned[returned.IDN]; !ok {
+		t.Fatal("Returned continuation mutated its HUMAN_FINAL predecessor")
+	}
+}
+
 func TestGovernedCycleCirculatesSAWBeforeProgramProposalFailure(t *testing.T) {
 	root := t.TempDir()
 
