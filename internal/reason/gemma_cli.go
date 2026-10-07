@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 type GemmaCLI struct {
@@ -39,6 +40,19 @@ func GemmaFromEnv() GemmaCLI {
 		Timeout:   timeout,
 		ExtraArgs: extra,
 	}
+}
+
+func truncateUTF8(s string, limit int) string {
+	if limit <= 0 {
+		return ""
+	}
+	if len(s) <= limit {
+		return s
+	}
+	for limit > 0 && !utf8.RuneStart(s[limit]) {
+		limit--
+	}
+	return s[:limit]
 }
 
 func envInt(name string, fallback int) int {
@@ -269,7 +283,7 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 	inputBytes := inputTokens * 3
 	governedLimit := inputBytes / 4
 	if len(governedState) > governedLimit {
-		governedState = governedState[:governedLimit]
+		governedState = truncateUTF8(governedState, governedLimit)
 	}
 
 	contentLimit := inputBytes - len(governedState)
@@ -280,7 +294,7 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 		return Result{}, fmt.Errorf("Gemma context exhausted by governed state")
 	}
 	if len(content) > contentLimit {
-		content = content[:contentLimit]
+		content = truncateUTF8(content, contentLimit)
 	}
 	prompt := buildPrompt(in.Name, content, governedState)
 

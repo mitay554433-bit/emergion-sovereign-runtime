@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 	"time"
 )
 
@@ -894,5 +895,25 @@ func TestMXPDRealFactIsNotOmitted(t *testing.T) {
 
 	if len(got.Facts) != 1 || got.Facts[0] != "source evidence is preserved" {
 		t.Fatalf("real Fact lost: %#v", got.Facts)
+	}
+}
+
+
+func TestTruncateUTF8PreservesRuneBoundary(t *testing.T) {
+	input := "abc€def"
+	got := truncateUTF8(input, 5)
+	if !utf8.ValidString(got) {
+		t.Fatalf("truncateUTF8 returned invalid UTF-8: %q", got)
+	}
+	if got != "abc" {
+		t.Fatalf("truncateUTF8 = %q want %q", got, "abc")
+	}
+}
+
+func TestTruncateUTF8LeavesBoundedInputUnchanged(t *testing.T) {
+	input := "abc€def"
+	got := truncateUTF8(input, len(input))
+	if got != input {
+		t.Fatalf("truncateUTF8 = %q want unchanged %q", got, input)
 	}
 }
