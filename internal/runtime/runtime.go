@@ -1598,6 +1598,23 @@ func (r Runtime) admitAnalyzedCandidate(
 		return core.EmergION{}, false, err
 	}
 
+	if provenance != "provider_population" {
+		if required := strings.TrimSpace(em.REL["required_capability"]); required != "" {
+			if _, err := r.materializeCapabilityProviderPopulation(
+				ctx,
+				required,
+				boundary,
+				governedState,
+				em.IDN,
+			); err != nil {
+				return em, false, fmt.Errorf(
+					"candidate provider population materialization failed: %w",
+					err,
+				)
+			}
+		}
+	}
+
 	return em, false, nil
 }
 
