@@ -429,7 +429,7 @@ func TestMXPDGrammarOwnsKnownBadLeadingLexicalForms(t *testing.T) {
 func TestMXPDGrammarMakesCapabilityOptionalAndCanonical(t *testing.T) {
 	if !strings.Contains(
 		mxpdGrammar,
-		`root ::= summary risk fact difference? requirement? relationship? capability? facet? end`,
+		`root ::= summary risk fact (difference requirement?)? relationship? capability? facet? end`,
 	) {
 		t.Fatal("MXPD grammar still requires a capability")
 	}
@@ -472,7 +472,7 @@ func TestMXPDGrammarMakesCapabilityOptionalAndCanonical(t *testing.T) {
 func TestMXPDGrammarAllowsGovernedCompositionRelationship(t *testing.T) {
 	if !strings.Contains(
 		mxpdGrammar,
-		`root ::= summary risk fact difference? requirement? relationship? capability? facet? end`,
+		`root ::= summary risk fact (difference requirement?)? relationship? capability? facet? end`,
 	) {
 		t.Fatal("MXPD grammar does not permit an optional governed relationship")
 	}

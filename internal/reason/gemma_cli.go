@@ -173,11 +173,11 @@ func (g GemmaCLI) Validate() error {
 	return nil
 }
 
-const mxpdGrammar = `root ::= summary risk fact difference? requirement? relationship? capability? facet? end
+const mxpdGrammar = `root ::= summary risk fact (difference requirement?)? relationship? capability? facet? end
 summary ::= "S|" text "\n"
 risk ::= "K|" ("L" | "M" | "H") "\n"
 fact ::= "F|" text "\n"
-difference ::= "D|" text "\n"
+difference ::= "D|TARGET_STATE!=ACCEPTED_REALITY\n"
 requirement ::= "R|" ("ESTABLISH_FACT" | "DERIVE_RELATIONSHIP" | "DERIVE_CAPABILITY") "\n"
 capability ::= "C|" capability-token "\n"
 capability-token ::= "OBS" | "CMP" | "RLT" | "VLD" | "REASON" | "ANALYZE" | "DRAFT" | "SIMULATE" | "PROGRAM" | "VERSION" | "PATENT_EVIDENCE" | "READ" | "SEND" | "PRODUCT" | "PRICE" | "LINK" | "RECEIPT" | "TRANSFER" | "CUSTOMER" | "LEAD" | "SALE" | "SUPPORT" | "SITE" | "STORE" | "DEPLOY" | "PATENT" | "GRANT" | "MARKET" | "MA"
