@@ -42,6 +42,7 @@ func fullEvent() core.Event {
 					"source preserved",
 					"identity deterministic",
 				},
+				Differences: []string{"TARGET_STATE!=ACCEPTED_REALITY"},
 				Gaps: []string{
 					"external validation pending",
 				},
