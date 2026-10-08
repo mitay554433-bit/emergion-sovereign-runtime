@@ -1,10 +1,10 @@
 # EmergION Sovereign Runtime — Current System State
 
-**State date:** 2026-09-27
+**State date:** 2026-10-08
 
 **Branch:** `governed-demand-v1`
 
-**Verified HEAD before this documentation finalization:** `90d3bb4` — `test: preserve governed cycle composition evidence`.
+**Current remote branch state reviewed:** `governed-demand-v1` through the 2026-10-08 implementation/documentation pass. Local Termux remains authoritative for final execution verification.
 
 This document records the current implementation boundary. It deliberately separates verified operation from capabilities that are designed but not yet independently verified.
 
@@ -271,7 +271,55 @@ These remain outside the verified-complete boundary:
 
 These are not architecture failures. They are explicitly separated verification boundaries.
 
-## 15. Final operational invariant
+## 15. Development workflow supersession
+
+Historical continuity records used a one-item-at-a-time engineering cadence and sometimes required a HUMAN_FINAL checkpoint before each source modification. That development cadence is superseded.
+
+Current development policy:
+- inspect existing implementation before designing replacements;
+- compatible inspection, coding, tests, documentation, UI work, and integration may proceed in coordinated parallel tranches;
+- preserve evidence, exact lineage, deterministic rebuild, and fail-closed behavior;
+- do not create a parallel registry, scheduler, wave engine, authority system, or competing canonical state;
+- HUMAN_FINAL remains mandatory where the runtime authority model requires it for consequential reality-changing actions;
+- development activity itself does not become a HUMAN_FINAL-gated runtime action merely because it modifies source during engineering.
+
+This changes engineering cadence only. It does not weaken GOV, REG, Q authorization, KIN lineage, RECOIL/WVC, or SELF_BUILDING != SELF_AUTHORIZING.
+
+## 16. October 2026 closure reconciliation
+
+Later repository evidence supersedes several stale frontier statements in older continuity records:
+
+- persistent TARGET survival across rebuild/restart is implemented and regression-tested in repository history;
+- governed target recurrence and semantic comparison are implemented;
+- verified execution results can materialize as deliverables;
+- deliverables are reconciled during the living run;
+- verified deliverables are projected in the operator UI and served through fieldd;
+- deterministic HUMAN_FINAL Returned continuation now derives bounded evidence and re-enters the existing Capture/rework path;
+- target/candidate requirements can materialize deterministic accepted-provider populations without manufacturing COMPOSITION_KIN;
+- Gemma prompt truncation is UTF-8 boundary-safe;
+- post-model calibration/output truncation has now been hardened to use the same UTF-8-safe truncation primitive. Regression tests were added; local Termux execution verification remains pending for the newest hardening commit.
+
+The remaining closure work is therefore narrower than “build an autonomous wave runner.” The existing GovernedCycle/Run machinery remains the only wave/orchestration path.
+
+Current closure fronts:
+1. sustained multi-wave circulation proof over the current combined paths;
+2. reliable bounded PROGRAM proposal generation and validation;
+3. operator-grade HUMAN_FINAL presentation of target/difference/evidence/lineage/action consequences;
+4. bounded external capability adapters that reuse existing CAP/Q/HUMAN_FINAL execution semantics;
+5. economic/product loops that materialize useful outputs and RECAPTURE external outcomes;
+6. exact source-code evidence lineage for governed self-modification where source bytes themselves must become canonical evidence.
+
+## 17. Concept reconciliation
+
+Historical Target/Fracture work distinguished Difference, Boundary/fracture observation, BRIDGEGAP, KIN, and TORQUE. That distinction remains useful, but historical concepts are not promoted into new runtime subsystems merely because they were named.
+
+In particular:
+- provider topology is not COMPOSITION_KIN;
+- capability availability is not execution authority;
+- TORQUE remains a derived/explanatory concept unless a verified behavior cannot be represented by existing TARGET/Difference/requirement/capability/continuation primitives;
+- MXPD/2 is a compact machine-semantic/evidence interchange boundary, not a replacement for typed Go contracts, COSL/REG, or FIELD reconstruction.
+
+## 18. Final operational invariant
 
 ```text
 AI may observe, reason, structure, project, propose, and execute only
