@@ -917,3 +917,44 @@ func TestTruncateUTF8LeavesBoundedInputUnchanged(t *testing.T) {
 		t.Fatalf("truncateUTF8 = %q want unchanged %q", got, input)
 	}
 }
+
+
+func TestCalibratePreservesUTF8AtByteLimits(t *testing.T) {
+	summary := strings.Repeat("a", 479) + "€"
+	capability := strings.Repeat("b", 95) + "€"
+
+	got := Calibrate(Result{
+		Summary:      summary,
+		Capabilities: []string{capability},
+		Risk:         "L",
+	})
+
+	if !utf8.ValidString(got.Summary) {
+		t.Fatalf("Calibrate returned invalid UTF-8 summary: %q", got.Summary)
+	}
+	if got.Summary != strings.Repeat("a", 479) {
+		t.Fatalf("unexpected calibrated summary length/content: %q", got.Summary)
+	}
+	if len(got.Capabilities) != 1 || !utf8.ValidString(got.Capabilities[0]) {
+		t.Fatalf("Calibrate returned invalid UTF-8 capability: %#v", got.Capabilities)
+	}
+	if got.Capabilities[0] != strings.Repeat("b", 95) {
+		t.Fatalf("unexpected calibrated capability: %q", got.Capabilities[0])
+	}
+}
+
+func TestCleanTextAndTrimPreserveUTF8(t *testing.T) {
+	input := "abc€def"
+
+	for name, got := range map[string]string{
+		"cleanText": cleanText(input, 5),
+		"trim":      trim(input, 5),
+	} {
+		if !utf8.ValidString(got) {
+			t.Fatalf("%s returned invalid UTF-8: %q", name, got)
+		}
+		if got != "abc" {
+			t.Fatalf("%s = %q want %q", name, got, "abc")
+		}
+	}
+}
