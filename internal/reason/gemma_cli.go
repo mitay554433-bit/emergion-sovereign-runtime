@@ -169,7 +169,7 @@ func (g GemmaCLI) Version(ctx context.Context) string {
 	}
 	v := strings.TrimSpace(string(out))
 	if len(v) > 120 {
-		v = v[:120]
+		v = truncateUTF8(v, 120)
 	}
 	return v
 }
@@ -777,7 +777,7 @@ func Calibrate(r Result) Result {
 		r.Archonym = ""
 	}
 	if len(r.Summary) > 480 {
-		r.Summary = r.Summary[:480]
+		r.Summary = truncateUTF8(r.Summary, 480)
 	}
 	r.Relationships = cleanRelationships(r.Relationships)
 	if r.Risk != "L" && r.Risk != "M" && r.Risk != "H" {
@@ -872,7 +872,7 @@ func cleanBuildGraph(nodes []BuildNode, edges []BuildEdge) ([]BuildNode, []Build
 func cleanText(value string, max int) string {
 	value = strings.TrimSpace(value)
 	if len(value) > max {
-		value = value[:max]
+		value = truncateUTF8(value, max)
 	}
 	return value
 }
@@ -904,7 +904,7 @@ func clean(in []string, max int) []string {
 			continue
 		}
 		if len(v) > 96 {
-			v = v[:96]
+			v = truncateUTF8(v, 96)
 		}
 		seen[v] = true
 		out = append(out, v)
