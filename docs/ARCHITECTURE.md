@@ -270,7 +270,54 @@ The repository also exposes `pkg/fieldapi` as the existing native embedding seam
 
 A Termux-free Android shell and platform-packaged inference engine are not claimed complete by this architecture document because they have not been verified in the current tree.
 
-## 16. Non-negotiable invariants
+## 16. Recursive closure model
+
+The current implementation should be understood as one governed recurrence, not as independent agent subsystems:
+
+```text
+TARGET
+→ rebuild CURRENT FIELD
+→ CMP / DIF
+→ bounded requirement
+→ accepted capability search
+→ reuse | provider population/proposal | bounded evidence SOURCE
+→ existing admission
+→ RECOIL / WVC
+→ GOV / HUMAN_FINAL when required
+→ REG
+→ FIELD
+→ materialize / execute through an authorized capability
+→ observe result
+→ RECAPTURE
+→ compare TARGET again
+```
+
+Valid stop/wait outcomes include target satisfaction, pending HUMAN_FINAL, unresolved capability, lack of a grounded bounded continuation, duplicate deterministic evidence, absent execution authority, unchanged external dependency, and verification failure. The runtime must not invent work merely to keep the recurrence moving.
+
+Returned candidates use the existing rework lineage contract: a bounded continuation SOURCE re-enters Capture with ReturnedPredecessor, the successor preserves Supersedes lineage, and the predecessor remains Returned.
+
+Provider populations and provider-edge topology are proposal/evidence structures. They never independently create COMPOSITION_KIN.
+
+## 17. Machine-native representation boundary
+
+MXPD/2 is the compact machine-semantic/evidence interchange boundary used by bounded reasoning. It does not replace:
+- typed Go runtime contracts;
+- canonical COSL events;
+- GOV/HUMAN_FINAL;
+- REG acceptance;
+- deterministic FIELD reconstruction.
+
+Compact representation may reduce model-to-model verbosity while authority and exact lineage remain explicit and reconstructable.
+
+## 18. Development versus runtime authority
+
+Engineering operations and runtime authority are separate concerns.
+
+Repository inspection, implementation, testing, documentation, integration, and compatible parallel development do not each require a HUMAN_FINAL runtime decision. HUMAN_FINAL remains the final authority where the runtime proposes consequential SEND, TRANSFER, DEPLOY, PROGRAM, CONTRACT, ACQUIRE, or other gated actions under the existing action/authorization contract.
+
+This preserves SELF_BUILDING != SELF_AUTHORIZING without wrapping ordinary engineering work in a second governance process.
+
+## 19. Non-negotiable invariants
 
 1. FIELD is reconstructed state, not an authority replacement.
 2. COSL/REG remain canonical governance lineage.
