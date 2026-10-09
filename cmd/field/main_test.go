@@ -1,11 +1,17 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"testing"
 
+	"emergion-sovereign-runtime/internal/adapters"
+	"emergion-sovereign-runtime/internal/gov"
+	"emergion-sovereign-runtime/internal/reg"
 	fieldruntime "emergion-sovereign-runtime/internal/runtime"
+	"emergion-sovereign-runtime/internal/store"
 )
 
 func TestPublishDeliverableIsIdempotent(t *testing.T) {
@@ -112,5 +118,146 @@ func TestPublishDeliverableIndexPreservesVerifiedOrder(t *testing.T) {
 		len(got.Deliverables) != 1 ||
 		got.Deliverables[0].EmergIONID != "E-A" {
 		t.Fatalf("index was not atomically replaced: %#v", got)
+	}
+}
+
+func TestPublishAcceptedDeliverablesMaterializesAcceptedExecutionResult(t *testing.T) {
+	root := t.TempDir()
+
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	request := adapters.ExecutionRequest{
+		EmergIONID:      "E-PUBLISH-SOURCE",
+		SourceHash:      "SOURCE-PUBLISH-PROOF",
+		AuthorizationID: "EV-Q-PUBLISH",
+		Authority:       "HUMAN_FINAL",
+		Adapter:         "LOCAL_GEMMA",
+		Action:          "ANALYZE",
+	}
+	request.TransitionEmergIONID = adapters.ExecutionTransitionID(request)
+
+	const output = "verified published deliverable\nline=two:preserved"
+
+	result := adapters.BindExecutionResult(
+		request,
+		adapters.ExecutionResult{
+			Succeeded: true,
+			Output:    output,
+		},
+	)
+
+	rt := fieldruntime.Runtime{Store: s}
+
+	signal, duplicate, err := rt.CaptureGovernedExecutionResult(
+		context.Background(),
+		request,
+		result,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate {
+		t.Fatal("execution result unexpectedly duplicate")
+	}
+
+	approved, decision, err := gov.Decide(
+		signal,
+		gov.Approve,
+		"HUMAN_FINAL",
+		"accept publisher integration proof",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	decisionID, err := s.SaveDecision(decision)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	accepted, receipt, err := reg.Accept(approved, decisionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveAccepted(receipt); err != nil {
+		t.Fatal(err)
+	}
+
+	out := filepath.Join(root, "outputs")
+
+	published, err := publishAcceptedDeliverables(s, out)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(published) != 1 || published[0] != accepted.IDN {
+		t.Fatalf("published = %#v want [%q]", published, accepted.IDN)
+	}
+
+	artifact := filepath.Join(
+		out,
+		"deliverables",
+		accepted.IDN,
+		"output",
+	)
+	got, err := os.ReadFile(artifact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != output {
+		t.Fatalf("published output = %q want %q", got, output)
+	}
+
+	receiptPath := filepath.Join(
+		out,
+		"deliverables",
+		accepted.IDN,
+		"receipt.json",
+	)
+	receiptBytes, err := os.ReadFile(receiptPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var publishedReceipt deliverableReceipt
+	if err := json.Unmarshal(receiptBytes, &publishedReceipt); err != nil {
+		t.Fatal(err)
+	}
+	if publishedReceipt.EmergIONID != accepted.IDN {
+		t.Fatalf(
+			"receipt EmergION = %q want %q",
+			publishedReceipt.EmergIONID,
+			accepted.IDN,
+		)
+	}
+
+	indexBytes, err := os.ReadFile(
+		filepath.Join(out, "deliverables", "index.json"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var index deliverableIndex
+	if err := json.Unmarshal(indexBytes, &index); err != nil {
+		t.Fatal(err)
+	}
+
+	if index.FieldTip == "" {
+		t.Fatal("deliverable index missing FIELD tip")
+	}
+	if index.FieldTip != publishedReceipt.FieldTip {
+		t.Fatalf(
+			"index FIELD tip = %q receipt FIELD tip = %q",
+			index.FieldTip,
+			publishedReceipt.FieldTip,
+		)
+	}
+	if len(index.Deliverables) != 1 ||
+		index.Deliverables[0].EmergIONID != accepted.IDN {
+		t.Fatalf("deliverable index = %#v", index.Deliverables)
 	}
 }
