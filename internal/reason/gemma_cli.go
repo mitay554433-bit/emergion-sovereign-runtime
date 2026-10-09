@@ -917,7 +917,7 @@ func clean(in []string, max int) []string {
 func trim(s string, n int) string {
 	s = strings.TrimSpace(s)
 	if len(s) > n {
-		return s[:n]
+		return truncateUTF8(s, n)
 	}
 	return s
 }
