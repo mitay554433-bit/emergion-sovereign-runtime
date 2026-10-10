@@ -92,3 +92,29 @@ func TestLocalGemmaExecutorRequiresPreservedEvidence(t *testing.T) {
 		t.Fatal("missing evidence reported success")
 	}
 }
+
+func TestLocalGemmaExecutorDraftReachesPreservedEvidenceBoundary(t *testing.T) {
+	root := t.TempDir()
+
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	executor := LocalGemmaExecutor{
+		Store: s,
+		Gemma: reason.GemmaFromEnv(),
+	}
+
+	result, err := executor.Execute(ExecutionRequest{
+		Adapter:    "LOCAL_GEMMA",
+		Action:     "DRAFT",
+		SourceHash: "missing-evidence",
+	})
+	if err == nil {
+		t.Fatal("DRAFT with missing preserved evidence unexpectedly executed")
+	}
+	if result.Succeeded {
+		t.Fatal("DRAFT with missing evidence reported success")
+	}
+}

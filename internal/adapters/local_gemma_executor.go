@@ -27,7 +27,7 @@ func (e LocalGemmaExecutor) Execute(
 		return result, err
 	}
 
-	if request.Action != "ANALYZE" {
+	if request.Action != "ANALYZE" && request.Action != "DRAFT" {
 		err := fmt.Errorf(
 			"LOCAL_GEMMA executor does not support action %s",
 			request.Action,
