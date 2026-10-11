@@ -1307,7 +1307,15 @@ func (t targetComparisonReasoner) Analyze(ctx context.Context, in reason.Input) 
 		return reason.Result{}, fmt.Errorf("target comparison observer required")
 	}
 
-	observed, err := t.observer.Analyze(ctx, in)
+	// TARGET_COMPARISON/1 evidence already carries the exact target and
+	// deterministic accepted-reality observation. Do not duplicate the broader
+	// governed-state projection into the model prompt: it consumes the bounded
+	// context budget without adding comparison evidence. Canonical evidence is
+	// preserved unchanged and remains the admission/WVC source.
+	comparisonInput := in
+	comparisonInput.GovernedState = ""
+
+	observed, err := t.observer.Analyze(ctx, comparisonInput)
 	if err != nil {
 		return reason.Result{}, err
 	}
