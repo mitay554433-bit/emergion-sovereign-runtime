@@ -2,11 +2,13 @@ package reason
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseProgramPatchAcceptsSingleTargetDiff(t *testing.T) {
@@ -175,5 +177,48 @@ func TestParseProgramEditAcceptsNoChangeWithLlamaEndMarker(t *testing.T) {
 	}
 	if oldText != "" || newText != "" {
 		t.Fatalf("expected empty edit texts, got old=%q new=%q", oldText, newText)
+	}
+}
+
+func TestProposeProgramPatchWithLocalGemma(t *testing.T) {
+	bin := os.Getenv("GEMMA_BIN")
+	model := os.Getenv("GEMMA_MODEL")
+	if bin == "" || model == "" {
+		t.Skip("set GEMMA_BIN and GEMMA_MODEL for local Gemma PROGRAM integration test")
+	}
+
+	gemma := GemmaCLI{
+		Binary:    bin,
+		Model:     model,
+		Context:   2048,
+		MaxTokens: 80,
+		Threads:   4,
+		Timeout:   180 * time.Second,
+	}
+	if err := gemma.Validate(); err != nil {
+		t.Fatalf("local Gemma validation failed: %v", err)
+	}
+
+	patch, err := gemma.ProposeProgramPatch(context.Background(), ProgramPatchInput{
+		Name:          "sample.go",
+		Content:       []byte("package sample\n\nconst value = 1\n"),
+		GovernedState: "Change the value constant from 1 to 2. Make exactly one bounded source edit.",
+	})
+	if err != nil {
+		t.Fatalf("real Gemma PROGRAM proposal failed: %v", err)
+	}
+	if len(patch) == 0 {
+		t.Fatal("real Gemma unexpectedly returned no PROGRAM patch")
+	}
+
+	parsed, noChange, err := parseProgramPatch(string(patch), "sample.go")
+	if err != nil {
+		t.Fatalf("real Gemma produced invalid PROGRAM patch: %v\\n%s", err, patch)
+	}
+	if noChange {
+		t.Fatal("real Gemma unexpectedly returned NO_CHANGE for explicit bounded edit")
+	}
+	if len(parsed) == 0 {
+		t.Fatal("real Gemma PROGRAM patch parsed empty")
 	}
 }
