@@ -337,6 +337,8 @@ code{color:#a78bfa;overflow-wrap:anywhere;word-break:break-all}
 .F{color:#22c55e}
 .X{color:#ef4444}
 .small{color:#9ca3af;font-size:.9rem}
+.diagnostic summary{cursor:pointer;font-weight:700}
+.diagnostic summary::marker{color:#9ca3af}
 .field-topology{position:relative;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem;padding:1rem;margin:.75rem 0;background:#071120;border:1px solid #2a3548;border-radius:12px}
 .field-facet{min-height:4.5rem;padding:.75rem;background:#0f1c2e;border:1px solid #2d6cff;border-radius:10px}
 .field-facet summary{cursor:pointer;font-weight:700}
@@ -396,8 +398,9 @@ th,td{padding:.5rem;font-size:.9rem}
 </tbody>
 </table>
 
-<h2>SPATIAL CONVERGENCE ZONE</h2>
-<p class="small">Accepted governed structures only.</p>
+<details class="panel diagnostic">
+<summary>SPATIAL CONVERGENCE ZONE · {{len .Convergence}} accepted</summary>
+<p class="small">Accepted governed structures only. Diagnostic structural projection; canonical authority remains COSL + REG.</p>
 
 <table>
 <thead>
@@ -431,6 +434,7 @@ th,td{padding:.5rem;font-size:.9rem}
 {{end}}
 </tbody>
 </table>
+</details>
 
 <h2>SPATIAL EMERGION PROJECTION</h2>
 <p class="small">Accepted EmergION structures projected across the canonical FIELD topology. Projection only; authority remains COSL + REG.</p>

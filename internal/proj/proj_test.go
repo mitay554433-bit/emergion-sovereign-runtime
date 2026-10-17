@@ -270,6 +270,13 @@ func TestHTMLProjectsCanonicalVisualFIELDWithoutChangingAuthority(t *testing.T) 
 	}
 	html := string(b)
 
+	if !strings.Contains(html, `<details class="panel diagnostic">`) {
+		t.Fatal("convergence diagnostic disclosure missing")
+	}
+	if !strings.Contains(html, `SPATIAL CONVERGENCE ZONE ·`) {
+		t.Fatal("convergence diagnostic summary/count missing")
+	}
+
 	if !strings.Contains(html, `class="field-topology"`) {
 		t.Fatal("visual FIELD topology missing")
 	}
