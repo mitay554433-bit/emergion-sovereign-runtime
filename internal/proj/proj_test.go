@@ -1139,3 +1139,56 @@ func TestHTMLProjectsVerifiedDeliveriesWithoutChangingFieldState(t *testing.T) {
 		t.Fatalf("HTML projection mutated FIELD state: %#v", st)
 	}
 }
+
+func TestHumanFinalRowsSelectOnlyAtGOV(t *testing.T) {
+	st := core.EmptyState()
+
+	pending := core.EmergION{
+		IDN: "E-HUMAN-FINAL",
+		STA: core.StateAtGOV,
+		MEM: core.Memory{Summary: "requires operator decision"},
+	}
+	accepted := core.EmergION{
+		IDN: "E-HISTORY",
+		STA: core.StateAccepted,
+		MEM: core.Memory{Summary: "historical accepted state"},
+	}
+
+	st.AtGOV[pending.IDN] = pending
+	st.Accepted[accepted.IDN] = accepted
+
+	got := humanFinalRows(rows(st))
+	if len(got) != 1 {
+		t.Fatalf("HUMAN_FINAL rows = %d want 1", len(got))
+	}
+	if got[0].ID != pending.IDN {
+		t.Fatalf("HUMAN_FINAL row = %q want %q", got[0].ID, pending.IDN)
+	}
+
+	root := t.TempDir()
+	if _, err := Current(root, st); err != nil {
+		t.Fatal(err)
+	}
+
+	b, err := os.ReadFile(filepath.Join(root, "field.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(b)
+
+	if !strings.Contains(html, "<h2>HUMAN_FINAL</h2>") {
+		t.Fatal("HUMAN_FINAL operator surface missing")
+	}
+	if !strings.Contains(html, "1 decision(s) awaiting HUMAN_FINAL.") {
+		t.Fatal("HUMAN_FINAL pending count missing")
+	}
+	if !strings.Contains(html, "humanFinal('E-HUMAN-FINAL','APPROVE')") {
+		t.Fatal("HUMAN_FINAL approve control missing")
+	}
+	if !strings.Contains(html, "humanFinal('E-HUMAN-FINAL','REJECT')") {
+		t.Fatal("HUMAN_FINAL reject control missing")
+	}
+	if !strings.Contains(html, "Lifecycle Projection ·") {
+		t.Fatal("lifecycle diagnostic disclosure missing")
+	}
+}

@@ -97,6 +97,16 @@ func rows(st core.State) []row {
 	return out
 }
 
+func humanFinalRows(rows []row) []row {
+	var out []row
+	for _, r := range rows {
+		if r.State == core.StateAtGOV {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 type convergenceRow struct {
 	ID            string
 	Kin           string
@@ -361,7 +371,43 @@ th,td{padding:.5rem;font-size:.9rem}
 <p>Events: {{.Events}} · Tip: <code>{{.TipHash}}</code></p>
 <p class="small">Projection is derived state only. COSL + governance remain authoritative.</p>
 
-<h2>Lifecycle Projection</h2>
+<h2>HUMAN_FINAL</h2>
+{{if .HumanFinal}}
+<p class="small">{{len .HumanFinal}} decision(s) awaiting HUMAN_FINAL.</p>
+<table>
+<thead>
+<tr>
+<th>EmergION</th>
+<th>Risk</th>
+<th>Evidence proof</th>
+<th>Relationships</th>
+<th>Meaning</th>
+<th>Decision</th>
+</tr>
+</thead>
+<tbody>
+{{range .HumanFinal}}
+<tr>
+<td><code>{{.ID}}</code></td>
+<td>{{.Risk}}</td>
+<td><code>{{.Proof}}</code></td>
+<td>{{.Relationships}}</td>
+<td>{{.Summary}}</td>
+<td>
+<button type="button" onclick="humanFinal('{{.ID}}','APPROVE')">APPROVE</button>
+<button type="button" onclick="humanFinal('{{.ID}}','REJECT')">REJECT</button>
+</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{else}}
+<p class="small">No decisions awaiting HUMAN_FINAL.</p>
+{{end}}
+
+<details class="panel diagnostic">
+<summary>Lifecycle Projection · {{len .Rows}} records</summary>
+<p class="small">Complete reconstructed lifecycle history. Projection only; COSL + governance remain authoritative.</p>
 <table>
 <thead>
 <tr>
@@ -372,7 +418,6 @@ th,td{padding:.5rem;font-size:.9rem}
 <th>Governance</th>
 <th>Relationships</th>
 <th>Meaning</th>
-<th>HUMAN_FINAL</th>
 </tr>
 </thead>
 <tbody>
@@ -385,18 +430,11 @@ th,td{padding:.5rem;font-size:.9rem}
 <td>{{.Governance}}</td>
 <td>{{.Relationships}}</td>
 <td>{{.Summary}}</td>
-{{if eq .State "G"}}
-<td>
-<button type="button" onclick="humanFinal('{{.ID}}','APPROVE')">APPROVE</button>
-<button type="button" onclick="humanFinal('{{.ID}}','REJECT')">REJECT</button>
-</td>
-{{else}}
-<td></td>
-{{end}}
 </tr>
 {{end}}
 </tbody>
 </table>
+</details>
 
 <details class="panel diagnostic">
 <summary>SPATIAL CONVERGENCE ZONE · {{len .Convergence}} accepted</summary>
@@ -608,10 +646,13 @@ async function humanFinal(id, decision) {
 	facetGroups := spatialFacetGroups(spatial)
 	unassigned := spatialUnassigned(spatial)
 
+	lifecycle := rows(st)
+
 	return t.Execute(f, map[string]any{
 		"Events":      st.Events,
 		"TipHash":     st.TipHash,
-		"Rows":        rows(st),
+		"Rows":        lifecycle,
+		"HumanFinal":  humanFinalRows(lifecycle),
 		"Convergence": convergence,
 		"SAWs":        saws,
 		"Spatial":     spatial,
