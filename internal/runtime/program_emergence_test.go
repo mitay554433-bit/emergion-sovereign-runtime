@@ -247,6 +247,27 @@ func TestProposeOneProgramPatchAdmitsPatchAtGOVWithRuntimeOrigin(t *testing.T) {
                 t.Fatalf("PROGRAM patch did not change source: %s", finalSource)
         }
 
+        if result.ResultSourceHash == "" {
+                t.Fatal("PROGRAM execution missing preserved result source")
+        }
+        if result.ResultSourceHash == request.SourceHash {
+                t.Fatal("PROGRAM result source evidence unexpectedly equals patch evidence")
+        }
+        if signal.REL["result_source_hash"] != result.ResultSourceHash {
+                t.Fatalf(
+                        "PROGRAM result source relationship = %q want %q",
+                        signal.REL["result_source_hash"],
+                        result.ResultSourceHash,
+                )
+        }
+        preservedResult, err := s.ReadEvidence(result.ResultSourceHash)
+        if err != nil {
+                t.Fatal(err)
+        }
+        if string(preservedResult) != string(finalSource) {
+                t.Fatal("preserved PROGRAM result source does not equal verified filesystem source")
+        }
+
         finalState, err := livefield.Rebuild(mustEvents(t, s))
         if err != nil {
                 t.Fatal(err)
@@ -254,7 +275,15 @@ func TestProposeOneProgramPatchAdmitsPatchAtGOVWithRuntimeOrigin(t *testing.T) {
         if _, ok := finalState.Accepted[acceptedPatch.IDN]; !ok {
                 t.Fatal("accepted PROGRAM patch disappeared from FIELD")
         }
-        if _, ok := finalState.AtGOV[signal.IDN]; !ok {
+        finalSignal, ok := finalState.AtGOV[signal.IDN]
+        if !ok {
                 t.Fatal("PROGRAM execution RECAPTURE did not return to GOV")
+        }
+        if finalSignal.REL["result_source_hash"] != result.ResultSourceHash {
+                t.Fatalf(
+                        "rebuilt FIELD result source relationship = %q want %q",
+                        finalSignal.REL["result_source_hash"],
+                        result.ResultSourceHash,
+                )
         }
 }

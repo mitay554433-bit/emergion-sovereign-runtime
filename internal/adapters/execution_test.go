@@ -287,3 +287,60 @@ func TestExecutionResultBytesRoundTripPreservesBoundedOutput(t *testing.T) {
 		t.Fatalf("decoded execution result = %#v want %#v", got, want)
 	}
 }
+
+func TestExecutionResultHistoricalXS1RemainsParseable(t *testing.T) {
+	request := executionLineageProofRequest()
+	result := BindExecutionResult(request, ExecutionResult{
+		Succeeded: true,
+		Output:    "historical",
+	})
+
+	wire := ExecutionResultBytes(request, result)
+	got, err := ParseExecutionResultBytes(wire)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ResultSourceHash != "" {
+		t.Fatalf("historical result source hash = %q want empty", got.ResultSourceHash)
+	}
+}
+
+func TestExecutionResultRoundTripPreservesResultSourceHash(t *testing.T) {
+	request := executionLineageProofRequest()
+	result := BindExecutionResult(request, ExecutionResult{
+		Succeeded:        true,
+		Output:           "verified",
+		ResultSourceHash: "sha256-result-source",
+	})
+
+	wire := ExecutionResultBytes(request, result)
+	got, err := ParseExecutionResultBytes(wire)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.SourceHash != request.SourceHash {
+		t.Fatalf("input source hash = %q want %q", got.SourceHash, request.SourceHash)
+	}
+	if got.ResultSourceHash != result.ResultSourceHash {
+		t.Fatalf("result source hash = %q want %q", got.ResultSourceHash, result.ResultSourceHash)
+	}
+}
+
+func TestGitHubProgramPatchTargetRequiresSingleMatchingTarget(t *testing.T) {
+	patch := []byte("diff --git a/internal/a.go b/internal/a.go\n")
+	target, err := githubProgramPatchTarget(patch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if target != "internal/a.go" {
+		t.Fatalf("target = %q want internal/a.go", target)
+	}
+
+	multiple := []byte(
+		"diff --git a/internal/a.go b/internal/a.go\n" +
+			"diff --git a/internal/b.go b/internal/b.go\n",
+	)
+	if _, err := githubProgramPatchTarget(multiple); err == nil {
+		t.Fatal("multiple PROGRAM targets unexpectedly accepted")
+	}
+}

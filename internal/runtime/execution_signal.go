@@ -60,6 +60,9 @@ func (r Runtime) CaptureExecutionResult(
 	if request.AuthorizationID != "" {
 		relationships["authorization_event"] = request.AuthorizationID
 	}
+	if strings.TrimSpace(result.ResultSourceHash) != "" {
+		relationships["result_source_hash"] = result.ResultSourceHash
+	}
 
 	if !result.Succeeded && strings.TrimSpace(result.Error) != "" {
 		required := requiredCapabilityFromDivergence(pivot.Result{

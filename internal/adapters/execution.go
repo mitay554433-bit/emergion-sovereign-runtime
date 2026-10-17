@@ -31,6 +31,7 @@ type ExecutionResult struct {
 	Succeeded            bool
 	Output               string
 	Error                string
+	ResultSourceHash     string
 }
 
 func ExecutionResultBytes(request ExecutionRequest, result ExecutionResult) []byte {
@@ -51,6 +52,9 @@ func ExecutionResultBytes(request ExecutionRequest, result ExecutionResult) []by
 	writeField("Y", fmt.Sprintf("%t", result.Succeeded))
 	writeField("O", result.Output)
 	writeField("E", result.Error)
+	if result.ResultSourceHash != "" {
+		writeField("R", result.ResultSourceHash)
+	}
 	return []byte(content.String())
 }
 
@@ -96,15 +100,16 @@ func ParseExecutionResultBytes(content []byte) (ExecutionResult, error) {
 		return ExecutionResult{}, fmt.Errorf("invalid execution result success value: %w", err)
 	}
 	return ExecutionResult{
-		EmergIONID:      fields["P"],
-		SourceHash:      fields["H"],
-		AuthorizationID: fields["Q"],
-		Authority:       fields["A"],
-		Adapter:         fields["D"],
-		Action:          fields["X"],
-		Succeeded:       succeeded,
-		Output:          fields["O"],
-		Error:           fields["E"],
+		EmergIONID:       fields["P"],
+		SourceHash:       fields["H"],
+		AuthorizationID:  fields["Q"],
+		Authority:        fields["A"],
+		Adapter:          fields["D"],
+		Action:           fields["X"],
+		Succeeded:        succeeded,
+		Output:           fields["O"],
+		Error:            fields["E"],
+		ResultSourceHash: fields["R"],
 	}, nil
 }
 

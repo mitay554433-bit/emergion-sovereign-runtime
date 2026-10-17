@@ -3,7 +3,9 @@ package adapters
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"emergion-sovereign-runtime/internal/store"
@@ -95,7 +97,24 @@ func (e GitHubProgramExecutor) Execute(
 		return result, err
 	}
 
+	target, targetErr := githubProgramPatchTarget(patch)
+	if targetErr != nil {
+		result.Error = targetErr.Error()
+		return result, targetErr
+	}
+	resultingSource, readErr := os.ReadFile(filepath.Join(root, filepath.FromSlash(target)))
+	if readErr != nil {
+		result.Error = readErr.Error()
+		return result, readErr
+	}
+	preserved, preserveErr := e.Store.Preserve(resultingSource)
+	if preserveErr != nil {
+		result.Error = preserveErr.Error()
+		return result, preserveErr
+	}
+
 	result.Succeeded = true
+	result.ResultSourceHash = preserved.Hash
 	result.Output = "GITHUB:PROGRAM applied authorized patch\ngo test ./...: PASS"
 	if summary := boundedExecutionOutput(testOutput); summary != "" {
 		result.Output += "\n" + summary
@@ -137,6 +156,34 @@ func CheckGitHubProgramPatch(workDir string, patch []byte) (string, error) {
 	}
 
 	return root, nil
+}
+
+func githubProgramPatchTarget(patch []byte) (string, error) {
+	var target string
+	for _, line := range strings.Split(string(patch), "\n") {
+		if !strings.HasPrefix(line, "diff --git ") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) != 4 ||
+			!strings.HasPrefix(fields[2], "a/") ||
+			!strings.HasPrefix(fields[3], "b/") {
+			return "", fmt.Errorf("GITHUB:PROGRAM invalid patch target")
+		}
+		oldTarget := strings.TrimPrefix(fields[2], "a/")
+		newTarget := strings.TrimPrefix(fields[3], "b/")
+		if oldTarget == "" || oldTarget != newTarget {
+			return "", fmt.Errorf("GITHUB:PROGRAM patch target mismatch")
+		}
+		if target != "" {
+			return "", fmt.Errorf("GITHUB:PROGRAM patch contains multiple targets")
+		}
+		target = newTarget
+	}
+	if target == "" {
+		return "", fmt.Errorf("GITHUB:PROGRAM patch target missing")
+	}
+	return target, nil
 }
 
 func runPatchCommand(root string, patch []byte, args ...string) ([]byte, error) {
