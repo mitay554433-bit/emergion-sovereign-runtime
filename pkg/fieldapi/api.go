@@ -332,6 +332,10 @@ func (r *Runtime) Render(dir string) error {
 }
 
 func (r *Runtime) RenderCurrent(dir string) (proj.Receipt, error) {
+	if _, err := (fieldruntime.Runtime{Store: r.store}).PublishAcceptedDeliverables(dir); err != nil {
+		return proj.Receipt{}, err
+	}
+
 	st, err := r.state()
 	if err != nil {
 		return proj.Receipt{}, err

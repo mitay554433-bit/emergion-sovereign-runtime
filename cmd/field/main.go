@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -12,7 +11,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -159,191 +157,6 @@ func exportLineage(destination string) (lineageExportReceipt, error) {
 	return lineageExportReceipt{Bundle: final, SHA256: hash, Head: head, Branch: branch, ExportedAt: time.Now().UTC()}, nil
 }
 
-type deliverableReceipt struct {
-	EmergIONID           string    `json:"emergion_id"`
-	EvidenceHash         string    `json:"evidence_sha256"`
-	SourceEmergIONID     string    `json:"source_emergion_id"`
-	SourceHash           string    `json:"source_hash"`
-	TransitionEmergIONID string    `json:"transition_emergion_id"`
-	AuthorizationID      string    `json:"authorization_event"`
-	Authority            string    `json:"authority"`
-	Adapter              string    `json:"adapter"`
-	Action               string    `json:"action"`
-	OutputSHA256         string    `json:"output_sha256"`
-	FieldTip             string    `json:"field_tip"`
-	PublishedAt          time.Time `json:"published_at"`
-}
-
-type deliverableIndex struct {
-	FieldTip     string               `json:"field_tip"`
-	Deliverables []deliverableReceipt `json:"deliverables"`
-}
-
-func publishDeliverableIndex(root, fieldTip string, receipts []deliverableReceipt) (string, error) {
-	dir := filepath.Join(root, "deliverables")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
-	}
-
-	index := deliverableIndex{
-		FieldTip:     fieldTip,
-		Deliverables: receipts,
-	}
-	b, err := json.MarshalIndent(index, "", "  ")
-	if err != nil {
-		return "", err
-	}
-
-	tmp, err := os.CreateTemp(dir, ".index-*.json")
-	if err != nil {
-		return "", err
-	}
-	tmpPath := tmp.Name()
-	defer os.Remove(tmpPath)
-
-	if _, err := tmp.Write(b); err != nil {
-		tmp.Close()
-		return "", err
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return "", err
-	}
-	if err := tmp.Close(); err != nil {
-		return "", err
-	}
-
-	final := filepath.Join(dir, "index.json")
-	if err := os.Rename(tmpPath, final); err != nil {
-		return "", fmt.Errorf("publish deliverable index: %w", err)
-	}
-	return final, nil
-}
-
-func publishAcceptedDeliverables(s *store.Store, out string) ([]string, error) {
-	st := loadState(s)
-
-	ids := make([]string, 0)
-	for id, em := range st.Accepted {
-		if em.REL["source_kind"] == "EXECUTION_RESULT" {
-			ids = append(ids, id)
-		}
-	}
-	sort.Strings(ids)
-
-	published := make([]string, 0, len(ids))
-	receipts := make([]deliverableReceipt, 0, len(ids))
-	rt := fieldruntime.Runtime{Store: s}
-
-	for _, id := range ids {
-		deliverable, err := rt.MaterializeAcceptedExecutionResult(id)
-		if err != nil {
-			if errors.Is(err, fieldruntime.ErrExecutionResultUnsuccessful) {
-				continue
-			}
-			return published, err
-		}
-
-		receipt, _, err := publishDeliverable(out, deliverable)
-		if err != nil {
-			return published, err
-		}
-		receipts = append(receipts, receipt)
-		published = append(published, id)
-	}
-
-	if _, err := publishDeliverableIndex(out, st.TipHash, receipts); err != nil {
-		return published, err
-	}
-
-	return published, nil
-}
-
-func publishDeliverable(root string, d fieldruntime.Deliverable) (deliverableReceipt, string, error) {
-	dir := filepath.Join(root, "deliverables", d.EmergIONID)
-	outputFinal := filepath.Join(dir, "output")
-	receiptFinal := filepath.Join(dir, "receipt.json")
-
-	if receiptBytes, err := os.ReadFile(receiptFinal); err == nil {
-		var existing deliverableReceipt
-		if json.Unmarshal(receiptBytes, &existing) == nil {
-			outputHash, hashErr := hashFile(outputFinal)
-			expectedHash := sha256.Sum256([]byte(d.Output))
-			expectedOutputHash := fmt.Sprintf("%x", expectedHash[:])
-
-			if hashErr == nil &&
-				existing.EmergIONID == d.EmergIONID &&
-				existing.EvidenceHash == d.EvidenceHash &&
-				existing.SourceEmergIONID == d.SourceEmergIONID &&
-				existing.SourceHash == d.SourceHash &&
-				existing.TransitionEmergIONID == d.TransitionEmergIONID &&
-				existing.AuthorizationID == d.AuthorizationID &&
-				existing.Authority == d.Authority &&
-				existing.Adapter == d.Adapter &&
-				existing.Action == d.Action &&
-				existing.OutputSHA256 == outputHash &&
-				existing.OutputSHA256 == expectedOutputHash &&
-				existing.FieldTip != "" &&
-				!existing.PublishedAt.IsZero() {
-				return existing, outputFinal, nil
-			}
-		}
-	}
-
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return deliverableReceipt{}, "", err
-	}
-
-	tmp, err := os.MkdirTemp(dir, ".publish-*")
-	if err != nil {
-		return deliverableReceipt{}, "", err
-	}
-	defer os.RemoveAll(tmp)
-
-	outputTmp := filepath.Join(tmp, "output")
-	if err := os.WriteFile(outputTmp, []byte(d.Output), 0o644); err != nil {
-		return deliverableReceipt{}, "", err
-	}
-
-	outputHash, err := hashFile(outputTmp)
-	if err != nil {
-		return deliverableReceipt{}, "", err
-	}
-
-	receipt := deliverableReceipt{
-		EmergIONID:           d.EmergIONID,
-		EvidenceHash:         d.EvidenceHash,
-		SourceEmergIONID:     d.SourceEmergIONID,
-		SourceHash:           d.SourceHash,
-		TransitionEmergIONID: d.TransitionEmergIONID,
-		AuthorizationID:      d.AuthorizationID,
-		Authority:            d.Authority,
-		Adapter:              d.Adapter,
-		Action:               d.Action,
-		OutputSHA256:         outputHash,
-		FieldTip:             d.FieldTip,
-		PublishedAt:          time.Now().UTC(),
-	}
-
-	receiptBytes, err := json.MarshalIndent(receipt, "", "  ")
-	if err != nil {
-		return deliverableReceipt{}, "", err
-	}
-
-	receiptTmp := filepath.Join(tmp, "receipt.json")
-	if err := os.WriteFile(receiptTmp, receiptBytes, 0o644); err != nil {
-		return deliverableReceipt{}, "", err
-	}
-
-	if err := os.Rename(outputTmp, outputFinal); err != nil {
-		return deliverableReceipt{}, "", fmt.Errorf("publish deliverable output: %w", err)
-	}
-	if err := os.Rename(receiptTmp, receiptFinal); err != nil {
-		return deliverableReceipt{}, "", fmt.Errorf("publish deliverable receipt: %w", err)
-	}
-
-	return receipt, outputFinal, nil
-}
 func main() {
 	state := flag.String("state", envOr("FIELD_HOME", ".field"), "local runtime state")
 	reasonerName := flag.String("reasoner", envOr("FIELD_REASONER", "gemma"), "gemma or heuristic")
@@ -549,7 +362,7 @@ func main() {
 					renderField(s, *output)
 					fmt.Println(safeSignal.IDN, "SAFE_ACTION_AT_GOV")
 				}
-				published, err := publishAcceptedDeliverables(s, *output)
+				published, err := (fieldruntime.Runtime{Store: s}).PublishAcceptedDeliverables(*output)
 				if err != nil {
 					fail(err)
 				}
@@ -750,7 +563,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		receipt, artifact, err := publishDeliverable(*output, deliverable)
+		receipt, artifact, err := fieldruntime.PublishDeliverable(*output, deliverable)
 		if err != nil {
 			fail(err)
 		}

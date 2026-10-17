@@ -9,10 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"emergion-sovereign-runtime/internal/adapters"
 	"emergion-sovereign-runtime/internal/core"
 	"emergion-sovereign-runtime/internal/gov"
 	"emergion-sovereign-runtime/internal/reason"
 	"emergion-sovereign-runtime/internal/reg"
+	fieldruntime "emergion-sovereign-runtime/internal/runtime"
 	"emergion-sovereign-runtime/internal/store"
 )
 
@@ -1445,5 +1447,180 @@ func TestRunRecomparesPersistentTargetWhenAcceptedRealityChanges(t *testing.T) {
 	}
 	if !comparison1.VAL.Recoil || !comparison1.VAL.WVC {
 		t.Fatal("recomparison bypassed RECOIL/WVC")
+	}
+}
+
+func TestHumanFinalApprovalRenderCurrentPublishesVerifiedDeliverable(t *testing.T) {
+	root := t.TempDir()
+
+	rt, err := Open(
+		filepath.Join(root, "state"),
+		sawCirculationReasoner{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	request := adapters.ExecutionRequest{
+		EmergIONID:      "E-FIELDAPI-DELIVERABLE-SOURCE",
+		SourceHash:      "SOURCE-FIELDAPI-DELIVERABLE-PROOF",
+		AuthorizationID: "EV-Q-FIELDAPI-DELIVERABLE",
+		Authority:       "HUMAN_FINAL",
+		Adapter:         "LOCAL_GEMMA",
+		Action:          "ANALYZE",
+	}
+	request.TransitionEmergIONID = adapters.ExecutionTransitionID(request)
+
+	const output = "fieldapi governed deliverable\nlineage=preserved"
+
+	result := adapters.BindExecutionResult(
+		request,
+		adapters.ExecutionResult{
+			Succeeded: true,
+			Output:    output,
+		},
+	)
+
+	executionRuntime := fieldruntime.Runtime{
+		Store: rt.store,
+	}
+	signal, duplicate, err := executionRuntime.CaptureGovernedExecutionResult(
+		context.Background(),
+		request,
+		result,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate {
+		t.Fatal("execution result unexpectedly duplicate")
+	}
+
+	before, err := rt.state()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := before.AtGOV[signal.IDN]; !ok {
+		t.Fatal("execution result did not enter GOV before HUMAN_FINAL")
+	}
+	if _, ok := before.Accepted[signal.IDN]; ok {
+		t.Fatal("execution result bypassed HUMAN_FINAL into REG")
+	}
+
+	if err := rt.DecideBinding(
+		signal.IDN,
+		"APPROVE",
+		"publish verified deliverable proof",
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	after, err := rt.state()
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted, ok := after.Accepted[signal.IDN]
+	if !ok {
+		t.Fatal("HUMAN_FINAL approval did not produce REG acceptance")
+	}
+	if _, ok := after.AtGOV[signal.IDN]; ok {
+		t.Fatal("REG-accepted execution result remained at GOV")
+	}
+
+	out := filepath.Join(root, "projection")
+	projectionReceipt, err := rt.RenderCurrent(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	deliverableDir := filepath.Join(out, "deliverables", signal.IDN)
+	artifactPath := filepath.Join(deliverableDir, "output")
+	receiptPath := filepath.Join(deliverableDir, "receipt.json")
+	indexPath := filepath.Join(out, "deliverables", "index.json")
+
+	artifact, err := os.ReadFile(artifactPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(artifact) != output {
+		t.Fatalf("published output = %q want %q", artifact, output)
+	}
+
+	receiptBytes, err := os.ReadFile(receiptPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var receipt fieldruntime.DeliverableReceipt
+	if err := json.Unmarshal(receiptBytes, &receipt); err != nil {
+		t.Fatal(err)
+	}
+
+	if receipt.EmergIONID != signal.IDN {
+		t.Fatalf("receipt EmergION = %q want %q", receipt.EmergIONID, signal.IDN)
+	}
+	if receipt.EvidenceHash != accepted.MEM.SourceHash {
+		t.Fatal("receipt lost immutable execution evidence identity")
+	}
+	if receipt.SourceEmergIONID != request.EmergIONID {
+		t.Fatal("receipt lost source EmergION lineage")
+	}
+	if receipt.SourceHash != request.SourceHash {
+		t.Fatal("receipt lost source evidence hash")
+	}
+	if receipt.TransitionEmergIONID != request.TransitionEmergIONID {
+		t.Fatal("receipt lost transition EmergION identity")
+	}
+	if receipt.AuthorizationID != request.AuthorizationID {
+		t.Fatal("receipt lost authorization identity")
+	}
+	if receipt.Authority != request.Authority ||
+		receipt.Adapter != request.Adapter ||
+		receipt.Action != request.Action {
+		t.Fatal("receipt changed governed execution binding")
+	}
+	if receipt.OutputSHA256 == "" {
+		t.Fatal("receipt missing output hash")
+	}
+	if receipt.FieldTip == "" {
+		t.Fatal("receipt missing FIELD tip")
+	}
+
+	indexBytes, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var index fieldruntime.DeliverableIndex
+	if err := json.Unmarshal(indexBytes, &index); err != nil {
+		t.Fatal(err)
+	}
+	if index.FieldTip == "" {
+		t.Fatal("deliverable index missing FIELD tip")
+	}
+
+	found := false
+	for _, entry := range index.Deliverables {
+		if entry.EmergIONID == signal.IDN {
+			found = true
+			if entry.OutputSHA256 != receipt.OutputSHA256 {
+				t.Fatal("deliverable index output hash differs from receipt")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatal("REG-accepted execution result missing from deliverable index")
+	}
+
+	if projectionReceipt.TipHash == "" {
+		t.Fatal("RenderCurrent returned projection without canonical tip")
+	}
+
+	if _, err := os.Stat(filepath.Join(out, "field.html")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(out, "field.json")); err != nil {
+		t.Fatal(err)
 	}
 }
