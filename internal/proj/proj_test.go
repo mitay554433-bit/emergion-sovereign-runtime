@@ -1135,6 +1135,27 @@ func TestHTMLProjectsVerifiedDeliveriesWithoutChangingFieldState(t *testing.T) {
 		}
 	}
 
+	humanFinalPos := strings.Index(html, "<h2>HUMAN_FINAL</h2>")
+	deliveriesPos := strings.Index(html, "<h2>VERIFIED DELIVERIES</h2>")
+	lifecyclePos := strings.Index(html, "<summary>Lifecycle Projection ·")
+
+	if humanFinalPos < 0 || deliveriesPos < 0 || lifecyclePos < 0 {
+		t.Fatal("operator projection ordering anchors missing")
+	}
+	if !(humanFinalPos < deliveriesPos && deliveriesPos < lifecyclePos) {
+		t.Fatal("verified deliveries must follow HUMAN_FINAL before lifecycle diagnostics")
+	}
+
+	spatialPos := strings.Index(html, "SPATIAL EMERGION PROJECTION ·")
+	if spatialPos < 0 {
+		t.Fatal("spatial EmergION projection missing")
+	}
+	spatialPrefix := html[:spatialPos]
+	detailsPos := strings.LastIndex(spatialPrefix, `<details class="panel diagnostic">`)
+	if detailsPos < 0 || strings.Contains(spatialPrefix[detailsPos:], "</details>") {
+		t.Fatal("spatial EmergION projection is not inside a collapsed diagnostic disclosure")
+	}
+
 	if st.Events != 3 || st.TipHash != "tip-delivery-ui" {
 		t.Fatalf("HTML projection mutated FIELD state: %#v", st)
 	}

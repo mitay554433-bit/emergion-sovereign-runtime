@@ -405,6 +405,10 @@ th,td{padding:.5rem;font-size:.9rem}
 <p class="small">No decisions awaiting HUMAN_FINAL.</p>
 {{end}}
 
+<h2>VERIFIED DELIVERIES</h2>
+<p class="small">Operator projection only. Entries are published from REG-accepted successful execution results; canonical authority remains COSL + REG.</p>
+<div id="deliveries" class="panel" data-field-tip="{{.TipHash}}"><span class="muted">Loading verified deliveries…</span></div>
+
 <details class="panel diagnostic">
 <summary>Lifecycle Projection · {{len .Rows}} records</summary>
 <p class="small">Complete reconstructed lifecycle history. Projection only; COSL + governance remain authoritative.</p>
@@ -474,7 +478,8 @@ th,td{padding:.5rem;font-size:.9rem}
 </table>
 </details>
 
-<h2>SPATIAL EMERGION PROJECTION</h2>
+<details class="panel diagnostic">
+<summary>SPATIAL EMERGION PROJECTION · {{len .FacetGroups}} facets</summary>
 <p class="small">Accepted EmergION structures projected across the canonical FIELD topology. Projection only; authority remains COSL + REG.</p>
 
 <div class="field-topology">
@@ -510,6 +515,7 @@ th,td{padding:.5rem;font-size:.9rem}
 </div>
 </details>
 {{end}}
+</details>
 
 <h2>SAW WORK PROJECTION</h2>
 <p class="small">Deterministic SAW artifacts derived from accepted governed composition.</p>
@@ -538,10 +544,6 @@ th,td{padding:.5rem;font-size:.9rem}
 {{end}}
 </tbody>
 </table>
-
-<h2>VERIFIED DELIVERIES</h2>
-<p class="small">Operator projection only. Entries are published from REG-accepted successful execution results; canonical authority remains COSL + REG.</p>
-<div id="deliveries" class="panel" data-field-tip="{{.TipHash}}"><span class="muted">Loading verified deliveries…</span></div>
 
 <script>
 function deliveryText(value) {
