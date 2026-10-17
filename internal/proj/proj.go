@@ -366,6 +366,13 @@ body{padding:1rem}
 .operator-table,.operator-table tbody,.operator-table tr,.operator-table td{display:block;width:100%}
 .operator-table tr{box-sizing:border-box;background:#0f1c2e;border:1px solid #2a3548;border-radius:10px;padding:.75rem;margin:.75rem 0}
 .operator-table td{box-sizing:border-box;border:0;padding:.35rem 0;font-size:.9rem;overflow-wrap:anywhere;word-break:break-word}
+.operator-table pre{
+white-space:pre-wrap;
+overflow-wrap:anywhere;
+word-break:break-word;
+max-width:100%;
+box-sizing:border-box;
+}
 .operator-table td::before{content:attr(data-label);display:block;color:#9ca3af;font-size:.75rem;font-weight:700;margin-bottom:.15rem}
 .operator-table button{max-width:100%;margin:.2rem .35rem .2rem 0}
 }
@@ -526,7 +533,7 @@ body{padding:1rem}
 <h2>SAW WORK PROJECTION</h2>
 <p class="small">Deterministic SAW artifacts derived from accepted governed composition.</p>
 
-<table>
+<table class="operator-table">
 <thead>
 <tr>
 <th>SAW</th>
@@ -540,12 +547,12 @@ body{padding:1rem}
 <tbody>
 {{range .SAWs}}
 <tr>
-<td><code>{{.ID}}</code></td>
-<td><code>{{.SAABID}}</code></td>
-<td>{{.MemberPRMIDs}}</td>
-<td>{{.Capabilities}}</td>
-<td>{{.Commercial}}</td>
-<td><pre>{{.CPSL}}</pre></td>
+<td data-label="SAW"><code>{{.ID}}</code></td>
+<td data-label="SAAB"><code>{{.SAABID}}</code></td>
+<td data-label="Member PRMs">{{.MemberPRMIDs}}</td>
+<td data-label="Capabilities">{{.Capabilities}}</td>
+<td data-label="Commercial">{{.Commercial}}</td>
+<td data-label="CPSL"><pre>{{.CPSL}}</pre></td>
 </tr>
 {{end}}
 </tbody>

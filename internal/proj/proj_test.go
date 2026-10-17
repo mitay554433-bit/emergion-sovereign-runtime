@@ -944,6 +944,63 @@ func TestSAWExtractsDeterministicGovernedArtifact(t *testing.T) {
 	}
 }
 
+func TestSAWProjectionUsesResponsiveOperatorRecord(t *testing.T) {
+	a := core.EmergION{
+		IDN: "E-SAW-UI-A",
+		STA: core.StateAccepted,
+		MEM: core.Memory{SourceHash: "saw-ui-a"},
+		REL: map[string]string{
+			"COMPOSITION_KIN": "E-SAW-UI-B",
+		},
+		CAP: []string{"PROGRAM", "ANALYZE"},
+	}
+
+	b := core.EmergION{
+		IDN: "E-SAW-UI-B",
+		STA: core.StateAccepted,
+		MEM: core.Memory{SourceHash: "saw-ui-b"},
+		CAP: []string{"SIMULATE"},
+	}
+
+	st := core.EmptyState()
+	st.Accepted[a.IDN] = a
+	st.Accepted[b.IDN] = b
+
+	root := t.TempDir()
+	path := filepath.Join(root, "field.html")
+
+	if err := HTML(path, st); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(data)
+
+	for _, want := range []string{
+		`<h2>SAW WORK PROJECTION</h2>`,
+		`<table class="operator-table">`,
+		`data-label="SAW"`,
+		`data-label="SAAB"`,
+		`data-label="Member PRMs"`,
+		`data-label="Capabilities"`,
+		`data-label="Commercial"`,
+		`data-label="CPSL"`,
+		`CPSL/1`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("SAW HTML projection missing responsive operator support %q", want)
+		}
+	}
+
+	if st.Accepted[a.IDN].STA != core.StateAccepted ||
+		st.Accepted[b.IDN].STA != core.StateAccepted {
+		t.Fatal("SAW HTML projection mutated authoritative state")
+	}
+}
+
 func TestSAWDoesNotExistWithoutGovernedComposition(t *testing.T) {
 	em := core.EmergION{
 		IDN: "E-SAW-SINGLE",
