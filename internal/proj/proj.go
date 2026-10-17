@@ -144,6 +144,44 @@ func spatialEmergIONs(st core.State) []spatialEmergION {
 	return out
 }
 
+type spatialFacetGroup struct {
+	Facet     core.Facet
+	EmergIONs []spatialEmergION
+}
+
+func spatialFacetGroups(spatial []spatialEmergION) []spatialFacetGroup {
+	groups := make([]spatialFacetGroup, 0, len(spatialFacetOrder()))
+
+	for _, facet := range spatialFacetOrder() {
+		group := spatialFacetGroup{Facet: facet}
+
+		for _, em := range spatial {
+			for _, emFacet := range em.Facets {
+				if emFacet == facet {
+					group.EmergIONs = append(group.EmergIONs, em)
+					break
+				}
+			}
+		}
+
+		groups = append(groups, group)
+	}
+
+	return groups
+}
+
+func spatialUnassigned(spatial []spatialEmergION) []spatialEmergION {
+	out := make([]spatialEmergION, 0)
+
+	for _, em := range spatial {
+		if len(em.Facets) == 0 {
+			out = append(out, em)
+		}
+	}
+
+	return out
+}
+
 func spatialFacetOrder() []core.Facet {
 	return []core.Facet{
 		core.FacetFIELDCommand,
@@ -396,16 +434,12 @@ th,td{padding:.5rem;font-size:.9rem}
 <p class="small">Accepted EmergION structures projected across the canonical FIELD topology. Projection only; authority remains COSL + REG.</p>
 
 <div class="field-topology">
-{{range .FacetOrder}}
+{{range .FacetGroups}}
 <div class="field-facet">
-<strong>{{.}}</strong>
-<span class="small">FIELD facet</span>
-</div>
-{{end}}
-</div>
-
+<strong>{{.Facet}}</strong>
+<span class="small">FIELD facet · {{len .EmergIONs}} accepted</span>
 <div class="field-emergions">
-{{range .Spatial}}
+{{range .EmergIONs}}
 <div class="field-emergion">
 <strong><code>{{.ID}}</code></strong>
 <div>{{.Archonym}}</div>
@@ -414,6 +448,25 @@ th,td{padding:.5rem;font-size:.9rem}
 </div>
 {{end}}
 </div>
+</div>
+{{end}}
+</div>
+
+{{if .Unassigned}}
+<div class="field-facet">
+<strong>UNASSIGNED</strong>
+<span class="small">Accepted EmergIONs without canonical facet metadata · projection only</span>
+<div class="field-emergions">
+{{range .Unassigned}}
+<div class="field-emergion">
+<strong><code>{{.ID}}</code></strong>
+<div>{{.Archonym}}</div>
+<div class="small">{{.Topology}}</div>
+</div>
+{{end}}
+</div>
+</div>
+{{end}}
 
 <h2>SAW WORK PROJECTION</h2>
 <p class="small">Deterministic SAW artifacts derived from accepted governed composition.</p>
@@ -547,7 +600,8 @@ async function humanFinal(id, decision) {
 	}
 
 	spatial := spatialEmergIONs(st)
-	facetOrder := spatialFacetOrder()
+	facetGroups := spatialFacetGroups(spatial)
+	unassigned := spatialUnassigned(spatial)
 
 	return t.Execute(f, map[string]any{
 		"Events":      st.Events,
@@ -556,7 +610,8 @@ async function humanFinal(id, decision) {
 		"Convergence": convergence,
 		"SAWs":        saws,
 		"Spatial":     spatial,
-		"FacetOrder":  facetOrder,
+		"FacetGroups": facetGroups,
+		"Unassigned":  unassigned,
 	})
 }
 

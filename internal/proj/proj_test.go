@@ -166,6 +166,50 @@ func TestSpatialEmergIONProjectionContainsAcceptedOnlyWithoutMutation(t *testing
 	}
 }
 
+func TestSpatialFacetGroupsAreCanonicalAcceptedProjectionOnly(t *testing.T) {
+	st := core.EmptyState()
+
+	accepted := core.EmergION{
+		IDN: "E-MULTI-FACET",
+		STA: core.StateAccepted,
+		EVO: core.Evolution{
+			Metadata: &core.Metadata{
+				Facets: []core.Facet{
+					core.FacetFIELDCommand,
+					core.FacetProgramForge,
+				},
+			},
+		},
+	}
+	st.Accepted[accepted.IDN] = accepted
+
+	spatial := spatialEmergIONs(st)
+	groups := spatialFacetGroups(spatial)
+	order := spatialFacetOrder()
+
+	if len(groups) != len(order) {
+		t.Fatalf("spatial facet groups = %d want %d", len(groups), len(order))
+	}
+
+	for i := range groups {
+		if groups[i].Facet != order[i] {
+			t.Fatalf("group[%d] facet = %q want %q", i, groups[i].Facet, order[i])
+		}
+	}
+
+	if len(groups[0].EmergIONs) != 1 || groups[0].EmergIONs[0].ID != accepted.IDN {
+		t.Fatal("accepted EmergION missing from FIELD_COMMAND projection group")
+	}
+	if len(groups[2].EmergIONs) != 1 || groups[2].EmergIONs[0].ID != accepted.IDN {
+		t.Fatal("multi-facet EmergION missing from PROGRAM_FORGE projection group")
+	}
+
+	groups[0].EmergIONs[0].Facets[0] = core.FacetProductStore
+	if st.Accepted[accepted.IDN].EVO.Metadata.Facets[0] != core.FacetFIELDCommand {
+		t.Fatal("facet grouping mutated accepted FIELD state")
+	}
+}
+
 func TestSpatialFacetOrderIsCompleteDeterministicProjectionOnly(t *testing.T) {
 	got := spatialFacetOrder()
 
