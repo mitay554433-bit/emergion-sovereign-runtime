@@ -299,7 +299,15 @@ code{color:#a78bfa;overflow-wrap:anywhere;word-break:break-all}
 .F{color:#22c55e}
 .X{color:#ef4444}
 .small{color:#9ca3af;font-size:.9rem}
+.field-topology{position:relative;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem;padding:1rem;margin:.75rem 0;background:#071120;border:1px solid #2a3548;border-radius:12px}
+.field-facet{min-height:4.5rem;padding:.75rem;background:#0f1c2e;border:1px solid #2d6cff;border-radius:10px}
+.field-facet strong{display:block;margin-bottom:.35rem}
+.field-emergions{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.75rem;margin:.75rem 0}
+.field-emergion{padding:.75rem;background:#0f1c2e;border:1px solid #2a3548;border-radius:10px}
+.field-emergion .facets{margin-top:.45rem;color:#9ca3af;font-size:.85rem}
 @media (max-width:700px){
+.field-topology{grid-template-columns:repeat(2,minmax(0,1fr))}
+
 body{padding:1rem}
 th,td{padding:.5rem;font-size:.9rem}
 }
@@ -385,28 +393,27 @@ th,td{padding:.5rem;font-size:.9rem}
 </table>
 
 <h2>SPATIAL EMERGION PROJECTION</h2>
-<p class="small">Accepted EmergION structures projected from governed state.</p>
+<p class="small">Accepted EmergION structures projected across the canonical FIELD topology. Projection only; authority remains COSL + REG.</p>
 
-<table>
-<thead>
-<tr>
-<th>EmergION</th>
-<th>Archonym</th>
-<th>Topology</th>
-<th>Facets</th>
-</tr>
-</thead>
-<tbody>
-{{range .Spatial}}
-<tr>
-<td><code>{{.ID}}</code></td>
-<td>{{.Archonym}}</td>
-<td>{{.Topology}}</td>
-<td>{{range .Facets}}{{.}} {{end}}</td>
-</tr>
+<div class="field-topology">
+{{range .FacetOrder}}
+<div class="field-facet">
+<strong>{{.}}</strong>
+<span class="small">FIELD facet</span>
+</div>
 {{end}}
-</tbody>
-</table>
+</div>
+
+<div class="field-emergions">
+{{range .Spatial}}
+<div class="field-emergion">
+<strong><code>{{.ID}}</code></strong>
+<div>{{.Archonym}}</div>
+<div class="small">{{.Topology}}</div>
+<div class="facets">{{range .Facets}}{{.}} {{end}}</div>
+</div>
+{{end}}
+</div>
 
 <h2>SAW WORK PROJECTION</h2>
 <p class="small">Deterministic SAW artifacts derived from accepted governed composition.</p>

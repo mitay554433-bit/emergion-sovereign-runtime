@@ -205,6 +205,48 @@ func TestSpatialFacetOrderIsCompleteDeterministicProjectionOnly(t *testing.T) {
 	}
 }
 
+func TestHTMLProjectsCanonicalVisualFIELDWithoutChangingAuthority(t *testing.T) {
+	root := t.TempDir()
+	st := core.EmptyState()
+
+	accepted := core.EmergION{
+		IDN: "E-FIELD-VISUAL",
+		STA: core.StateAccepted,
+		MEM: core.Memory{Summary: "visual FIELD projection"},
+	}
+	st.Accepted[accepted.IDN] = accepted
+
+	if _, err := Current(root, st); err != nil {
+		t.Fatal(err)
+	}
+
+	b, err := os.ReadFile(filepath.Join(root, "field.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(b)
+
+	if !strings.Contains(html, `class="field-topology"`) {
+		t.Fatal("visual FIELD topology missing")
+	}
+	if !strings.Contains(html, `class="field-emergion"`) {
+		t.Fatal("visual accepted EmergION projection missing")
+	}
+	if !strings.Contains(html, accepted.IDN) {
+		t.Fatalf("accepted EmergION %q missing from visual FIELD", accepted.IDN)
+	}
+
+	for _, facet := range spatialFacetOrder() {
+		if !strings.Contains(html, string(facet)) {
+			t.Fatalf("canonical FIELD facet %q missing from visual projection", facet)
+		}
+	}
+
+	if !strings.Contains(html, "Projection only; authority remains COSL + REG.") {
+		t.Fatal("visual FIELD authority boundary missing")
+	}
+}
+
 func TestSpatialConvergenceZoneDerivesAcceptedKinWithoutMerging(t *testing.T) {
 	predecessor := core.EmergION{
 		IDN: "E-PREDECESSOR",
