@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"unicode/utf8"
 	"time"
+	"unicode/utf8"
 )
 
 func TestCleanFacets(t *testing.T) {
@@ -824,6 +824,20 @@ func TestDifferenceGroundingAcceptsSupportedTargetComparison(t *testing.T) {
 	}
 }
 
+func TestDifferenceGroundingAcceptsCanonicalSymbolicTargetDifference(t *testing.T) {
+	source := "TARGET_COMPARISON/1\n" +
+		"TARGET_EMERGION:E-TARGET\n" +
+		"TARGET_STATE:\n" +
+		"runtime deployment state is deployed\n" +
+		"REALITY:\n" +
+		"ACCEPTED_FACT:runtime deployment state is observation-only\n" +
+		"Z\n"
+
+	if !sourceSupportsDifference(source, "TARGET_STATE!=ACCEPTED_REALITY") {
+		t.Fatal("canonical symbolic target Difference was rejected")
+	}
+}
+
 func TestDifferenceGroundingRejectsIdenticalOperands(t *testing.T) {
 	source := "TARGET_COMPARISON/1\n" +
 		"TARGET_EMERGION:E-TARGET\n" +
@@ -898,7 +912,6 @@ func TestMXPDRealFactIsNotOmitted(t *testing.T) {
 	}
 }
 
-
 func TestTruncateUTF8PreservesRuneBoundary(t *testing.T) {
 	input := "abc€def"
 	got := truncateUTF8(input, 5)
@@ -917,7 +930,6 @@ func TestTruncateUTF8LeavesBoundedInputUnchanged(t *testing.T) {
 		t.Fatalf("truncateUTF8 = %q want unchanged %q", got, input)
 	}
 }
-
 
 func TestCalibratePreservesUTF8AtByteLimits(t *testing.T) {
 	summary := strings.Repeat("a", 479) + "€"

@@ -453,6 +453,14 @@ func sourceSupportsDifference(source, difference string) bool {
 		return false
 	}
 
+	// TARGET_STATE!=ACCEPTED_REALITY is the canonical symbolic Difference
+	// derived from the structured TARGET_COMPARISON/1 operands themselves.
+	// The labels describe the relation; they are not expected to occur inside
+	// either operand's semantic content.
+	if strings.EqualFold(difference, "TARGET_STATE!=ACCEPTED_REALITY") {
+		return true
+	}
+
 	return sourceSupportsFact(target+"\n"+reality, difference)
 }
 
