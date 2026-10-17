@@ -1,7 +1,9 @@
 package main
 
 import (
+"context"
 "encoding/json"
+"os"
 "net"
 "path/filepath"
 "testing"
@@ -74,5 +76,65 @@ t.Fatalf("failed to decode error response: %v", err)
 
 if badResp.Error == "" {
 t.Fatal("expected error on unknown method, got nil")
+}
+}
+
+type humanFinalTestReasoner struct{}
+
+func (humanFinalTestReasoner) Analyze(_ context.Context, _ reason.Input) (reason.Result, error) {
+return reason.Result{
+Summary: "bounded HUMAN_FINAL fieldd decision proof",
+Relationships: map[string]string{"source_kind": "TEST"},
+Capabilities: []string{"OBS", "CMP"},
+Facts: []string{"bounded fieldd test source"},
+Risk: "L",
+}, nil
+}
+
+func (humanFinalTestReasoner) Name() string { return "fieldd-human-final-test" }
+func (humanFinalTestReasoner) Version(context.Context) string { return "1" }
+
+func TestDecideDispatchUsesHumanFinalAndReachesREG(t *testing.T) {
+tmpDir := t.TempDir()
+statePath := filepath.Join(tmpDir, "state")
+sourcePath := filepath.Join(tmpDir, "candidate.txt")
+
+if err := os.WriteFile(sourcePath, []byte("bounded HUMAN_FINAL fieldd decision proof"), 0600); err != nil {
+t.Fatal(err)
+}
+
+rt, err := fieldapi.Open(statePath, humanFinalTestReasoner{})
+if err != nil {
+t.Fatal(err)
+}
+
+em, err := rt.Capture(context.Background(), sourcePath)
+if err != nil {
+t.Fatal(err)
+}
+
+params, err := json.Marshal(DecideParams{
+EmergIONID: em.IDN,
+Decision: "APPROVE",
+Reason: "fieldd HUMAN_FINAL dispatch proof",
+})
+if err != nil {
+t.Fatal(err)
+}
+
+resp := dispatch(rt, Request{Method: "decide", Params: params})
+if resp.Error != "" {
+t.Fatalf("decide dispatch failed: %s", resp.Error)
+}
+
+status, err := rt.Status()
+if err != nil {
+t.Fatal(err)
+}
+if status.Accepted != 1 {
+t.Fatalf("accepted = %d want 1", status.Accepted)
+}
+if status.AtGOV != 0 {
+t.Fatalf("at_gov = %d want 0", status.AtGOV)
 }
 }
