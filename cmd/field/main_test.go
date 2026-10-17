@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"emergion-sovereign-runtime/internal/adapters"
@@ -195,5 +196,67 @@ func TestPublishAcceptedDeliverablesMaterializesAcceptedExecutionResult(t *testi
 	if len(index.Deliverables) != 1 ||
 		index.Deliverables[0].EmergIONID != accepted.IDN {
 		t.Fatalf("deliverable index = %#v", index.Deliverables)
+	}
+}
+
+
+func TestDaemonPathsUsePlatformTempDirectory(t *testing.T) {
+	t.Setenv("FIELD_SOCKET", "")
+	t.Setenv("FIELD_PID", "")
+
+	sockPath, pidPath := daemonPaths()
+	wantBase := os.TempDir()
+
+	if filepath.Dir(sockPath) != wantBase {
+		t.Fatalf("socket directory = %q want %q", filepath.Dir(sockPath), wantBase)
+	}
+	if filepath.Dir(pidPath) != wantBase {
+		t.Fatalf("pid directory = %q want %q", filepath.Dir(pidPath), wantBase)
+	}
+}
+
+func TestDaemonPathsRespectExplicitConfiguration(t *testing.T) {
+	root := t.TempDir()
+	wantSocket := filepath.Join(root, "operator.sock")
+	wantPID := filepath.Join(root, "operator.pid")
+	t.Setenv("FIELD_SOCKET", wantSocket)
+	t.Setenv("FIELD_PID", wantPID)
+
+	sockPath, pidPath := daemonPaths()
+	if sockPath != wantSocket || pidPath != wantPID {
+		t.Fatalf("daemon paths = %q %q want %q %q", sockPath, pidPath, wantSocket, wantPID)
+	}
+}
+
+func TestDaemonStartCommandUsesAdjacentContractAndLoopbackHTTP(t *testing.T) {
+	t.Setenv("FIELDD_BIN", "/pilot/bin/fieldd")
+	t.Setenv("FIELD_HTTP", "127.0.0.1:8899")
+
+	cmd := daemonStartCommand(".field", "/tmp/pilot.sock", "/tmp/pilot.pid")
+	if cmd.Path != "/pilot/bin/fieldd" {
+		t.Fatalf("fieldd binary = %q", cmd.Path)
+	}
+
+	args := strings.Join(cmd.Args[1:], " ")
+	for _, want := range []string{
+		"-state .field",
+		"-socket /tmp/pilot.sock",
+		"-pid /tmp/pilot.pid",
+		"-http 127.0.0.1:8899",
+	} {
+		if !strings.Contains(args, want) {
+			t.Fatalf("daemon args %q missing %q", args, want)
+		}
+	}
+}
+
+func TestDaemonStartCommandAllowsHTTPOptOut(t *testing.T) {
+	t.Setenv("FIELDD_BIN", "/pilot/bin/fieldd")
+	t.Setenv("FIELD_HTTP", "")
+
+	cmd := daemonStartCommand(".field", "/tmp/pilot.sock", "/tmp/pilot.pid")
+	args := strings.Join(cmd.Args[1:], " ")
+	if strings.Contains(args, "-http") {
+		t.Fatalf("daemon args unexpectedly enable HTTP: %q", args)
 	}
 }
