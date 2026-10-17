@@ -1156,6 +1156,18 @@ func TestHTMLProjectsVerifiedDeliveriesWithoutChangingFieldState(t *testing.T) {
 		t.Fatal("spatial EmergION projection is not inside a collapsed diagnostic disclosure")
 	}
 
+	for _, want := range []string{
+		`.operator-table thead{display:none}`,
+		`.operator-table td::before{content:attr(data-label)`,
+		`table.className = "operator-table"`,
+		`td.dataset.label = entry[0]`,
+		`artifactCell.dataset.label = "Artifact"`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("field.html missing responsive operator record support %q", want)
+		}
+	}
+
 	if st.Events != 3 || st.TipHash != "tip-delivery-ui" {
 		t.Fatalf("HTML projection mutated FIELD state: %#v", st)
 	}

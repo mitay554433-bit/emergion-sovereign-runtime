@@ -361,7 +361,13 @@ code{color:#a78bfa;overflow-wrap:anywhere;word-break:break-all}
 .field-topology{grid-template-columns:minmax(0,1fr)}
 
 body{padding:1rem}
-th,td{padding:.5rem;font-size:.9rem}
+.operator-table{width:100%;min-width:0}
+.operator-table thead{display:none}
+.operator-table,.operator-table tbody,.operator-table tr,.operator-table td{display:block;width:100%}
+.operator-table tr{box-sizing:border-box;background:#0f1c2e;border:1px solid #2a3548;border-radius:10px;padding:.75rem;margin:.75rem 0}
+.operator-table td{box-sizing:border-box;border:0;padding:.35rem 0;font-size:.9rem;overflow-wrap:anywhere;word-break:break-word}
+.operator-table td::before{content:attr(data-label);display:block;color:#9ca3af;font-size:.75rem;font-weight:700;margin-bottom:.15rem}
+.operator-table button{max-width:100%;margin:.2rem .35rem .2rem 0}
 }
 </style>
 </head>
@@ -374,7 +380,7 @@ th,td{padding:.5rem;font-size:.9rem}
 <h2>HUMAN_FINAL</h2>
 {{if .HumanFinal}}
 <p class="small">{{len .HumanFinal}} decision(s) awaiting HUMAN_FINAL.</p>
-<table>
+<table class="operator-table">
 <thead>
 <tr>
 <th>EmergION</th>
@@ -388,12 +394,12 @@ th,td{padding:.5rem;font-size:.9rem}
 <tbody>
 {{range .HumanFinal}}
 <tr>
-<td><code>{{.ID}}</code></td>
-<td>{{.Risk}}</td>
-<td><code>{{.Proof}}</code></td>
-<td>{{.Relationships}}</td>
-<td>{{.Summary}}</td>
-<td>
+<td data-label="EmergION"><code>{{.ID}}</code></td>
+<td data-label="Risk">{{.Risk}}</td>
+<td data-label="Evidence proof"><code>{{.Proof}}</code></td>
+<td data-label="Relationships">{{.Relationships}}</td>
+<td data-label="Meaning">{{.Summary}}</td>
+<td data-label="Decision">
 <button type="button" onclick="humanFinal('{{.ID}}','APPROVE')">APPROVE</button>
 <button type="button" onclick="humanFinal('{{.ID}}','REJECT')">REJECT</button>
 </td>
@@ -567,6 +573,7 @@ async function loadDeliveries() {
     }
 
     const table = document.createElement("table");
+    table.className = "operator-table";
     const head = document.createElement("thead");
     const headRow = document.createElement("tr");
     ["EmergION", "Action", "Adapter", "Evidence", "Output", "Artifact"].forEach(function(label) {
@@ -581,20 +588,23 @@ async function loadDeliveries() {
     items.forEach(function(item) {
       const row = document.createElement("tr");
       [
-        deliveryText(item.emergion_id),
-        deliveryText(item.action),
-        deliveryText(item.adapter),
-        deliveryText(item.evidence_sha256),
-        deliveryText(item.output_sha256)
-      ].forEach(function(value) {
+        ["EmergION", deliveryText(item.emergion_id)],
+        ["Action", deliveryText(item.action)],
+        ["Adapter", deliveryText(item.adapter)],
+        ["Evidence", deliveryText(item.evidence_sha256)],
+        ["Output", deliveryText(item.output_sha256)]
+      ].forEach(function(entry) {
         const td = document.createElement("td");
+        td.dataset.label = entry[0];
         const code = document.createElement("code");
+        const value = entry[1];
         code.textContent = value;
         td.appendChild(code);
         row.appendChild(td);
       });
 
       const artifactCell = document.createElement("td");
+      artifactCell.dataset.label = "Artifact";
       const link = document.createElement("a");
       link.href = "deliverables/" + encodeURIComponent(deliveryText(item.emergion_id)) + "/output";
       link.textContent = "open";
