@@ -83,9 +83,45 @@ GEMMA_EXTRA_ARGS=
 
 ## Operation
 
+The canonical pilot package is the existing `field` CLI plus the existing
+`fieldd` daemon. Build both from the same repository revision:
+
+```sh
+mkdir -p dist
+go build -o dist/field ./cmd/field
+go build -o dist/fieldd ./cmd/fieldd
+```
+
+The CLI discovers an adjacent `fieldd` binary, uses the platform temporary
+directory for its PID/socket files, and exposes the operator surface on
+loopback by default:
+
+```sh
+./dist/field init
+./dist/field doctor
+./dist/field daemon start
+./dist/field daemon status
+```
+
+Operator surface:
+
 ```text
-field init
-field doctor
+http://127.0.0.1:8899/field.html
+```
+
+Stop the same governed daemon with:
+
+```sh
+./dist/field daemon stop
+```
+
+The listener remains loopback-only. Set `FIELD_HTTP` to another loopback
+address when required, or set it to the empty string to disable HTTP.
+`FIELD_SOCKET`, `FIELD_PID`, and `FIELDD_BIN` remain explicit overrides.
+
+For a foreground living FIELD loop rather than the daemon/operator surface:
+
+```text
 field run
 ```
 
