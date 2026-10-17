@@ -339,12 +339,14 @@ code{color:#a78bfa;overflow-wrap:anywhere;word-break:break-all}
 .small{color:#9ca3af;font-size:.9rem}
 .field-topology{position:relative;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem;padding:1rem;margin:.75rem 0;background:#071120;border:1px solid #2a3548;border-radius:12px}
 .field-facet{min-height:4.5rem;padding:.75rem;background:#0f1c2e;border:1px solid #2d6cff;border-radius:10px}
+.field-facet summary{cursor:pointer;font-weight:700}
+.field-facet summary::marker{color:#9ca3af}
 .field-facet strong{display:block;margin-bottom:.35rem}
 .field-emergions{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.75rem;margin:.75rem 0}
 .field-emergion{padding:.75rem;background:#0f1c2e;border:1px solid #2a3548;border-radius:10px}
 .field-emergion .facets{margin-top:.45rem;color:#9ca3af;font-size:.85rem}
 @media (max-width:700px){
-.field-topology{grid-template-columns:repeat(2,minmax(0,1fr))}
+.field-topology{grid-template-columns:minmax(0,1fr)}
 
 body{padding:1rem}
 th,td{padding:.5rem;font-size:.9rem}
@@ -435,9 +437,8 @@ th,td{padding:.5rem;font-size:.9rem}
 
 <div class="field-topology">
 {{range .FacetGroups}}
-<div class="field-facet">
-<strong>{{.Facet}}</strong>
-<span class="small">FIELD facet · {{len .EmergIONs}} accepted</span>
+<details class="field-facet">
+<summary>{{.Facet}} · {{len .EmergIONs}} accepted</summary>
 <div class="field-emergions">
 {{range .EmergIONs}}
 <div class="field-emergion">
@@ -448,13 +449,13 @@ th,td{padding:.5rem;font-size:.9rem}
 </div>
 {{end}}
 </div>
-</div>
+</details>
 {{end}}
 </div>
 
 {{if .Unassigned}}
-<div class="field-facet">
-<strong>UNASSIGNED</strong>
+<details class="field-facet">
+<summary>UNASSIGNED · {{len .Unassigned}} accepted</summary>
 <span class="small">Accepted EmergIONs without canonical facet metadata · projection only</span>
 <div class="field-emergions">
 {{range .Unassigned}}
@@ -465,7 +466,7 @@ th,td{padding:.5rem;font-size:.9rem}
 </div>
 {{end}}
 </div>
-</div>
+</details>
 {{end}}
 
 <h2>SAW WORK PROJECTION</h2>

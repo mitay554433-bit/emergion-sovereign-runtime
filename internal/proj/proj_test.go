@@ -289,6 +289,13 @@ func TestHTMLProjectsCanonicalVisualFIELDWithoutChangingAuthority(t *testing.T) 
 	if !strings.Contains(html, "Projection only; authority remains COSL + REG.") {
 		t.Fatal("visual FIELD authority boundary missing")
 	}
+	if !strings.Contains(html, `<details class="field-facet">`) {
+		t.Fatal("canonical FIELD facets are not native disclosure groups")
+	}
+	if !strings.Contains(html, `<summary>FIELD_COMMAND ·`) {
+		t.Fatal("canonical FIELD facet summary/count missing")
+	}
+
 }
 
 func TestSpatialConvergenceZoneDerivesAcceptedKinWithoutMerging(t *testing.T) {
