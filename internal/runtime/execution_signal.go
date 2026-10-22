@@ -51,7 +51,7 @@ func (r Runtime) CaptureExecutionResult(
 
 	relationships := map[string]string{
 		"source_kind":         "EXECUTION_RESULT",
-		"parent_emergion":     request.EmergIONID,
+		"kin_emergion":        request.EmergIONID,
 		"transition_emergion": request.TransitionEmergIONID,
 		"adapter":             request.Adapter,
 		"action":              request.Action,
