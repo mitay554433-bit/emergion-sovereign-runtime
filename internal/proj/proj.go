@@ -107,6 +107,82 @@ func humanFinalRows(rows []row) []row {
 	return out
 }
 
+type realizationRow struct {
+	TargetThing string
+	Selected    string
+	RunnersUp   string
+	SourceID    string
+	SourceKind  string
+	Status      string
+}
+
+func realizationRows(st core.State) []realizationRow {
+	byTarget := map[string]realizationRow{}
+
+	// REG-accepted realization state is the current canonical order.
+	acceptedIDs := make([]string, 0, len(st.Accepted))
+	for id := range st.Accepted {
+		acceptedIDs = append(acceptedIDs, id)
+	}
+	sort.Strings(acceptedIDs)
+	for _, id := range acceptedIDs {
+		em := st.Accepted[id]
+		kind := strings.TrimSpace(em.REL["source_kind"])
+		if kind != "REALIZATION_SELECTION" && kind != "REALIZATION_REORDER" {
+			continue
+		}
+		target := strings.TrimSpace(em.REL["target_thing"])
+		selected := strings.TrimSpace(em.REL["selected_realization"])
+		if target == "" || selected == "" {
+			continue
+		}
+		byTarget[target] = realizationRow{
+			TargetThing: target,
+			Selected: selected,
+			RunnersUp: strings.TrimSpace(em.REL["runners_up"]),
+			SourceID: em.IDN,
+			SourceKind: kind,
+			Status: "REG ACCEPTED",
+		}
+	}
+
+	// A pending reorder is the operator-relevant frontier. Project it without
+	// treating it as canonical: HUMAN_FINAL must resolve it before REG changes.
+	pendingIDs := make([]string, 0, len(st.AtGOV))
+	for id := range st.AtGOV {
+		pendingIDs = append(pendingIDs, id)
+	}
+	sort.Strings(pendingIDs)
+	for _, id := range pendingIDs {
+		em := st.AtGOV[id]
+		if strings.TrimSpace(em.REL["source_kind"]) != "REALIZATION_REORDER" {
+			continue
+		}
+		target := strings.TrimSpace(em.REL["target_thing"])
+		selected := strings.TrimSpace(em.REL["selected_realization"])
+		if target == "" || selected == "" {
+			continue
+		}
+		byTarget[target] = realizationRow{
+			TargetThing: target,
+			Selected: selected,
+			RunnersUp: strings.TrimSpace(em.REL["runners_up"]),
+			SourceID: em.IDN,
+			SourceKind: "REALIZATION_REORDER",
+			Status: "PENDING HUMAN_FINAL",
+		}
+	}
+
+	out := make([]realizationRow, 0, len(byTarget))
+	for _, item := range byTarget {
+		out = append(out, item)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].TargetThing < out[j].TargetThing
+	})
+	return out
+}
+
 type convergenceRow struct {
 	ID            string
 	Kin           string
@@ -383,6 +459,37 @@ box-sizing:border-box;
 <h1>Living Projection</h1>
 <p>Events: {{.Events}} · Tip: <code>{{.TipHash}}</code></p>
 <p class="small">Projection is derived state only. COSL + governance remain authoritative.</p>
+
+<h2>REALIZATION FIELD</h2>
+<p class="small">Target-specific governed order projected from canonical state. Pending reorder is visible but is not canonical until HUMAN_FINAL + REG.</p>
+{{if .Realizations}}
+<table class="operator-table">
+<thead>
+<tr>
+<th>THING</th>
+<th>Strongest</th>
+<th>Runners-up</th>
+<th>Status</th>
+<th>Evidence EmergION</th>
+<th>Kind</th>
+</tr>
+</thead>
+<tbody>
+{{range .Realizations}}
+<tr>
+<td data-label="THING"><strong>{{.TargetThing}}</strong></td>
+<td data-label="Strongest"><code>{{.Selected}}</code></td>
+<td data-label="Runners-up"><code>{{.RunnersUp}}</code></td>
+<td data-label="Status">{{.Status}}</td>
+<td data-label="Evidence EmergION"><code>{{.SourceID}}</code></td>
+<td data-label="Kind">{{.SourceKind}}</td>
+</tr>
+{{end}}
+</tbody>
+</table>
+{{else}}
+<p class="small">No governed realization population projected.</p>
+{{end}}
 
 <h2>HUMAN_FINAL</h2>
 {{if .HumanFinal}}
@@ -672,6 +779,7 @@ async function humanFinal(id, decision) {
 		"TipHash":     st.TipHash,
 		"Rows":        lifecycle,
 		"HumanFinal":  humanFinalRows(lifecycle),
+		"Realizations": realizationRows(st),
 		"Convergence": convergence,
 		"SAWs":        saws,
 		"Spatial":     spatial,
