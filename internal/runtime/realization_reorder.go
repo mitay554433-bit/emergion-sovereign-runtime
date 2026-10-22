@@ -23,7 +23,7 @@ func acceptedRealizationExecutionOutcomes(
 
 	for id, em := range st.Accepted {
 		if em.REL["source_kind"] != "EXECUTION_RESULT" ||
-			em.REL["parent_emergion"] != realizationID {
+			em.REL["kin_emergion"] != realizationID {
 			continue
 		}
 
