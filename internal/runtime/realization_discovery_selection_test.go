@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"emergion-sovereign-runtime/internal/adapters"
 	"emergion-sovereign-runtime/internal/core"
 	"emergion-sovereign-runtime/internal/field"
-	"emergion-sovereign-runtime/internal/reason"
 	"emergion-sovereign-runtime/internal/store"
 )
 
@@ -24,35 +24,24 @@ func acceptedDiscoveryIdentity(t *testing.T, r Runtime, member core.EmergION, th
 func addAcceptedDiscoveryOutcome(
 	t *testing.T,
 	r Runtime,
-	parent string,
+	kinID string,
 	succeeded bool,
 ) {
 	t.Helper()
-	fact := "execution_failed"
-	if succeeded { fact = "execution_succeeded" }
-
-	outcomeRuntime := r
-	outcomeRuntime.Reasoner = fixedReasoner{
-		name: "discovery-execution-result",
-		version: "v1",
-		result: reason.Result{
-			Summary: "governed execution result fixture",
-			Relationships: map[string]string{
-				"source_kind": "EXECUTION_RESULT",
-				"kin_emergion": parent,
-				"adapter": "LOCAL_GEMMA",
-				"action": "ANALYZE",
-			},
-			Capabilities: []string{"OBS", "VLD"},
-			Facts: []string{"execution_result_observed", fact},
-			Risk: "L",
-		},
+	request := adapters.ExecutionRequest{
+		EmergIONID: kinID,
+		Adapter: "LOCAL_GEMMA",
+		Action: "ANALYZE",
 	}
-	em, duplicate, err := outcomeRuntime.CaptureBytes(
+	result := adapters.ExecutionResult{
+		Adapter: "LOCAL_GEMMA",
+		Action: "ANALYZE",
+		Succeeded: succeeded,
+	}
+	em, duplicate, err := r.CaptureExecutionResult(
 		context.Background(),
-		"execution-result-"+parent,
-		[]byte("execution result "+parent+" "+fact),
-		"execution_result_fixture",
+		request,
+		result,
 	)
 	if err != nil { t.Fatal(err) }
 	if duplicate { t.Fatal("execution result unexpectedly duplicate") }
