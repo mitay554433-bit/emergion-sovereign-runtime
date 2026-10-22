@@ -19,7 +19,11 @@ func (r Runtime) CaptureNextObservedRealizationReorder(
 	if r.Store == nil {
 		return core.EmergION{}, false, nil
 	}
-	state, events, err := r.governedStateContext()
+	state, _, err := r.governedStateContext()
+	if err != nil {
+		return core.EmergION{}, false, err
+	}
+	events, err := r.Store.Events()
 	if err != nil {
 		return core.EmergION{}, false, err
 	}
