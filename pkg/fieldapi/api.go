@@ -167,6 +167,14 @@ func (r *Runtime) capturePendingRealizationReorder(
 	}).CaptureNextObservedRealizationReorder(ctx)
 }
 
+func (r *Runtime) capturePendingRealizationSelection(
+	ctx context.Context,
+) (core.EmergION, bool, error) {
+	return (fieldruntime.Runtime{
+		Store: r.store,
+	}).CaptureNextDiscoveredRealizationSelection(ctx)
+}
+
 func (r *Runtime) GovernedCycle(
 	ctx context.Context,
 	gemma reason.GemmaCLI,
@@ -203,6 +211,17 @@ func (r *Runtime) GovernedCycle(
 		// A changed order is new governed evidence. Stop this cycle at AtGOV
 		// rather than executing either the prior or proposed strongest
 		// realization before HUMAN_FINAL/REG resolves the transition.
+		return circulated, core.EmergION{}, false, nil
+	}
+
+	selection, proposedSelection, err := r.capturePendingRealizationSelection(ctx)
+	if err != nil {
+		return circulated, core.EmergION{}, false, err
+	}
+	if proposedSelection {
+		circulated = append(circulated, selection)
+		// A discovered unique strongest realization is only a governed
+		// selection candidate. Stop at AtGOV until HUMAN_FINAL/REG resolves it.
 		return circulated, core.EmergION{}, false, nil
 	}
 

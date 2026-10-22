@@ -1738,3 +1738,90 @@ func TestGovernedCycleReorderBoundaryStopsAtHumanFinal(t *testing.T) {
 		t.Fatal("reorder boundary manufactured action authorization")
 	}
 }
+
+
+func TestGovernedCycleDiscoveredSelectionStopsAtHumanFinal(t *testing.T) {
+	root := t.TempDir()
+	rt, err := Open(filepath.Join(root, "state"), sawCirculationReasoner{})
+	if err != nil { t.Fatal(err) }
+
+	accept := func(em core.EmergION, why string) {
+		approved, decision, err := gov.Decide(em, gov.Approve, "HUMAN_FINAL", why)
+		if err != nil { t.Fatal(err) }
+		decisionID, err := rt.store.SaveDecision(decision)
+		if err != nil { t.Fatal(err) }
+		_, receipt, err := reg.Accept(approved, decisionID)
+		if err != nil { t.Fatal(err) }
+		if _, err := rt.store.SaveAccepted(receipt); err != nil { t.Fatal(err) }
+	}
+
+	runtime := fieldruntime.Runtime{Store: rt.store}
+	captureMember := func(name string) core.EmergION {
+		memberRuntime := fieldruntime.Runtime{
+			Store:    rt.store,
+			Reasoner: sawCirculationReasoner{},
+		}
+		em, duplicate, err := memberRuntime.CaptureBytes(
+			context.Background(), name, []byte(name+" evidence"), "selection_cycle_fixture",
+		)
+		if err != nil { t.Fatal(err) }
+		if duplicate { t.Fatal("member unexpectedly duplicate") }
+		accept(em, "accept realization")
+		return em
+	}
+
+	a := captureMember("selection-cycle-A")
+	b := captureMember("selection-cycle-B")
+
+	for _, member := range []core.EmergION{a, b} {
+		identity, duplicate, err := runtime.CaptureRealizationIdentity(
+			context.Background(), member.IDN, "KNIFE",
+		)
+		if err != nil { t.Fatal(err) }
+		if duplicate { t.Fatal("identity unexpectedly duplicate") }
+		accept(identity, "accept realization identity")
+	}
+
+	captureOutcome := func(kinID string, succeeded bool) {
+		request := adapters.ExecutionRequest{
+			EmergIONID: kinID,
+			Adapter: "LOCAL_GEMMA",
+			Action: "ANALYZE",
+		}
+		result := adapters.ExecutionResult{
+			Adapter: "LOCAL_GEMMA",
+			Action: "ANALYZE",
+			Succeeded: succeeded,
+		}
+		signal, duplicate, err := runtime.CaptureExecutionResult(
+			context.Background(), request, result,
+		)
+		if err != nil { t.Fatal(err) }
+		if duplicate { t.Fatal("execution result unexpectedly duplicate") }
+		accept(signal, "accept execution observation")
+	}
+	captureOutcome(a.IDN, true)
+	captureOutcome(b.IDN, false)
+
+	selection, pending, err := rt.capturePendingRealizationSelection(context.Background())
+	if err != nil { t.Fatal(err) }
+	if !pending { t.Fatal("discovered selection did not stop for HUMAN_FINAL") }
+	if selection.STA != core.StateAtGOV {
+		t.Fatalf("selection state = %q want AtGOV", selection.STA)
+	}
+	if selection.REL["source_kind"] != "REALIZATION_SELECTION" {
+		t.Fatalf("source_kind = %q", selection.REL["source_kind"])
+	}
+	if selection.REL["selected_realization"] != a.IDN {
+		t.Fatalf("selected = %q want %q", selection.REL["selected_realization"], a.IDN)
+	}
+
+	state, err := rt.state()
+	if err != nil { t.Fatal(err) }
+	if _, ok := state.AtGOV[selection.IDN]; !ok {
+		t.Fatal("selection did not remain AtGOV")
+	}
+	if len(state.ActionAuthorizations) != 0 {
+		t.Fatal("selection boundary manufactured action authorization")
+	}
+}
