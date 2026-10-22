@@ -46,6 +46,7 @@ func TestSelectedRealizationQExecuteObservesConcurrently(t *testing.T) {
 				version: "v1",
 				result: reason.Result{
 					Summary: evidence,
+					Relationships: map[string]string{"target_thing": "KNIFE"},
 					Capabilities: []string{"ANALYZE"},
 					Facts: []string{evidence},
 					Risk: "L",
