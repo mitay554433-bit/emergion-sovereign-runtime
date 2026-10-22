@@ -114,7 +114,7 @@ func TestExecuteOneSafeActionPrioritizesAcceptedReorderSelection(t *testing.T) {
 		context.Background(),
 		reason.GemmaCLI{
 			Binary: binary, Model: model, Threads: 1,
-			Context: 256, MaxTokens: 32, Timeout: 5 * time.Second,
+			Context: 2048, MaxTokens: 64, Timeout: 5 * time.Second,
 		},
 	)
 	if err != nil { t.Fatal(err) }
