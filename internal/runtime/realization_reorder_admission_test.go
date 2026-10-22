@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"emergion-sovereign-runtime/internal/adapters"
 	"emergion-sovereign-runtime/internal/core"
 	"emergion-sovereign-runtime/internal/store"
 )
@@ -25,11 +26,42 @@ func TestCaptureObservedRealizationReorderAdmitsAtGOV(t *testing.T) {
 		})
 	}
 
-	for _, result := range []core.EmergION{
-		acceptedExecutionResultFixture("R-A", "E-A", "LOCAL_GEMMA", "ANALYZE", false),
-		acceptedExecutionResultFixture("R-B", "E-B", "LOCAL_GEMMA", "ANALYZE", true),
+	r := Runtime{Store: s}
+	for _, outcome := range []struct {
+		parent    string
+		succeeded bool
+	}{
+		{parent: "E-A", succeeded: false},
+		{parent: "E-B", succeeded: true},
 	} {
-		acceptRealizationForSelectionGovernance(t, s, result)
+		request := adapters.ExecutionRequest{
+			EmergIONID:      outcome.parent,
+			SourceHash:      outcome.parent + "-source",
+			AuthorizationID: "EV-Q-" + outcome.parent,
+			Authority:       "HUMAN_FINAL",
+			Adapter:         "LOCAL_GEMMA",
+			Action:          "ANALYZE",
+		}
+		request.TransitionEmergIONID = adapters.ExecutionTransitionID(request)
+		result := adapters.BindExecutionResult(
+			request,
+			adapters.ExecutionResult{
+				Succeeded: outcome.succeeded,
+				Output:    "observed realization execution",
+				Error: func() string {
+					if outcome.succeeded { return "" }
+					return "observed execution failure"
+				}(),
+			},
+		)
+		signal, duplicate, err := r.CaptureGovernedExecutionResult(
+			context.Background(),
+			request,
+			result,
+		)
+		if err != nil { t.Fatal(err) }
+		if duplicate { t.Fatal("execution result unexpectedly duplicate") }
+		acceptRealizationForSelectionGovernance(t, s, signal)
 	}
 
 	p := RealizationPopulation{
@@ -44,7 +76,6 @@ func TestCaptureObservedRealizationReorderAdmitsAtGOV(t *testing.T) {
 		}},
 	}
 
-	r := Runtime{Store: s}
 	em, duplicate, err := r.CaptureObservedRealizationReorder(context.Background(), p)
 	if err != nil { t.Fatal(err) }
 	if duplicate { t.Fatal("first reorder unexpectedly duplicate") }
