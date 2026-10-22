@@ -27,12 +27,12 @@ func recurrenceStateFixture() core.State {
 	return st
 }
 
-func TestResolveAcceptedRealizationReorderTargetsSelectedREGRealization(t *testing.T) {
+func TestResolveAcceptedRealizationRecurrenceTargetsSelectedREGRealization(t *testing.T) {
 	st := recurrenceStateFixture()
-	got, err := ResolveAcceptedRealizationReorder(st, "E-R", true)
+	got, err := ResolveAcceptedRealizationRecurrence(st, "E-R", true)
 	if err != nil { t.Fatal(err) }
-	if got.ReorderEmergION != "E-R" {
-		t.Fatalf("reorder = %q", got.ReorderEmergION)
+	if got.SelectionEmergION != "E-R" {
+		t.Fatalf("reorder = %q", got.SelectionEmergION)
 	}
 	if got.SelectedRealization != "E-B" {
 		t.Fatalf("selected = %q want E-B", got.SelectedRealization)
@@ -62,34 +62,60 @@ func TestResolveAcceptedRealizationReorderTargetsSelectedREGRealization(t *testi
 	}
 }
 
-func TestResolveAcceptedRealizationReorderRejectsAtGOVReorder(t *testing.T) {
+
+func TestResolveAcceptedRealizationRecurrenceAcceptsInitialSelection(t *testing.T) {
+	st := core.EmptyState()
+	st.Accepted["E-A"] = core.EmergION{
+		IDN: "E-A",
+		CAP: []string{"ANALYZE"},
+	}
+	st.Accepted["E-S"] = core.EmergION{
+		IDN: "E-S",
+		REL: map[string]string{
+			"source_kind": "REALIZATION_SELECTION",
+			"target_thing": "KNIFE",
+			"selected_realization": "E-A",
+		},
+	}
+
+	got, err := ResolveAcceptedRealizationRecurrence(st, "E-S", true)
+	if err != nil { t.Fatal(err) }
+	if got.SelectionEmergION != "E-S" {
+		t.Fatalf("selection EmergION = %q want E-S", got.SelectionEmergION)
+	}
+	if got.TargetThing != "KNIFE" || got.SelectedRealization != "E-A" {
+		t.Fatalf("recurrence = %#v", got)
+	}
+}
+
+func TestResolveAcceptedRealizationRecurrenceRejectsAtGOVReorder(t *testing.T) {
 	st := recurrenceStateFixture()
 	reorder := st.Accepted["E-R"]
 	delete(st.Accepted, "E-R")
 	st.AtGOV["E-R"] = reorder
 
-	_, err := ResolveAcceptedRealizationReorder(st, "E-R", true)
+	_, err := ResolveAcceptedRealizationRecurrence(st, "E-R", true)
 	if err == nil || !strings.Contains(err.Error(), "not REG-accepted") {
 		t.Fatalf("err = %v want reorder REG rejection", err)
 	}
 }
 
-func TestResolveAcceptedRealizationReorderRejectsNonREGSelectedRealization(t *testing.T) {
+func TestResolveAcceptedRealizationRecurrenceRejectsNonREGSelectedRealization(t *testing.T) {
 	st := recurrenceStateFixture()
 	selected := st.Accepted["E-B"]
 	delete(st.Accepted, "E-B")
 	st.AtGOV["E-B"] = selected
 
-	_, err := ResolveAcceptedRealizationReorder(st, "E-R", true)
+	_, err := ResolveAcceptedRealizationRecurrence(st, "E-R", true)
 	if err == nil || !strings.Contains(err.Error(), "selected realization") {
 		t.Fatalf("err = %v want selected realization REG rejection", err)
 	}
 }
 
-func TestResolveAcceptedRealizationReorderCreatesNoAuthorization(t *testing.T) {
+func TestResolveAcceptedRealizationRecurrenceCreatesNoAuthorization(t *testing.T) {
 	st := recurrenceStateFixture()
 	before := len(st.ActionAuthorizations)
-	got, err := ResolveAcceptedRealizationReorder(st, "E-R", true)
+	got, err := ResolveAcceptedRealizationRecurrence(st, "E-R", true)
 	if err != nil { t.Fatal(err) }
 	if len(st.ActionAuthorizations) != before {
 		t.Fatal("recurrence resolution created authorization")
