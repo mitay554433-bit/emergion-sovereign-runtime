@@ -1835,7 +1835,7 @@ func (r Runtime) executeWithConcurrentObservation(
 	ctx context.Context,
 	request adapters.ExecutionRequest,
 	execute func() (adapters.ExecutionResult, error),
-) (adapters.ExecutionResult, error) {
+) (adapters.ExecutionResult, error, error) {
 	observationStarted := time.Now()
 	observationDone := make(chan struct{})
 	observationSamples := make(chan int, 1)
@@ -1893,10 +1893,10 @@ func (r Runtime) executeWithConcurrentObservation(
 		"execution_observation",
 		request.TransitionEmergIONID,
 	); err != nil {
-		return result, err
+		return result, execErr, err
 	}
 
-	return result, execErr
+	return result, execErr, nil
 }
 
 func (r Runtime) ExecuteAction(
@@ -1957,7 +1957,10 @@ func (r Runtime) ExecuteAction(
 		)
 	}
 
-	result, execErr := r.executeWithConcurrentObservation(ctx, request, execute)
+	result, execErr, observationErr := r.executeWithConcurrentObservation(ctx, request, execute)
+	if observationErr != nil {
+		return request, result, core.EmergION{}, false, observationErr
+	}
 
 	if execErr != nil && result.Error == "" {
 		result.Error = execErr.Error()
@@ -2057,13 +2060,16 @@ func (r Runtime) ExecuteOneSafeAction(
 				Gemma: gemma,
 			}
 
-			result, execErr := r.executeWithConcurrentObservation(
+			result, execErr, observationErr := r.executeWithConcurrentObservation(
 				ctx,
 				request,
 				func() (adapters.ExecutionResult, error) {
 					return executor.Execute(request)
 				},
 			)
+			if observationErr != nil {
+				return core.EmergION{}, false, observationErr
+			}
 			if execErr != nil && result.Error == "" {
 				result.Error = execErr.Error()
 			}
