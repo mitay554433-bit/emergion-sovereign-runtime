@@ -1282,3 +1282,68 @@ func TestHumanFinalRowsSelectOnlyAtGOV(t *testing.T) {
 		t.Fatal("lifecycle diagnostic disclosure missing")
 	}
 }
+
+
+func TestRealizationRowsProjectAcceptedAndPendingGovernedOrder(t *testing.T) {
+	st := core.EmptyState()
+
+	st.Accepted["E-SELECTION"] = core.EmergION{
+		IDN: "E-SELECTION",
+		STA: core.StateAccepted,
+		REL: map[string]string{
+			"source_kind": "REALIZATION_SELECTION",
+			"target_thing": "KNIFE",
+			"selected_realization": "E-KNIFE-A",
+			"runners_up": "E-KNIFE-B,E-KNIFE-C",
+		},
+	}
+	rows := realizationRows(st)
+	if len(rows) != 1 {
+		t.Fatalf("realization rows = %d want 1", len(rows))
+	}
+	if rows[0].Selected != "E-KNIFE-A" || rows[0].Status != "REG ACCEPTED" {
+		t.Fatalf("accepted realization projection = %#v", rows[0])
+	}
+
+	st.AtGOV["E-REORDER"] = core.EmergION{
+		IDN: "E-REORDER",
+		STA: core.StateAtGOV,
+		REL: map[string]string{
+			"source_kind": "REALIZATION_REORDER",
+			"target_thing": "KNIFE",
+			"selected_realization": "E-KNIFE-B",
+			"runners_up": "E-KNIFE-A,E-KNIFE-C",
+		},
+	}
+	rows = realizationRows(st)
+	if len(rows) != 1 {
+		t.Fatalf("pending realization rows = %d want 1", len(rows))
+	}
+	if rows[0].Selected != "E-KNIFE-B" ||
+		rows[0].Status != "PENDING HUMAN_FINAL" ||
+		rows[0].SourceID != "E-REORDER" {
+		t.Fatalf("pending realization projection = %#v", rows[0])
+	}
+
+	root := t.TempDir()
+	if _, err := Current(root, st); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(root, "field.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(b)
+	for _, want := range []string{
+		"<h2>REALIZATION FIELD</h2>",
+		"KNIFE",
+		"E-KNIFE-B",
+		"E-KNIFE-A,E-KNIFE-C",
+		"PENDING HUMAN_FINAL",
+		"E-REORDER",
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("REALIZATION FIELD missing %q", want)
+		}
+	}
+}
