@@ -7,6 +7,7 @@ import (
 
 	"emergion-sovereign-runtime/internal/core"
 	"emergion-sovereign-runtime/internal/field"
+	"emergion-sovereign-runtime/internal/reason"
 	"emergion-sovereign-runtime/internal/store"
 )
 
@@ -22,26 +23,40 @@ func acceptedDiscoveryIdentity(t *testing.T, r Runtime, member core.EmergION, th
 
 func addAcceptedDiscoveryOutcome(
 	t *testing.T,
-	s *store.Store,
+	r Runtime,
 	parent string,
 	succeeded bool,
 ) {
 	t.Helper()
 	fact := "execution_failed"
 	if succeeded { fact = "execution_succeeded" }
-	em := core.EmergION{
-		IDN: "R-" + parent,
-		STA: core.StateAtGOV,
-		REL: map[string]string{
-			"source_kind": "EXECUTION_RESULT",
-			"parent_emergion": parent,
-			"adapter": "LOCAL_GEMMA",
-			"action": "ANALYZE",
+
+	outcomeRuntime := r
+	outcomeRuntime.Reasoner = fixedReasoner{
+		name: "discovery-execution-result",
+		version: "v1",
+		result: reason.Result{
+			Summary: "governed execution result fixture",
+			Relationships: map[string]string{
+				"source_kind": "EXECUTION_RESULT",
+				"parent_emergion": parent,
+				"adapter": "LOCAL_GEMMA",
+				"action": "ANALYZE",
+			},
+			Capabilities: []string{"OBS", "VLD"},
+			Facts: []string{"execution_result_observed", fact},
+			Risk: "L",
 		},
-		VAL: core.Validation{Facts: []string{fact}},
 	}
-	if _, err := s.SaveCandidate(em); err != nil { t.Fatal(err) }
-	acceptRealizationIdentityFixture(t, s, em)
+	em, duplicate, err := outcomeRuntime.CaptureBytes(
+		context.Background(),
+		"execution-result-"+parent,
+		[]byte("execution result "+parent+" "+fact),
+		"execution_result_fixture",
+	)
+	if err != nil { t.Fatal(err) }
+	if duplicate { t.Fatal("execution result unexpectedly duplicate") }
+	acceptRealizationIdentityFixture(t, r.Store, em)
 }
 
 func TestCaptureNextDiscoveredRealizationSelectionAdmitsUniqueStrongestAtGOV(t *testing.T) {
@@ -52,8 +67,8 @@ func TestCaptureNextDiscoveredRealizationSelectionAdmitsUniqueStrongestAtGOV(t *
 	b := captureAcceptedIdentityMember(t, r, "knife-B")
 	acceptedDiscoveryIdentity(t, r, a, "KNIFE")
 	acceptedDiscoveryIdentity(t, r, b, "KNIFE")
-	addAcceptedDiscoveryOutcome(t, s, a.IDN, false)
-	addAcceptedDiscoveryOutcome(t, s, b.IDN, true)
+	addAcceptedDiscoveryOutcome(t, r, a.IDN, false)
+	addAcceptedDiscoveryOutcome(t, r, b.IDN, true)
 
 	selection, proposed, err := r.CaptureNextDiscoveredRealizationSelection(context.Background())
 	if err != nil { t.Fatal(err) }
@@ -87,8 +102,8 @@ func TestCaptureNextDiscoveredRealizationSelectionSkipsUnresolvedPopulation(t *t
 	b := captureAcceptedIdentityMember(t, r, "knife-B")
 	acceptedDiscoveryIdentity(t, r, a, "KNIFE")
 	acceptedDiscoveryIdentity(t, r, b, "KNIFE")
-	addAcceptedDiscoveryOutcome(t, s, a.IDN, true)
-	addAcceptedDiscoveryOutcome(t, s, b.IDN, true)
+	addAcceptedDiscoveryOutcome(t, r, a.IDN, true)
+	addAcceptedDiscoveryOutcome(t, r, b.IDN, true)
 
 	if selection, proposed, err := r.CaptureNextDiscoveredRealizationSelection(
 		context.Background(),
@@ -107,8 +122,8 @@ func TestCaptureNextDiscoveredRealizationSelectionKeepsDuplicatePendingAtGOV(t *
 	b := captureAcceptedIdentityMember(t, r, "knife-B")
 	acceptedDiscoveryIdentity(t, r, a, "KNIFE")
 	acceptedDiscoveryIdentity(t, r, b, "KNIFE")
-	addAcceptedDiscoveryOutcome(t, s, a.IDN, false)
-	addAcceptedDiscoveryOutcome(t, s, b.IDN, true)
+	addAcceptedDiscoveryOutcome(t, r, a.IDN, false)
+	addAcceptedDiscoveryOutcome(t, r, b.IDN, true)
 
 	first, proposed, err := r.CaptureNextDiscoveredRealizationSelection(context.Background())
 	if err != nil || !proposed { t.Fatalf("first selection proposed=%t err=%v", proposed, err) }
