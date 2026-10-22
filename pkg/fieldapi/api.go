@@ -159,6 +159,14 @@ func (r *Runtime) SafeAction(
 	)
 }
 
+func (r *Runtime) capturePendingRealizationReorder(
+	ctx context.Context,
+) (core.EmergION, bool, error) {
+	return (fieldruntime.Runtime{
+		Store: r.store,
+	}).CaptureNextObservedRealizationReorder(ctx)
+}
+
 func (r *Runtime) GovernedCycle(
 	ctx context.Context,
 	gemma reason.GemmaCLI,
@@ -184,6 +192,18 @@ func (r *Runtime) GovernedCycle(
 	}
 	if proposed {
 		circulated = append(circulated, program)
+	}
+
+	reorder, proposedReorder, err := r.capturePendingRealizationReorder(ctx)
+	if err != nil {
+		return circulated, core.EmergION{}, false, err
+	}
+	if proposedReorder {
+		circulated = append(circulated, reorder)
+		// A changed order is new governed evidence. Stop this cycle at AtGOV
+		// rather than executing either the prior or proposed strongest
+		// realization before HUMAN_FINAL/REG resolves the transition.
+		return circulated, core.EmergION{}, false, nil
 	}
 
 	signal, executed, err := (fieldruntime.Runtime{
