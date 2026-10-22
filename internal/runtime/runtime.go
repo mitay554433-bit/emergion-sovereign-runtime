@@ -965,7 +965,7 @@ func deriveDelta(previous core.EmergION, analysis reason.Result) []string {
 func (r Runtime) validateLineage(analysis *reason.Result) error {
 	if r.Reasoner.Name() != "execution-signal" {
 		for _, key := range []string{
-			"parent_emergion",
+			"kin_emergion",
 			"authorization_event",
 			"parent",
 			"origin",
@@ -1744,7 +1744,7 @@ func executionAlreadyObserved(
 			if em.REL["source_kind"] != "EXECUTION_RESULT" {
 				continue
 			}
-			if em.REL["parent_emergion"] != parentEmergION {
+			if em.REL["kin_emergion"] != parentEmergION {
 				continue
 			}
 			if em.REL["adapter"] != adapter {
@@ -1867,7 +1867,7 @@ func (r Runtime) executeWithConcurrentObservation(
 			Summary: "bounded concurrent execution observation",
 			Relationships: map[string]string{
 				"source_kind": "EXECUTION_OBSERVATION",
-				"parent_emergion": request.EmergIONID,
+				"kin_emergion": request.EmergIONID,
 				"adapter": request.Adapter,
 				"action": request.Action,
 			},
