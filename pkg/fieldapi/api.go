@@ -186,6 +186,20 @@ func (r *Runtime) GovernedCycle(
 		circulated = append(circulated, program)
 	}
 
+	reorder, proposedReorder, err := (fieldruntime.Runtime{
+		Store: r.store,
+	}).CaptureNextObservedRealizationReorder(ctx)
+	if err != nil {
+		return circulated, core.EmergION{}, false, err
+	}
+	if proposedReorder {
+		circulated = append(circulated, reorder)
+		// A changed order is new governed evidence. Stop this cycle at AtGOV
+		// rather than executing either the prior or proposed strongest
+		// realization before HUMAN_FINAL/REG resolves the transition.
+		return circulated, core.EmergION{}, false, nil
+	}
+
 	signal, executed, err := (fieldruntime.Runtime{
 		Store: r.store,
 	}).ExecuteOneSafeAction(
