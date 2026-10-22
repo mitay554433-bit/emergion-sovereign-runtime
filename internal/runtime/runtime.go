@@ -1831,6 +1831,74 @@ func (r Runtime) AuthorizeAction(
 	return r.Store.SaveActionAuthorization(receipt)
 }
 
+func (r Runtime) executeWithConcurrentObservation(
+	ctx context.Context,
+	request adapters.ExecutionRequest,
+	execute func() (adapters.ExecutionResult, error),
+) (adapters.ExecutionResult, error, error) {
+	observationStarted := time.Now()
+	observationDone := make(chan struct{})
+	observationSamples := make(chan int, 1)
+	go func() {
+		ticker := time.NewTicker(25 * time.Millisecond)
+		defer ticker.Stop()
+		n := 1
+		for {
+			select {
+			case <-ticker.C:
+				n++
+			case <-observationDone:
+				observationSamples <- n
+				return
+			}
+		}
+	}()
+
+	result, execErr := execute()
+	close(observationDone)
+	sampleCount := <-observationSamples
+	observationFinished := time.Now()
+
+	observationRuntime := r
+	observationRuntime.Reasoner = fixedReasoner{
+		name: "execution-signal",
+		version: "v1",
+		result: reason.Result{
+			Summary: "bounded concurrent execution observation",
+			Relationships: map[string]string{
+				"source_kind": "EXECUTION_OBSERVATION",
+				"parent_emergion": request.EmergIONID,
+				"adapter": request.Adapter,
+				"action": request.Action,
+			},
+			Capabilities: []string{"OBS", "CMP"},
+			Facts: []string{"execution_observed_concurrently"},
+			Risk: "L",
+		},
+	}
+	observationContent := fmt.Sprintf(
+		"XS/1\nK=XO\nP=%s\nH=%s\nD=%s\nX=%s\nB=%s\nE=%s\nN=%d\n",
+		request.EmergIONID,
+		request.SourceHash,
+		request.Adapter,
+		request.Action,
+		observationStarted.UTC().Format(time.RFC3339Nano),
+		observationFinished.UTC().Format(time.RFC3339Nano),
+		sampleCount,
+	)
+	if _, _, err := observationRuntime.captureBytes(
+		ctx,
+		"execution-observation",
+		[]byte(observationContent),
+		"execution_observation",
+		request.TransitionEmergIONID,
+	); err != nil {
+		return result, execErr, err
+	}
+
+	return result, execErr, nil
+}
+
 func (r Runtime) ExecuteAction(
 	ctx context.Context,
 	emergionID string,
@@ -1863,8 +1931,7 @@ func (r Runtime) ExecuteAction(
 		return adapters.ExecutionRequest{}, adapters.ExecutionResult{}, core.EmergION{}, false, err
 	}
 
-	var result adapters.ExecutionResult
-	var execErr error
+	var execute func() (adapters.ExecutionResult, error)
 
 	switch request.Adapter {
 	case "LOCAL_GEMMA":
@@ -1872,18 +1939,27 @@ func (r Runtime) ExecuteAction(
 			Store: r.Store,
 			Gemma: gemma,
 		}
-		result, execErr = executor.Execute(request)
+		execute = func() (adapters.ExecutionResult, error) {
+			return executor.Execute(request)
+		}
 	case "GITHUB":
 		executor := adapters.GitHubProgramExecutor{
 			Store:   r.Store,
 			WorkDir: ".",
 		}
-		result, execErr = executor.Execute(request)
+		execute = func() (adapters.ExecutionResult, error) {
+			return executor.Execute(request)
+		}
 	default:
 		return request, adapters.ExecutionResult{}, core.EmergION{}, false, fmt.Errorf(
 			"no local executor connected for adapter %s",
 			request.Adapter,
 		)
+	}
+
+	result, execErr, observationErr := r.executeWithConcurrentObservation(ctx, request, execute)
+	if observationErr != nil {
+		return request, result, core.EmergION{}, false, observationErr
 	}
 
 	if execErr != nil && result.Error == "" {
@@ -1984,31 +2060,13 @@ func (r Runtime) ExecuteOneSafeAction(
 				Gemma: gemma,
 			}
 
-			observationStarted := time.Now()
-			observationDone := make(chan struct{})
-			observationSamples := make(chan int, 1)
-			go func() {
-				ticker := time.NewTicker(25 * time.Millisecond)
-				defer ticker.Stop()
-				n := 1
-				for {
-					select {
-					case <-ticker.C:
-						n++
-					case <-observationDone:
-						observationSamples <- n
-						return
-					}
-				}
-			}()
-			result, execErr := executor.Execute(request)
-			close(observationDone)
-			sampleCount := <-observationSamples
-			observationFinished := time.Now()
-			observationRuntime := r
-			observationRuntime.Reasoner = fixedReasoner{name: "execution-signal", version: "v1", result: reason.Result{Summary: "bounded concurrent execution observation", Relationships: map[string]string{"source_kind": "EXECUTION_OBSERVATION", "parent_emergion": request.EmergIONID, "adapter": request.Adapter, "action": request.Action}, Capabilities: []string{"OBS", "CMP"}, Facts: []string{"execution_observed_concurrently"}, Risk: "L"}}
-			observationContent := fmt.Sprintf("XS/1\nK=XO\nP=%s\nH=%s\nD=%s\nX=%s\nB=%s\nE=%s\nN=%d\n", request.EmergIONID, request.SourceHash, request.Adapter, request.Action, observationStarted.UTC().Format(time.RFC3339Nano), observationFinished.UTC().Format(time.RFC3339Nano), sampleCount)
-			_, _, observationErr := observationRuntime.captureBytes(ctx, "execution-observation", []byte(observationContent), "execution_observation", request.TransitionEmergIONID)
+			result, execErr, observationErr := r.executeWithConcurrentObservation(
+				ctx,
+				request,
+				func() (adapters.ExecutionResult, error) {
+					return executor.Execute(request)
+				},
+			)
 			if observationErr != nil {
 				return core.EmergION{}, false, observationErr
 			}
