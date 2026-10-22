@@ -106,7 +106,7 @@ func TestExecuteOneSafeActionPrioritizesAcceptedReorderSelection(t *testing.T) {
 	model := filepath.Join(root, "model.gguf")
 	if err := os.WriteFile(model, []byte("test"), 0o600); err != nil { t.Fatal(err) }
 	binary := filepath.Join(root, "llama-cli")
-	script := "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo fake; exit 0; fi\necho 'S|safe recurrence analysis'\necho 'K|L'\necho 'F|safe recurrence analysis'\necho 'C|ANALYZE'\necho 'Z'\n"
+	script := "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo fake; exit 0; fi\necho 'S|cycle evidence E-B'\necho 'K|L'\necho 'F|cycle evidence E-B'\necho 'C|ANALYZE'\necho 'Z'\n"
 	if err := os.WriteFile(binary, []byte(script), 0o700); err != nil { t.Fatal(err) }
 
 	r := Runtime{Store: s}
