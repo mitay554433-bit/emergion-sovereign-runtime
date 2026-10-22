@@ -1758,17 +1758,8 @@ func TestGovernedCycleDiscoveredSelectionStopsAtHumanFinal(t *testing.T) {
 	runtime := fieldruntime.Runtime{Store: rt.store}
 	captureMember := func(name string) core.EmergION {
 		memberRuntime := fieldruntime.Runtime{
-			Store: rt.store,
-			Reasoner: fieldapiFixedReasoner{
-				name: "selection-cycle-member",
-				result: reason.Result{
-					Summary: name,
-					Relationships: map[string]string{"source_name": name},
-					Capabilities: []string{"OBS"},
-					Facts: []string{name},
-					Risk: "L",
-				},
-			},
+			Store:    rt.store,
+			Reasoner: sawCirculationReasoner{},
 		}
 		em, duplicate, err := memberRuntime.CaptureBytes(
 			context.Background(), name, []byte(name+" evidence"), "selection_cycle_fixture",
