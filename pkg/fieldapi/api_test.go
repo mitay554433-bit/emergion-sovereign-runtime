@@ -1624,3 +1624,117 @@ func TestHumanFinalApprovalRenderCurrentPublishesVerifiedDeliverable(t *testing.
 		t.Fatal(err)
 	}
 }
+
+
+func TestGovernedCycleReorderBoundaryStopsAtHumanFinal(t *testing.T) {
+	root := t.TempDir()
+	rt, err := Open(filepath.Join(root, "state"), sawCirculationReasoner{})
+	if err != nil { t.Fatal(err) }
+
+	accept := func(em core.EmergION, why string) {
+		if _, err := rt.store.SaveCandidate(em); err != nil { t.Fatal(err) }
+		approved, decision, err := gov.Decide(em, gov.Approve, "HUMAN_FINAL", why)
+		if err != nil { t.Fatal(err) }
+		decisionID, err := rt.store.SaveDecision(decision)
+		if err != nil { t.Fatal(err) }
+		_, receipt, err := reg.Accept(approved, decisionID)
+		if err != nil { t.Fatal(err) }
+		if _, err := rt.store.SaveAccepted(receipt); err != nil { t.Fatal(err) }
+	}
+
+	member := func(id string) core.EmergION {
+		evidence, err := rt.store.Preserve([]byte(id + " evidence"))
+		if err != nil { t.Fatal(err) }
+		return core.EmergION{
+			IDN: id, STA: core.StateAtGOV,
+			MEM: core.Memory{
+				SourceHash: evidence.Hash, Codec: evidence.Codec,
+				Bytes: evidence.Bytes, Stored: evidence.Stored, Summary: id + " evidence",
+			},
+			REL: map[string]string{"target_thing": "KNIFE"},
+			CAP: []string{"ANALYZE"},
+			VAL: core.Validation{
+				Facts: []string{id + " evidence"}, Risk: "L", Recoil: true, WVC: true,
+			},
+			EVO: core.Evolution{Version: 1},
+		}
+	}
+
+	a := member("E-CYCLE-REORDER-A")
+	b := member("E-CYCLE-REORDER-B")
+	accept(a, "accept realization A")
+	accept(b, "accept realization B")
+
+	population := fieldruntime.RealizationPopulation{
+		TargetThing: "KNIFE",
+		Members: []string{a.IDN, b.IDN},
+		Comparisons: []fieldruntime.RealizationComparison{{
+			TargetThing: "KNIFE", Left: a.IDN, Right: b.IDN,
+			Result: fieldruntime.RealizationLeftPreferred,
+			Differences: []string{"INITIAL:A>B"},
+		}},
+	}
+	runtime := fieldruntime.Runtime{Store: rt.store}
+	selection, duplicate, err := runtime.CaptureRealizationSelection(context.Background(), population)
+	if err != nil { t.Fatal(err) }
+	if duplicate { t.Fatal("selection unexpectedly duplicate") }
+	accept(selection, "accept initial realization selection")
+
+	captureResult := func(parent string, succeeded bool) {
+		request := adapters.ExecutionRequest{
+			EmergIONID: parent,
+			SourceHash: parent + "-source",
+			AuthorizationID: "EV-Q-" + parent,
+			Authority: "HUMAN_FINAL",
+			Adapter: "LOCAL_GEMMA",
+			Action: "ANALYZE",
+		}
+		request.TransitionEmergIONID = adapters.ExecutionTransitionID(request)
+		result := adapters.BindExecutionResult(request, adapters.ExecutionResult{
+			Succeeded: succeeded,
+			Output: "observed execution",
+			Error: func() string {
+				if succeeded { return "" }
+				return "observed execution failure"
+			}(),
+		})
+		signal, duplicate, err := runtime.CaptureGovernedExecutionResult(
+			context.Background(), request, result,
+		)
+		if err != nil { t.Fatal(err) }
+		if duplicate { t.Fatal("execution result unexpectedly duplicate") }
+		accept(signal, "accept governed execution result")
+	}
+	captureResult(a.IDN, false)
+	captureResult(b.IDN, true)
+
+	reorder, pending, err := rt.capturePendingRealizationReorder(context.Background())
+	if err != nil { t.Fatal(err) }
+	if !pending { t.Fatal("changed order did not stop cycle for HUMAN_FINAL") }
+	if reorder.STA != core.StateAtGOV {
+		t.Fatalf("reorder state = %q want AtGOV", reorder.STA)
+	}
+	if reorder.REL["source_kind"] != "REALIZATION_REORDER" {
+		t.Fatalf("source_kind = %q", reorder.REL["source_kind"])
+	}
+	if reorder.REL["selected_realization"] != b.IDN {
+		t.Fatalf("selected = %q want %q", reorder.REL["selected_realization"], b.IDN)
+	}
+
+	// Re-check before HUMAN_FINAL. The same pending evidence must continue to
+	// stop the cycle rather than allowing execution to fall through.
+	same, pending, err := rt.capturePendingRealizationReorder(context.Background())
+	if err != nil { t.Fatal(err) }
+	if !pending || same.IDN != reorder.IDN {
+		t.Fatal("pending reorder did not remain a cycle stop condition")
+	}
+
+	state, err := rt.state()
+	if err != nil { t.Fatal(err) }
+	if _, ok := state.AtGOV[reorder.IDN]; !ok {
+		t.Fatal("reorder did not remain AtGOV")
+	}
+	if len(state.ActionAuthorizations) != 0 {
+		t.Fatal("reorder boundary manufactured action authorization")
+	}
+}
