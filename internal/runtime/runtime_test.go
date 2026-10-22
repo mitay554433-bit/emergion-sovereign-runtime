@@ -1542,7 +1542,7 @@ func TestExecutionAlreadyObservedUsesCanonicalFieldLineage(t *testing.T) {
 		IDN: "E-EXECUTION-SIGNAL",
 		REL: map[string]string{
 			"source_kind":     "EXECUTION_RESULT",
-			"parent_emergion": "E-PARENT",
+			"kin_emergion": "E-PARENT",
 			"adapter":         "LOCAL_GEMMA",
 			"action":          "ANALYZE",
 		},
@@ -1667,7 +1667,7 @@ func TestExecutionObservationRemainsConfinedToExactKinMember(t *testing.T) {
 		STA: core.StateAtGOV,
 		REL: map[string]string{
 			"source_kind":     "EXECUTION_RESULT",
-			"parent_emergion": predecessor.IDN,
+			"kin_emergion": predecessor.IDN,
 			"adapter":         "LOCAL_GEMMA",
 			"action":          "ANALYZE",
 		},
@@ -2241,10 +2241,10 @@ func TestSAWSourceReentersGovernedExecutionAndRecapture(t *testing.T) {
 		t.Fatalf("execution signal state = %s", signal.STA)
 	}
 
-	if signal.REL["parent_emergion"] != accepted.IDN {
+	if signal.REL["kin_emergion"] != accepted.IDN {
 		t.Fatalf(
 			"execution signal parent = %q want %q",
-			signal.REL["parent_emergion"],
+			signal.REL["kin_emergion"],
 			accepted.IDN,
 		)
 	}
@@ -4036,10 +4036,10 @@ func TestGovernedProviderCompositionCirculatesThroughSAWExecutionRecapture(t *te
 		t.Fatal("execution RECAPTURE did not pass RECOIL/WVC")
 	}
 
-	if signal.REL["parent_emergion"] != acceptedSAW.IDN {
+	if signal.REL["kin_emergion"] != acceptedSAW.IDN {
 		t.Fatalf(
 			"execution parent = %q want %q",
-			signal.REL["parent_emergion"],
+			signal.REL["kin_emergion"],
 			acceptedSAW.IDN,
 		)
 	}
@@ -4054,7 +4054,7 @@ func TestGovernedProviderCompositionCirculatesThroughSAWExecutionRecapture(t *te
 		t.Fatal("execution RECAPTURE did not return to G")
 	}
 
-	if admittedSignal.REL["parent_emergion"] != acceptedSAW.IDN {
+	if admittedSignal.REL["kin_emergion"] != acceptedSAW.IDN {
 		t.Fatal("stored execution lineage changed")
 	}
 
