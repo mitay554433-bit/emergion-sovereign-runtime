@@ -23,9 +23,28 @@ func TestCaptureRealizationSelectionAdmitsAtGOV(t *testing.T) {
 	}
 
 	state := core.EmptyState()
-	state.Accepted["E-A"] = acceptedRealization("E-A")
-	state.Accepted["E-B"] = acceptedRealization("E-B")
-	state.Accepted["E-C"] = acceptedRealization("E-C")
+	for _, id := range []string{"E-A", "E-B", "E-C"} {
+		em := acceptedRealization(id)
+		state.Accepted[id] = em
+		acceptRealizationForSelectionGovernance(t, s, core.EmergION{
+			IDN: em.IDN,
+			STA: core.StateAtGOV,
+			MEM: core.Memory{
+				SourceHash: id + "-source",
+				Bytes:      1,
+				Stored:     1,
+				Summary:    id,
+			},
+			REL: map[string]string{"source_kind": "SOURCE"},
+			CAP: []string{"OBS"},
+			VAL: core.Validation{
+				Facts:  []string{id + " evidence"},
+				Recoil: true,
+				WVC:    true,
+			},
+			EVO: core.Evolution{Version: 1},
+		})
+	}
 
 	p := RealizationPopulation{
 		TargetThing: "KNIFE",
