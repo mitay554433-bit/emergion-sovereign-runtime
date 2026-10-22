@@ -70,6 +70,18 @@ func (r Runtime) CaptureRealizationSelection(
 	ctx context.Context,
 	population RealizationPopulation,
 ) (core.EmergION, bool, error) {
+	if r.Store == nil {
+		return core.EmergION{}, false, fmt.Errorf("runtime store not configured")
+	}
+
+	state, _, err := r.governedStateContext()
+	if err != nil {
+		return core.EmergION{}, false, err
+	}
+	if err := population.Validate(state); err != nil {
+		return core.EmergION{}, false, err
+	}
+
 	selection, selected, err := SelectStrongestRealization(population)
 	if err != nil {
 		return core.EmergION{}, false, err
