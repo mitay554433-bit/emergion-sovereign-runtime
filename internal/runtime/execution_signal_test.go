@@ -89,10 +89,10 @@ func TestExecutionResultReentersEmergIONPipeline(t *testing.T) {
 		)
 	}
 
-	if got.REL["parent_emergion"] != "E-PARENT" {
+	if got.REL["kin_emergion"] != "E-PARENT" {
 		t.Fatalf(
 			"parent = %q",
-			got.REL["parent_emergion"],
+			got.REL["kin_emergion"],
 		)
 	}
 	if got.REL["authorization_event"] != "EV-Q-PROOF" {
@@ -1386,10 +1386,10 @@ func TestGovernedRecursiveEmergenceTinyLoop(t *testing.T) {
 		t.Fatal("execution RECAPTURE did not pass RECOIL/WVC")
 	}
 
-	if signal.REL["parent_emergion"] != acceptedSAW.IDN {
+	if signal.REL["kin_emergion"] != acceptedSAW.IDN {
 		t.Fatalf(
 			"execution parent = %q want %q",
-			signal.REL["parent_emergion"],
+			signal.REL["kin_emergion"],
 			acceptedSAW.IDN,
 		)
 	}
@@ -1404,7 +1404,7 @@ func TestGovernedRecursiveEmergenceTinyLoop(t *testing.T) {
 		t.Fatal("execution RECAPTURE did not return to G")
 	}
 
-	if admittedSignal.REL["parent_emergion"] != acceptedSAW.IDN {
+	if admittedSignal.REL["kin_emergion"] != acceptedSAW.IDN {
 		t.Fatal("stored execution lineage changed")
 	}
 
@@ -1521,7 +1521,7 @@ func TestHistoricalExecutionSignalV1MaterializesVerifiedDeliverable(t *testing.T
 		output     = `{"summary":"historical verified output"}`
 	)
 
-	evidence := []byte(`{"schema":"EXECUTION_SIGNAL_V1","source_kind":"EXECUTION_RESULT","parent_emergion":"E-HISTORICAL-SOURCE","source_hash":"SOURCE-HISTORICAL-PROOF","authority":"CAP_ONLY","adapter":"LOCAL_GEMMA","action":"ANALYZE","succeeded":true,"output":"{\"summary\":\"historical verified output\"}"}`)
+	evidence := []byte(`{"schema":"EXECUTION_SIGNAL_V1","source_kind":"EXECUTION_RESULT","kin_emergion":"E-HISTORICAL-SOURCE","source_hash":"SOURCE-HISTORICAL-PROOF","authority":"CAP_ONLY","adapter":"LOCAL_GEMMA","action":"ANALYZE","succeeded":true,"output":"{\"summary\":\"historical verified output\"}"}`)
 
 	rt := Runtime{Store: s}
 	signalRuntime := rt
@@ -1532,7 +1532,7 @@ func TestHistoricalExecutionSignalV1MaterializesVerifiedDeliverable(t *testing.T
 			Summary: "bounded execution result observation",
 			Relationships: map[string]string{
 				"source_kind":     "EXECUTION_RESULT",
-				"parent_emergion": sourceID,
+				"kin_emergion": sourceID,
 				"adapter":         "LOCAL_GEMMA",
 				"action":          "ANALYZE",
 			},
