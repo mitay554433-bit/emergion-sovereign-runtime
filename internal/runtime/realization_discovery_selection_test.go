@@ -39,7 +39,7 @@ func addAcceptedDiscoveryOutcome(
 			Summary: "governed execution result fixture",
 			Relationships: map[string]string{
 				"source_kind": "EXECUTION_RESULT",
-				"parent_emergion": parent,
+				"kin_emergion": parent,
 				"adapter": "LOCAL_GEMMA",
 				"action": "ANALYZE",
 			},
