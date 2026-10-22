@@ -10,39 +10,38 @@ import (
 )
 
 type RealizationRecurrence struct {
-	ReorderEmergION    string
+	SelectionEmergION  string
 	TargetThing        string
 	SelectedRealization string
 	Actions            []adapters.ActionCandidate
 }
 
-// ResolveAcceptedRealizationReorder binds a REG-accepted reorder to the
-// realization it selected. The selected realization must independently remain
-// REG-accepted. This function derives no Q and executes nothing.
-func ResolveAcceptedRealizationReorder(
+// ResolveAcceptedRealizationRecurrence binds a REG-accepted realization selection\n// or reorder to the realization it selected. The selected realization must\n// independently remain REG-accepted. This function derives no Q and executes nothing.
+func ResolveAcceptedRealizationRecurrence(
 	st core.State,
-	reorderID string,
+	selectionID string,
 	localGemma bool,
 ) (RealizationRecurrence, error) {
-	reorder, ok := st.Accepted[reorderID]
+	selection, ok := st.Accepted[selectionID]
 	if !ok {
 		return RealizationRecurrence{}, fmt.Errorf(
-			"realization reorder %q is not REG-accepted",
-			reorderID,
+			"realization selection %q is not REG-accepted",
+			selectionID,
 		)
 	}
-	if reorder.REL["source_kind"] != "REALIZATION_REORDER" {
+	kind := selection.REL["source_kind"]
+	if kind != "REALIZATION_SELECTION" && kind != "REALIZATION_REORDER" {
 		return RealizationRecurrence{}, fmt.Errorf(
-			"accepted EmergION %q is not a REALIZATION_REORDER",
-			reorderID,
+			"accepted EmergION %q is not a governed realization selection",
+			selectionID,
 		)
 	}
 
-	selectedID := strings.TrimSpace(reorder.REL["selected_realization"])
+	selectedID := strings.TrimSpace(selection.REL["selected_realization"])
 	if selectedID == "" {
 		return RealizationRecurrence{}, fmt.Errorf(
-			"realization reorder %q has no selected realization",
-			reorderID,
+			"realization selection %q has no selected realization",
+			selectionID,
 		)
 	}
 	selected, ok := st.Accepted[selectedID]
@@ -72,8 +71,8 @@ func ResolveAcceptedRealizationReorder(
 	})
 
 	return RealizationRecurrence{
-		ReorderEmergION:     reorder.IDN,
-		TargetThing:         reorder.REL["target_thing"],
+		SelectionEmergION:   selection.IDN,
+		TargetThing:         selection.REL["target_thing"],
 		SelectedRealization: selected.IDN,
 		Actions:             actions,
 	}, nil

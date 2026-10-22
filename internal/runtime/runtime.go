@@ -2012,7 +2012,7 @@ func (r Runtime) ExecuteOneSafeAction(
 	}
 	sort.Strings(ids)
 
-	// A HUMAN_FINAL/REG-accepted realization reorder may prioritize its
+	// A HUMAN_FINAL/REG-accepted realization selection or reorder may prioritize its
 	// selected realization for the existing safe-action scan. It grants no
 	// authority: the selected realization must independently remain in REG,
 	// and the ordinary action gates below still apply.
@@ -2021,14 +2021,18 @@ func (r Runtime) ExecuteOneSafeAction(
 		if event.REG == nil {
 			continue
 		}
-		reorderID := event.REG.EmergIONID
-		reorder, ok := st.Accepted[reorderID]
-		if !ok || reorder.REL["source_kind"] != "REALIZATION_REORDER" {
+		selectionID := event.REG.EmergIONID
+		selection, ok := st.Accepted[selectionID]
+		if !ok {
 			continue
 		}
-		recurrence, err := ResolveAcceptedRealizationReorder(
+		kind := selection.REL["source_kind"]
+		if kind != "REALIZATION_SELECTION" && kind != "REALIZATION_REORDER" {
+			continue
+		}
+		recurrence, err := ResolveAcceptedRealizationRecurrence(
 			st,
-			reorderID,
+			selectionID,
 			true,
 		)
 		if err != nil {
