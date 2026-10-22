@@ -47,5 +47,18 @@ func (r Runtime) CaptureNextObservedRealizationReorder(
 	if err != nil {
 		return core.EmergION{}, false, err
 	}
-	return em, !duplicate, nil
+	if !duplicate {
+		return em, true, nil
+	}
+
+	// Duplicate evidence can mean the same transition is already awaiting
+	// HUMAN_FINAL. Keep the cycle stopped while that candidate remains AtGOV.
+	current, _, err := r.governedStateContext()
+	if err != nil {
+		return core.EmergION{}, false, err
+	}
+	if pending, ok := current.AtGOV[em.IDN]; ok {
+		return pending, true, nil
+	}
+	return em, false, nil
 }
