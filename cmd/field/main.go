@@ -250,6 +250,25 @@ func main() {
 			)
 		}
 
+	case "realization-identity":
+		if len(args) < 3 {
+			fail(fmt.Errorf("realization-identity <accepted-id> <thing>"))
+		}
+		rt := fieldruntime.Runtime{Store: s}
+		em, duplicate, err := rt.CaptureRealizationIdentity(
+			context.Background(),
+			args[1],
+			strings.Join(args[2:], " "),
+		)
+		if err != nil {
+			fail(err)
+		}
+		receipt := renderField(s, *output)
+		if duplicate {
+			fmt.Println(em.IDN, "AT_GOV", "DUPLICATE_SOURCE", "PROJECTION_TIP", receipt.TipHash)
+		} else {
+			fmt.Println(em.IDN, "AT_GOV", "REALIZATION_IDENTITY", "PROJECTION_TIP", receipt.TipHash)
+		}
 	case "target":
 		if len(args) < 2 {
 			fail(fmt.Errorf("target requires exact target text"))
@@ -632,6 +651,7 @@ Commands:
   doctor                       verify state, COSL chain, evidence, Gemma runtime and model
   capture <file>               analyze with local Gemma and create one GOV-ready EmergION
   implementation-evidence <file> preserve bounded implementation evidence as one GOV-ready EmergION
+  realization-identity <accepted-id> <thing>  assert a REG-accepted EmergION realizes a named THING; stops at GOV
   rework <returned-id> <file>   re-enter a HUMAN_FINAL RETURNED EmergION with corrected source
   once                         process and clear the dropzone once
   run                          run the local living FIELD event loop; no server
