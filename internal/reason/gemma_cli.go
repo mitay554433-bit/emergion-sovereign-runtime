@@ -206,7 +206,22 @@ label-next ::= [^:=,|\r\n]
 text-tail ::= [^|\r\n]*
 `
 
+const mxpdOrdinaryGrammarRoot = `root ::= summary risk fact relationship? capability? facet? end`
+
+func gemmaGrammarForSource(content string) string {
+	if strings.HasPrefix(strings.TrimSpace(content), "TARGET_COMPARISON/1\n") {
+		return mxpdGrammar
+	}
+	return strings.Replace(mxpdGrammar,
+		`root ::= summary risk fact (difference requirement?)? relationship? capability? facet? end`,
+		mxpdOrdinaryGrammarRoot, 1)
+}
+
 func gemmaArgs(g GemmaCLI, prompt string) []string {
+	return gemmaArgsWithGrammar(g, prompt, mxpdGrammar)
+}
+
+func gemmaArgsWithGrammar(g GemmaCLI, prompt, grammar string) []string {
 	args := []string{
 		"-m", g.Model,
 	}
@@ -238,7 +253,7 @@ func gemmaArgs(g GemmaCLI, prompt string) []string {
 
 	args = append(args,
 		"--color", "off",
-		"--grammar", mxpdGrammar,
+		"--grammar", grammar,
 		"--simple-io",
 		"--single-turn",
 		"--no-display-prompt",
@@ -299,7 +314,7 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 	prompt := buildPrompt(in.Name, content, governedState)
 
 	for attempt := 0; attempt < 2; attempt++ {
-		args := gemmaArgs(g, prompt)
+		args := gemmaArgsWithGrammar(g, prompt, gemmaGrammarForSource(content))
 
 		cctx, cancel := context.WithTimeout(ctx, g.Timeout)
 		cmd := exec.CommandContext(cctx, g.Binary, args...)
