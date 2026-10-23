@@ -34,6 +34,7 @@ type historicalExecutionSignalV1 struct {
 	Schema         string `json:"schema"`
 	SourceKind     string `json:"source_kind"`
 	ParentEmergION string `json:"parent_emergion"`
+	KinEmergION    string `json:"kin_emergion"`
 	SourceHash     string `json:"source_hash"`
 	Authority      string `json:"authority"`
 	Adapter        string `json:"adapter"`
@@ -50,11 +51,18 @@ func parseHistoricalExecutionSignalV1(content []byte) (adapters.ExecutionResult,
 	if signal.Schema != "EXECUTION_SIGNAL_V1" || signal.SourceKind != "EXECUTION_RESULT" {
 		return adapters.ExecutionResult{}, fmt.Errorf("not an EXECUTION_SIGNAL_V1 execution result")
 	}
-	if signal.ParentEmergION == "" || signal.SourceHash == "" || signal.Authority == "" || signal.Adapter == "" || signal.Action == "" {
+	if signal.ParentEmergION != "" && signal.KinEmergION != "" && signal.ParentEmergION != signal.KinEmergION {
+		return adapters.ExecutionResult{}, fmt.Errorf("conflicting EXECUTION_SIGNAL_V1 kin lineage")
+	}
+	lineage := signal.KinEmergION
+	if lineage == "" {
+		lineage = signal.ParentEmergION
+	}
+	if lineage == "" || signal.SourceHash == "" || signal.Authority == "" || signal.Adapter == "" || signal.Action == "" {
 		return adapters.ExecutionResult{}, fmt.Errorf("incomplete EXECUTION_SIGNAL_V1 execution result")
 	}
 	return adapters.ExecutionResult{
-		EmergIONID: signal.ParentEmergION,
+		EmergIONID: lineage,
 		SourceHash: signal.SourceHash,
 		Authority:  signal.Authority,
 		Adapter:    signal.Adapter,
@@ -107,7 +115,16 @@ func (r Runtime) MaterializeAcceptedExecutionResult(id string) (Deliverable, err
 		return Deliverable{}, fmt.Errorf("%w: %s", ErrExecutionResultUnsuccessful, id)
 	}
 
-	if result.EmergIONID != em.REL["parent_emergion"] ||
+	kinLineage := em.REL["kin_emergion"]
+	if legacy := em.REL["parent_emergion"]; legacy != "" {
+		if kinLineage != "" && kinLineage != legacy {
+			return Deliverable{}, fmt.Errorf("conflicting accepted execution kin lineage: %s", id)
+		}
+		if kinLineage == "" {
+			kinLineage = legacy
+		}
+	}
+	if result.EmergIONID == "" || result.EmergIONID != kinLineage ||
 		result.AuthorizationID != em.REL["authorization_event"] ||
 		result.Adapter != em.REL["adapter"] ||
 		result.Action != em.REL["action"] {

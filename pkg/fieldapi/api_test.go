@@ -702,10 +702,10 @@ func TestGovernedCycleCirculatesAndExecutesExistingSafeWork(t *testing.T) {
 		t.Fatal("T_n+1 execution signal did not pass RECOIL/WVC")
 	}
 
-	if signalNext.REL["parent_emergion"] != circulatedID {
+	if signalNext.REL["kin_emergion"] != circulatedID {
 		t.Fatalf(
 			"T_n+1 execution parent = %q want governed T_n SAW %q",
-			signalNext.REL["parent_emergion"],
+			signalNext.REL["kin_emergion"],
 			circulatedID,
 		)
 	}
@@ -916,10 +916,10 @@ func TestRunDrivesSuccessiveGovernedCyclesWithoutManualInvocation(t *testing.T) 
 		t.Fatal("first unattended execution signal bypassed RECOIL/WVC")
 	}
 
-	if firstSignal.REL["parent_emergion"] != safeWork.IDN {
+	if firstSignal.REL["kin_emergion"] != safeWork.IDN {
 		t.Fatalf(
 			"first unattended execution parent = %q want %q",
-			firstSignal.REL["parent_emergion"],
+			firstSignal.REL["kin_emergion"],
 			safeWork.IDN,
 		)
 	}
