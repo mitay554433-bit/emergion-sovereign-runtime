@@ -585,7 +585,7 @@ Observe SOURCE and emit only source-grounded structure.
 
 S = the direct meaning established by SOURCE.
 K = L, M, or H.
-F = concrete evidence or verified state explicitly established by SOURCE.
+F = concrete evidence or verified state explicitly established by SOURCE. Copy a short, contiguous factual phrase from SOURCE rather than paraphrasing, changing punctuation, or combining unrelated terms. If no factual phrase is supported, do not invent one.
 D = a target-relative Difference only for TARGET_COMPARISON/1.
 Outside TARGET_COMPARISON/1, never emit D.
 For TARGET_COMPARISON/1, compare TARGET_STATE with source-grounded ACCEPTED_FACT values inside REALITY.

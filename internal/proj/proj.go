@@ -416,7 +416,12 @@ func HTML(path string, st core.State) error {
 body{font:15px system-ui;background:#020817;color:#e6eaf0;margin:0;padding:2rem}a{color:#c9a227}.ok,.good{color:#2ecc71}.bad,.err{color:#e74c3c}.muted{color:#8b95a8}.panel{background:#0f1c2e;border:1px solid #2a3548;border-radius:12px;padding:1rem;margin:0.75rem 0}h1,h2{color:#e6eaf0;border-bottom:1px solid #2d6cff;padding-bottom:0.35rem}code,pre{background:#0a1628;color:#e6eaf0;border:1px solid #2a3548}
 h1{font-size:1.5rem}
 h2{margin-top:2rem;font-size:1.15rem}
-table{width:max-content;min-width:100%;border-collapse:collapse}
+html,body{max-width:100%;overflow-x:hidden;box-sizing:border-box}
+body{width:100%}
+.panel,.field-topology,.field-facet,.field-emergion{box-sizing:border-box;min-width:0;max-width:100%}
+table{width:100%;max-width:100%;min-width:0;table-layout:fixed;border-collapse:collapse}
+pre{max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere}
+
 th,td{text-align:left;vertical-align:top;padding:.7rem;border-bottom:1px solid #2b3140;overflow-wrap:anywhere;word-break:break-word}
 code{color:#a78bfa;overflow-wrap:anywhere;word-break:break-all}
 .G{color:#f59e0b}
@@ -456,11 +461,12 @@ box-sizing:border-box;
 </head>
 <body>
 
-<h1>Living Projection</h1>
+<h1 id="field-top">Living Projection</h1>
+<details class="panel diagnostic"><summary>Operator navigation</summary><nav aria-label="FIELD sections"><a href="#realization-field">Realization</a> · <a href="#human-final">HUMAN_FINAL</a> · <a href="#verified-deliveries">Deliveries</a> · <a href="#lifecycle-projection">Lifecycle</a> · <a href="#spatial-convergence">Convergence</a> · <a href="#spatial-emergion">Topology</a> · <a href="#saw-work">SAW</a></nav><p class="small">Navigation only; governance remains unchanged.</p></details>
 <p>Events: {{.Events}} · Tip: <code>{{.TipHash}}</code></p>
 <p class="small">Projection is derived state only. COSL + governance remain authoritative.</p>
 
-<h2>REALIZATION FIELD</h2>
+<span id="realization-field"></span><h2>REALIZATION FIELD</h2>
 <p class="small">Target-specific governed order projected from canonical state. Pending reorder is visible but is not canonical until HUMAN_FINAL + REG.</p>
 {{if .Realizations}}
 <table class="operator-table">
@@ -491,7 +497,7 @@ box-sizing:border-box;
 <p class="small">No governed realization population projected.</p>
 {{end}}
 
-<h2>HUMAN_FINAL</h2>
+<span id="human-final"></span><h2>HUMAN_FINAL</h2>
 {{if .HumanFinal}}
 <p class="small">{{len .HumanFinal}} decision(s) awaiting HUMAN_FINAL.</p>
 <table class="operator-table">
@@ -525,12 +531,12 @@ box-sizing:border-box;
 <p class="small">No decisions awaiting HUMAN_FINAL.</p>
 {{end}}
 
-<h2>VERIFIED DELIVERIES</h2>
+<span id="verified-deliveries"></span><h2>VERIFIED DELIVERIES</h2>
 <p class="small">Operator projection only. Entries are published from REG-accepted successful execution results; canonical authority remains COSL + REG.</p>
 <div id="deliveries" class="panel" data-field-tip="{{.TipHash}}"><span class="muted">Loading verified deliveries…</span></div>
 
 <details class="panel diagnostic">
-<summary>Lifecycle Projection · {{len .Rows}} records</summary>
+<span id="lifecycle-projection"></span><summary>Lifecycle Projection · {{len .Rows}} records</summary>
 <p class="small">Complete reconstructed lifecycle history. Projection only; COSL + governance remain authoritative.</p>
 <table>
 <thead>
@@ -561,7 +567,7 @@ box-sizing:border-box;
 </details>
 
 <details class="panel diagnostic">
-<summary>SPATIAL CONVERGENCE ZONE · {{len .Convergence}} accepted</summary>
+<summary id="spatial-convergence">SPATIAL CONVERGENCE ZONE · {{len .Convergence}} accepted</summary>
 <p class="small">Accepted governed structures only. Diagnostic structural projection; canonical authority remains COSL + REG.</p>
 
 <table>
@@ -599,7 +605,7 @@ box-sizing:border-box;
 </details>
 
 <details class="panel diagnostic">
-<summary>SPATIAL EMERGION PROJECTION · {{len .FacetGroups}} facets</summary>
+<summary id="spatial-emergion">SPATIAL EMERGION PROJECTION · {{len .FacetGroups}} facets</summary>
 <p class="small">Accepted EmergION structures projected across the canonical FIELD topology. Projection only; authority remains COSL + REG.</p>
 
 <div class="field-topology">
@@ -637,7 +643,7 @@ box-sizing:border-box;
 {{end}}
 </details>
 
-<h2>SAW WORK PROJECTION</h2>
+<span id="saw-work"></span><h2>SAW WORK PROJECTION</h2>
 <p class="small">Deterministic SAW artifacts derived from accepted governed composition.</p>
 
 <table class="operator-table">
