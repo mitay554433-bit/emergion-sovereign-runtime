@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -250,12 +251,25 @@ func (r Runtime) PublishAcceptedDeliverables(out string) ([]string, error) {
 			return published, err
 		}
 
+		receiptPath := filepath.Join(out, "deliverables", id, "receipt.json")
+		beforeReceipt, readErr := os.ReadFile(receiptPath)
+		if readErr != nil && !os.IsNotExist(readErr) {
+			return published, readErr
+		}
+
 		receipt, _, err := PublishDeliverable(out, deliverable)
 		if err != nil {
 			return published, err
 		}
 		receipts = append(receipts, receipt)
-		published = append(published, id)
+
+		afterReceipt, err := os.ReadFile(receiptPath)
+		if err != nil {
+			return published, err
+		}
+		if os.IsNotExist(readErr) || !bytes.Equal(beforeReceipt, afterReceipt) {
+			published = append(published, id)
+		}
 	}
 
 	if _, err := publishDeliverableIndex(out, st.TipHash, receipts); err != nil {
