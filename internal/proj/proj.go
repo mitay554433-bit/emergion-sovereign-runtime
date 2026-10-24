@@ -416,7 +416,12 @@ func HTML(path string, st core.State) error {
 body{font:15px system-ui;background:#020817;color:#e6eaf0;margin:0;padding:2rem}a{color:#c9a227}.ok,.good{color:#2ecc71}.bad,.err{color:#e74c3c}.muted{color:#8b95a8}.panel{background:#0f1c2e;border:1px solid #2a3548;border-radius:12px;padding:1rem;margin:0.75rem 0}h1,h2{color:#e6eaf0;border-bottom:1px solid #2d6cff;padding-bottom:0.35rem}code,pre{background:#0a1628;color:#e6eaf0;border:1px solid #2a3548}
 h1{font-size:1.5rem}
 h2{margin-top:2rem;font-size:1.15rem}
-table{width:max-content;min-width:100%;border-collapse:collapse}
+html,body{max-width:100%;overflow-x:hidden;box-sizing:border-box}
+body{width:100%}
+.panel,.field-topology,.field-facet,.field-emergion{box-sizing:border-box;min-width:0;max-width:100%}
+table{width:100%;max-width:100%;min-width:0;table-layout:fixed;border-collapse:collapse}
+pre{max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere}
+
 th,td{text-align:left;vertical-align:top;padding:.7rem;border-bottom:1px solid #2b3140;overflow-wrap:anywhere;word-break:break-word}
 code{color:#a78bfa;overflow-wrap:anywhere;word-break:break-all}
 .G{color:#f59e0b}
