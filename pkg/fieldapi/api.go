@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"emergion-sovereign-runtime/internal/adapters"
@@ -261,6 +263,10 @@ func (r *Runtime) Run(
 				circulated, signal, executed, err :=
 					r.GovernedCycle(cycleCtx, gemma)
 				if err != nil {
+					if cycleCtx.Err() == nil && strings.Contains(err.Error(), "Gemma timed out:") {
+						fmt.Fprintln(os.Stderr, "GEMMA_REASONING_DEFERRED:", err)
+						return nil
+					}
 					return err
 				}
 
