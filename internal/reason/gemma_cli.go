@@ -279,8 +279,6 @@ func normalizeLlamaCLIAnalyzeCandidate(prompt, candidate string) string {
 }
 
 func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
-	fmt.Fprintln(os.Stderr, "ANALYZE_START")
-	defer fmt.Fprintln(os.Stderr, "ANALYZE_END")
 	if err := g.Validate(); err != nil {
 		return Result{}, err
 	}
@@ -313,19 +311,22 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 	}
 	prompt := buildPrompt(in.Name, content, governedState)
 
+	// Both inference attempts share one bounded reasoning deadline. A semantic
+	// retry must not double the time UNIFUSION waits for this component.
+	boundedCtx, boundedCancel := context.WithTimeout(ctx, g.Timeout)
+	defer boundedCancel()
+
 	for attempt := 0; attempt < 2; attempt++ {
 		args := gemmaArgsWithGrammar(g, prompt, gemmaGrammarForSource(content))
 
-		cctx, cancel := context.WithTimeout(ctx, g.Timeout)
-		cmd := exec.CommandContext(cctx, g.Binary, args...)
+		cmd := exec.CommandContext(boundedCtx, g.Binary, args...)
 
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
 
 		runErr := cmd.Run()
-		ctxErr := cctx.Err()
-		cancel()
+		ctxErr := boundedCtx.Err()
 
 		if runErr != nil {
 			if errors.Is(ctxErr, context.DeadlineExceeded) {
