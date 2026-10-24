@@ -531,7 +531,7 @@ box-sizing:border-box;
 <div id="deliveries" class="panel" data-field-tip="{{.TipHash}}"><span class="muted">Loading verified deliveries…</span></div>
 
 <details class="panel diagnostic">
-<summary id="lifecycle-projection">Lifecycle Projection · {{len .Rows}} records</summary>
+<span id="lifecycle-projection"></span><summary>Lifecycle Projection · {{len .Rows}} records</summary>
 <p class="small">Complete reconstructed lifecycle history. Projection only; COSL + governance remain authoritative.</p>
 <table>
 <thead>
