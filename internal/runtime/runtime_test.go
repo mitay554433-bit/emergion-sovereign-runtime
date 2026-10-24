@@ -1541,10 +1541,10 @@ func TestExecutionAlreadyObservedUsesCanonicalFieldLineage(t *testing.T) {
 	signal := core.EmergION{
 		IDN: "E-EXECUTION-SIGNAL",
 		REL: map[string]string{
-			"source_kind":     "EXECUTION_RESULT",
-			"parent_emergion": "E-PARENT",
-			"adapter":         "LOCAL_GEMMA",
-			"action":          "ANALYZE",
+			"source_kind":  "EXECUTION_RESULT",
+			"kin_emergion": "E-PARENT",
+			"adapter":      "LOCAL_GEMMA",
+			"action":       "ANALYZE",
 		},
 	}
 
@@ -1580,7 +1580,7 @@ func TestExecutionAlreadyObservedUsesCanonicalFieldLineage(t *testing.T) {
 
 func TestCaptureRejectsRuntimeOwnedExecutionLineageRelationships(t *testing.T) {
 	for _, key := range []string{
-		"parent_emergion",
+		"kin_emergion",
 		"authorization_event",
 		"parent",
 		"origin",
@@ -1666,10 +1666,10 @@ func TestExecutionObservationRemainsConfinedToExactKinMember(t *testing.T) {
 		IDN: "E-EXECUTION-SIGNAL",
 		STA: core.StateAtGOV,
 		REL: map[string]string{
-			"source_kind":     "EXECUTION_RESULT",
-			"parent_emergion": predecessor.IDN,
-			"adapter":         "LOCAL_GEMMA",
-			"action":          "ANALYZE",
+			"source_kind":  "EXECUTION_RESULT",
+			"kin_emergion": predecessor.IDN,
+			"adapter":      "LOCAL_GEMMA",
+			"action":       "ANALYZE",
 		},
 	}
 
@@ -2241,10 +2241,10 @@ func TestSAWSourceReentersGovernedExecutionAndRecapture(t *testing.T) {
 		t.Fatalf("execution signal state = %s", signal.STA)
 	}
 
-	if signal.REL["parent_emergion"] != accepted.IDN {
+	if signal.REL["kin_emergion"] != accepted.IDN {
 		t.Fatalf(
 			"execution signal parent = %q want %q",
-			signal.REL["parent_emergion"],
+			signal.REL["kin_emergion"],
 			accepted.IDN,
 		)
 	}
@@ -4036,10 +4036,10 @@ func TestGovernedProviderCompositionCirculatesThroughSAWExecutionRecapture(t *te
 		t.Fatal("execution RECAPTURE did not pass RECOIL/WVC")
 	}
 
-	if signal.REL["parent_emergion"] != acceptedSAW.IDN {
+	if signal.REL["kin_emergion"] != acceptedSAW.IDN {
 		t.Fatalf(
 			"execution parent = %q want %q",
-			signal.REL["parent_emergion"],
+			signal.REL["kin_emergion"],
 			acceptedSAW.IDN,
 		)
 	}
@@ -4054,7 +4054,7 @@ func TestGovernedProviderCompositionCirculatesThroughSAWExecutionRecapture(t *te
 		t.Fatal("execution RECAPTURE did not return to G")
 	}
 
-	if admittedSignal.REL["parent_emergion"] != acceptedSAW.IDN {
+	if admittedSignal.REL["kin_emergion"] != acceptedSAW.IDN {
 		t.Fatal("stored execution lineage changed")
 	}
 
@@ -5945,4 +5945,73 @@ func TestTargetComparisonDeduplicatesSameRealityButReopensOnRealityChange(t *tes
 	if changed.IDN == first.IDN {
 		t.Fatal("changed accepted reality reused previous comparison identity")
 	}
+}
+
+func TestGemmaAnalyzeLiveProofSourceDiagnostic(t *testing.T) {
+	stateRoot := os.Getenv("FIELD_HOME")
+	binary := os.Getenv("GEMMA_BIN")
+	model := os.Getenv("GEMMA_MODEL")
+	sourcePath := os.Getenv("LIVE_PROOF_SOURCE")
+
+	if stateRoot == "" || binary == "" || model == "" || sourcePath == "" {
+		t.Skip("set FIELD_HOME, GEMMA_BIN, GEMMA_MODEL, and LIVE_PROOF_SOURCE")
+	}
+
+	s, err := store.Open(stateRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r := Runtime{
+		Store:    s,
+		Reasoner: reason.Heuristic{},
+	}
+
+	_, governedState, err := r.governedStateContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	source, err := os.ReadFile(sourcePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	g := reason.GemmaCLI{
+		Binary:    binary,
+		Model:     model,
+		Threads:   4,
+		Context:   2048,
+		MaxTokens: 120,
+		Timeout:   180 * time.Second,
+	}
+
+	start := time.Now()
+
+	got, err := g.Analyze(context.Background(), reason.Input{
+		Name:          filepath.Base(sourcePath),
+		Content:       source,
+		GovernedState: governedState,
+	})
+
+	elapsed := time.Since(start)
+
+	t.Logf(
+		"governed_state_bytes=%d source_bytes=%d elapsed=%s",
+		len(governedState),
+		len(source),
+		elapsed,
+	)
+
+	if err != nil {
+		t.Fatalf("live proof Gemma Analyze failed after %s: %v", elapsed, err)
+	}
+
+	t.Logf(
+		"summary=%q risk=%q facts=%#v capabilities=%#v",
+		got.Summary,
+		got.Risk,
+		got.Facts,
+		got.Capabilities,
+	)
 }

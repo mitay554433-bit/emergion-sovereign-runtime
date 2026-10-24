@@ -1861,19 +1861,19 @@ func (r Runtime) executeWithConcurrentObservation(
 
 	observationRuntime := r
 	observationRuntime.Reasoner = fixedReasoner{
-		name: "execution-signal",
+		name:    "execution-signal",
 		version: "v1",
 		result: reason.Result{
 			Summary: "bounded concurrent execution observation",
 			Relationships: map[string]string{
-				"source_kind": "EXECUTION_OBSERVATION",
+				"source_kind":  "EXECUTION_OBSERVATION",
 				"kin_emergion": request.EmergIONID,
-				"adapter": request.Adapter,
-				"action": request.Action,
+				"adapter":      request.Adapter,
+				"action":       request.Action,
 			},
 			Capabilities: []string{"OBS", "CMP"},
-			Facts: []string{"execution_observed_concurrently"},
-			Risk: "L",
+			Facts:        []string{"execution_observed_concurrently"},
+			Risk:         "L",
 		},
 	}
 	observationContent := fmt.Sprintf(
@@ -1940,7 +1940,7 @@ func (r Runtime) ExecuteAction(
 			Gemma: gemma,
 		}
 		execute = func() (adapters.ExecutionResult, error) {
-			return executor.Execute(request)
+			return executor.Execute(ctx, request)
 		}
 	case "GITHUB":
 		executor := adapters.GitHubProgramExecutor{
@@ -2104,7 +2104,7 @@ func (r Runtime) ExecuteOneSafeAction(
 				ctx,
 				request,
 				func() (adapters.ExecutionResult, error) {
-					return executor.Execute(request)
+					return executor.Execute(ctx, request)
 				},
 			)
 			if observationErr != nil {

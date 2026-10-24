@@ -132,8 +132,8 @@ func TestSelectedRealizationQExecuteObservesConcurrently(t *testing.T) {
 	if !result.Succeeded {
 		t.Fatalf("selected realization execution failed: %#v", result)
 	}
-	if signal.REL["parent_emergion"] != a.IDN {
-		t.Fatalf("execution result parent = %q want %q", signal.REL["parent_emergion"], a.IDN)
+	if signal.REL["kin_emergion"] != a.IDN {
+		t.Fatalf("execution result parent = %q want %q", signal.REL["kin_emergion"], a.IDN)
 	}
 	if signal.REL["authorization_event"] != q {
 		t.Fatalf("execution result Q = %q want %q", signal.REL["authorization_event"], q)
@@ -154,7 +154,7 @@ func TestSelectedRealizationQExecuteObservesConcurrently(t *testing.T) {
 	for _, group := range groups {
 		for _, em := range group {
 			if em.REL["source_kind"] == "EXECUTION_OBSERVATION" &&
-				em.REL["parent_emergion"] == a.IDN &&
+				em.REL["kin_emergion"] == a.IDN &&
 				em.REL["adapter"] == "LOCAL_GEMMA" &&
 				em.REL["action"] == "ANALYZE" {
 				foundObservation = true

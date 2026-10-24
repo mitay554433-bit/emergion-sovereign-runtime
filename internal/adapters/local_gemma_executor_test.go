@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -40,7 +41,7 @@ func TestPrepareExecutionCarriesAcceptedSourceHash(t *testing.T) {
 func TestLocalGemmaExecutorRejectsWrongAdapter(t *testing.T) {
 	executor := LocalGemmaExecutor{}
 
-	result, err := executor.Execute(ExecutionRequest{
+	result, err := executor.Execute(context.Background(), ExecutionRequest{
 		Adapter: "EMAIL",
 		Action:  "ANALYZE",
 	})
@@ -55,7 +56,7 @@ func TestLocalGemmaExecutorRejectsWrongAdapter(t *testing.T) {
 func TestLocalGemmaExecutorRejectsUnsupportedAction(t *testing.T) {
 	executor := LocalGemmaExecutor{}
 
-	result, err := executor.Execute(ExecutionRequest{
+	result, err := executor.Execute(context.Background(), ExecutionRequest{
 		Adapter: "LOCAL_GEMMA",
 		Action:  "SEND",
 	})
@@ -80,7 +81,7 @@ func TestLocalGemmaExecutorRequiresPreservedEvidence(t *testing.T) {
 		Gemma: reason.GemmaFromEnv(),
 	}
 
-	result, err := executor.Execute(ExecutionRequest{
+	result, err := executor.Execute(context.Background(), ExecutionRequest{
 		Adapter:    "LOCAL_GEMMA",
 		Action:     "ANALYZE",
 		SourceHash: "missing-evidence",
@@ -106,7 +107,7 @@ func TestLocalGemmaExecutorDraftReachesPreservedEvidenceBoundary(t *testing.T) {
 		Gemma: reason.GemmaFromEnv(),
 	}
 
-	result, err := executor.Execute(ExecutionRequest{
+	result, err := executor.Execute(context.Background(), ExecutionRequest{
 		Adapter:    "LOCAL_GEMMA",
 		Action:     "DRAFT",
 		SourceHash: "missing-evidence",
