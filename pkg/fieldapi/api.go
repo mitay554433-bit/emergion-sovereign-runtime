@@ -198,9 +198,13 @@ func (r *Runtime) GovernedCycle(
 		".",
 	)
 	if err != nil {
-		return circulated, core.EmergION{}, false, err
-	}
-	if proposed {
+		// A bounded Gemma proposal timeout must not starve independently
+		// permitted safe work. Other failures still fail closed.
+		if ctx.Err() != nil || !strings.Contains(err.Error(), "Gemma timed out:") {
+			return circulated, core.EmergION{}, false, err
+		}
+		fmt.Fprintln(os.Stderr, "GEMMA_PROGRAM_PROPOSAL_DEFERRED:", err)
+	} else if proposed {
 		circulated = append(circulated, program)
 	}
 
