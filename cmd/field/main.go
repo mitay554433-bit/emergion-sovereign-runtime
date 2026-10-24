@@ -363,6 +363,8 @@ func main() {
 			"reasoner="+*reasonerName,
 		)
 
+		announcedDeliverables := make(map[string]bool)
+
 		if err := sawRuntime.Run(
 			ctx,
 			*dropzone,
@@ -386,7 +388,10 @@ func main() {
 					fail(err)
 				}
 				for _, id := range published {
-					fmt.Println(id, "DELIVERABLE_READY")
+					if !announcedDeliverables[id] {
+						fmt.Println(id, "DELIVERABLE_READY")
+						announcedDeliverables[id] = true
+					}
 				}
 			},
 		); err != nil {
