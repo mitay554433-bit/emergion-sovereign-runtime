@@ -461,7 +461,7 @@ box-sizing:border-box;
 <p>Events: {{.Events}} · Tip: <code>{{.TipHash}}</code></p>
 <p class="small">Projection is derived state only. COSL + governance remain authoritative.</p>
 
-<h2 id="realization-field">REALIZATION FIELD</h2>
+<span id="realization-field"></span><h2>REALIZATION FIELD</h2>
 <p class="small">Target-specific governed order projected from canonical state. Pending reorder is visible but is not canonical until HUMAN_FINAL + REG.</p>
 {{if .Realizations}}
 <table class="operator-table">
@@ -492,7 +492,7 @@ box-sizing:border-box;
 <p class="small">No governed realization population projected.</p>
 {{end}}
 
-<h2 id="human-final">HUMAN_FINAL</h2>
+<span id="human-final"></span><h2>HUMAN_FINAL</h2>
 {{if .HumanFinal}}
 <p class="small">{{len .HumanFinal}} decision(s) awaiting HUMAN_FINAL.</p>
 <table class="operator-table">
@@ -526,7 +526,7 @@ box-sizing:border-box;
 <p class="small">No decisions awaiting HUMAN_FINAL.</p>
 {{end}}
 
-<h2 id="verified-deliveries">VERIFIED DELIVERIES</h2>
+<span id="verified-deliveries"></span><h2>VERIFIED DELIVERIES</h2>
 <p class="small">Operator projection only. Entries are published from REG-accepted successful execution results; canonical authority remains COSL + REG.</p>
 <div id="deliveries" class="panel" data-field-tip="{{.TipHash}}"><span class="muted">Loading verified deliveries…</span></div>
 
@@ -638,7 +638,7 @@ box-sizing:border-box;
 {{end}}
 </details>
 
-<h2 id="saw-work">SAW WORK PROJECTION</h2>
+<span id="saw-work"></span><h2>SAW WORK PROJECTION</h2>
 <p class="small">Deterministic SAW artifacts derived from accepted governed composition.</p>
 
 <table class="operator-table">
