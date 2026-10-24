@@ -456,11 +456,12 @@ box-sizing:border-box;
 </head>
 <body>
 
-<h1>Living Projection</h1>
+<h1 id="field-top">Living Projection</h1>
+<details class="panel diagnostic"><summary>Operator navigation</summary><nav aria-label="FIELD sections"><a href="#realization-field">Realization</a> · <a href="#human-final">HUMAN_FINAL</a> · <a href="#verified-deliveries">Deliveries</a> · <a href="#lifecycle-projection">Lifecycle</a> · <a href="#spatial-convergence">Convergence</a> · <a href="#spatial-emergion">Topology</a> · <a href="#saw-work">SAW</a></nav><p class="small">Navigation only; governance remains unchanged.</p></details>
 <p>Events: {{.Events}} · Tip: <code>{{.TipHash}}</code></p>
 <p class="small">Projection is derived state only. COSL + governance remain authoritative.</p>
 
-<h2>REALIZATION FIELD</h2>
+<h2 id="realization-field">REALIZATION FIELD</h2>
 <p class="small">Target-specific governed order projected from canonical state. Pending reorder is visible but is not canonical until HUMAN_FINAL + REG.</p>
 {{if .Realizations}}
 <table class="operator-table">
@@ -491,7 +492,7 @@ box-sizing:border-box;
 <p class="small">No governed realization population projected.</p>
 {{end}}
 
-<h2>HUMAN_FINAL</h2>
+<h2 id="human-final">HUMAN_FINAL</h2>
 {{if .HumanFinal}}
 <p class="small">{{len .HumanFinal}} decision(s) awaiting HUMAN_FINAL.</p>
 <table class="operator-table">
@@ -525,12 +526,12 @@ box-sizing:border-box;
 <p class="small">No decisions awaiting HUMAN_FINAL.</p>
 {{end}}
 
-<h2>VERIFIED DELIVERIES</h2>
+<h2 id="verified-deliveries">VERIFIED DELIVERIES</h2>
 <p class="small">Operator projection only. Entries are published from REG-accepted successful execution results; canonical authority remains COSL + REG.</p>
 <div id="deliveries" class="panel" data-field-tip="{{.TipHash}}"><span class="muted">Loading verified deliveries…</span></div>
 
 <details class="panel diagnostic">
-<summary>Lifecycle Projection · {{len .Rows}} records</summary>
+<summary id="lifecycle-projection">Lifecycle Projection · {{len .Rows}} records</summary>
 <p class="small">Complete reconstructed lifecycle history. Projection only; COSL + governance remain authoritative.</p>
 <table>
 <thead>
@@ -561,7 +562,7 @@ box-sizing:border-box;
 </details>
 
 <details class="panel diagnostic">
-<summary>SPATIAL CONVERGENCE ZONE · {{len .Convergence}} accepted</summary>
+<summary id="spatial-convergence">SPATIAL CONVERGENCE ZONE · {{len .Convergence}} accepted</summary>
 <p class="small">Accepted governed structures only. Diagnostic structural projection; canonical authority remains COSL + REG.</p>
 
 <table>
@@ -599,7 +600,7 @@ box-sizing:border-box;
 </details>
 
 <details class="panel diagnostic">
-<summary>SPATIAL EMERGION PROJECTION · {{len .FacetGroups}} facets</summary>
+<summary id="spatial-emergion">SPATIAL EMERGION PROJECTION · {{len .FacetGroups}} facets</summary>
 <p class="small">Accepted EmergION structures projected across the canonical FIELD topology. Projection only; authority remains COSL + REG.</p>
 
 <div class="field-topology">
@@ -637,7 +638,7 @@ box-sizing:border-box;
 {{end}}
 </details>
 
-<h2>SAW WORK PROJECTION</h2>
+<h2 id="saw-work">SAW WORK PROJECTION</h2>
 <p class="small">Deterministic SAW artifacts derived from accepted governed composition.</p>
 
 <table class="operator-table">
