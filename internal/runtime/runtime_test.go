@@ -6015,3 +6015,41 @@ func TestGemmaAnalyzeLiveProofSourceDiagnostic(t *testing.T) {
 		got.Capabilities,
 	)
 }
+
+
+func TestAcceptedCapabilityProviderPopulationExcludesAdjacentSelfReference(t *testing.T) {
+	st := core.EmptyState()
+	st.Accepted["E-SHARED"] = core.EmergION{
+		IDN: "E-SHARED",
+		STA: core.StateAccepted,
+		CAP: []string{"CMP", "RLT"},
+	}
+	st.Accepted["E-CMP"] = core.EmergION{
+		IDN: "E-CMP",
+		STA: core.StateAccepted,
+		CAP: []string{"CMP"},
+	}
+	st.Accepted["E-RLT"] = core.EmergION{
+		IDN: "E-RLT",
+		STA: core.StateAccepted,
+		CAP: []string{"RLT"},
+	}
+
+	population, ok := acceptedCapabilityProviderPopulation("DERIVE_RELATIONSHIP", st)
+	if !ok {
+		t.Fatal("expected provider population")
+	}
+
+	for _, providers := range population {
+		if providers == "CMP:E-SHARED,RLT:E-SHARED" {
+			t.Fatalf("population contains adjacent self-reference: %q", providers)
+		}
+		if _, err := capabilityProviderEdges(providers); err != nil {
+			t.Fatalf("population emitted invalid provider trajectory %q: %v", providers, err)
+		}
+	}
+
+	if len(population) != 3 {
+		t.Fatalf("population size = %d want 3: %v", len(population), population)
+	}
+}
