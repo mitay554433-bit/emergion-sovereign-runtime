@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"emergion-sovereign-runtime/internal/adapters"
+	"emergion-sovereign-runtime/internal/core"
 )
 
 func governedExecutionProofRequest() adapters.ExecutionRequest {
@@ -89,5 +90,32 @@ func TestGovernedExecutionRejectsAuthorityPivotBeforeAdmission(t *testing.T) {
 	)
 	if err == nil {
 		t.Fatal("execution authority pivot unexpectedly admitted")
+	}
+}
+
+func TestExecutionSuccessWithoutProviderValidationDoesNotProveCapability(t *testing.T) {
+	request := governedExecutionProofRequest()
+	result := adapters.BindExecutionResult(request, adapters.ExecutionResult{
+		Succeeded: true,
+		Output:    "adapter completed, not independently validated",
+	})
+	// A valid execution receipt is not independent proof that the
+	// originating provider demonstrated OBS or VLD competence.
+	if err := adapters.VerifyExecutionResult(request, result); err != nil {
+		t.Fatalf("valid execution lineage rejected: %v", err)
+	}
+	signal := core.EmergION{
+		REL: map[string]string{
+			"source_kind": "EXECUTION_RESULT",
+			"kin_emergion": request.EmergIONID,
+			"adapter": request.Adapter,
+			"action": request.Action,
+		},
+		VAL: core.Validation{Facts: []string{"execution_result_observed", "execution_succeeded"}, WVC: true, Recoil: true},
+	}
+	for _, capability := range []string{"OBS", "VLD"} {
+		if got := capabilityEvidenceCount(signal, capability); got != 0 {
+			t.Fatalf("execution success alone proved %s: %d", capability, got)
+		}
 	}
 }
