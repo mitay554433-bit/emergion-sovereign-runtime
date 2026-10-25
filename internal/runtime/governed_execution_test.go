@@ -111,8 +111,11 @@ func TestExecutionSuccessWithoutProviderValidationDoesNotProveCapability(t *test
 			"adapter": request.Adapter,
 			"action": request.Action,
 		},
-		VAL: core.Validation{Facts: []string{"execution_result_observed", "execution_succeeded"}, WVC: true, Recoil: true},
+		
 	}
+	signal.VAL.Facts = []string{"execution_result_observed", "execution_succeeded"}
+	signal.VAL.WVC = true
+	signal.VAL.Recoil = true
 	for _, capability := range []string{"OBS", "VLD"} {
 		if got := capabilityEvidenceCount(signal, capability); got != 0 {
 			t.Fatalf("execution success alone proved %s: %d", capability, got)
