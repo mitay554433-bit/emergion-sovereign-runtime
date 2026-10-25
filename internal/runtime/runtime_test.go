@@ -3236,6 +3236,47 @@ func TestResolveRequiredCapabilityDoesNotFabricateMissingProviderIdentity(t *tes
 	}
 }
 
+func TestAcceptedCapabilityProvidersPrefersScopedEvidenceWithoutChangingAuthority(t *testing.T) {
+	st := core.EmptyState()
+	st.Accepted["E-A"] = core.EmergION{
+		IDN: "E-A", STA: core.StateAccepted, CAP: []string{"OBS"},
+		VAL: core.Validation{Facts: []string{"source_preserved"}, WVC: true, Recoil: true},
+	}
+	st.Accepted["E-Z"] = core.EmergION{
+		IDN: "E-Z", STA: core.StateAccepted, CAP: []string{"OBS"},
+		VAL: core.Validation{Facts: []string{"capability_verified:OBS:observation-1"}, WVC: true, Recoil: true},
+	}
+	st.Accepted["E-V"] = core.EmergION{
+		IDN: "E-V", STA: core.StateAccepted, CAP: []string{"VLD"},
+	}
+	st.AtGOV["E-UNACCEPTED"] = core.EmergION{
+		IDN: "E-UNACCEPTED", STA: core.StateAtGOV, CAP: []string{"OBS"},
+		VAL: core.Validation{Facts: []string{"capability_verified:OBS:unaccepted"}},
+	}
+	got, ok := acceptedCapabilityProviders("ESTABLISH_FACT", st)
+	if !ok || got != "OBS:E-Z,VLD:E-V" {
+		t.Fatalf("evidence preference = %q, %v", got, ok)
+	}
+	if len(st.Accepted) != 3 || len(st.AtGOV) != 1 {
+		t.Fatal("selection mutated governance state")
+	}
+}
+
+func TestCapabilityEvidenceCountDoesNotTreatIntegrityOrGenericFactsAsSuitability(t *testing.T) {
+	em := core.EmergION{
+		VAL: core.Validation{
+			WVC: true, Recoil: true,
+			Facts: []string{"source_preserved", "capability_verified:VLD:other", "capability_verified:OBS:a", "capability_verified:OBS:a"},
+		},
+	}
+	if got := capabilityEvidenceCount(em, "OBS"); got != 1 {
+		t.Fatalf("OBS evidence = %d, want 1", got)
+	}
+	if got := capabilityEvidenceCount(em, "CMP"); got != 0 {
+		t.Fatalf("CMP evidence = %d, want 0", got)
+	}
+}
+
 func TestCapabilityProviderEdgesDeriveAdjacentComposition(t *testing.T) {
 	got, err := capabilityProviderEdges(
 		"ANALYZE:E-A,CMP:E-B,RLT:E-C",
