@@ -95,6 +95,7 @@ func TestGovernedExecutionRejectsAuthorityPivotBeforeAdmission(t *testing.T) {
 
 func TestExecutionSuccessWithoutProviderValidationDoesNotProveCapability(t *testing.T) {
 	request := governedExecutionProofRequest()
+	request.TransitionEmergIONID = adapters.ExecutionTransitionID(request)
 	result := adapters.BindExecutionResult(request, adapters.ExecutionResult{
 		Succeeded: true,
 		Output:    "adapter completed, not independently validated",
