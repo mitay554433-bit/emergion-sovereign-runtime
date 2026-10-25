@@ -186,6 +186,21 @@ func requiredCapabilityRecipe(required string) []string {
 	}
 }
 
+// capabilityEvidenceCount counts only explicitly capability-scoped validated facts.
+// This is a conservative evidence preference, not an authorization or proof of
+// performance. Missing evidence scores zero and cannot be inferred from WVC.
+func capabilityEvidenceCount(em core.EmergION, capability string) int {
+	prefix := "capability_verified:" + capability
+	seen := map[string]bool{}
+	for _, fact := range em.VAL.Facts {
+		fact = strings.TrimSpace(fact)
+		if fact == prefix || strings.HasPrefix(fact, prefix+":") {
+			seen[fact] = true
+		}
+	}
+	return len(seen)
+}
+
 func acceptedCapabilityProviders(
 	required string,
 	st core.State,
@@ -219,7 +234,17 @@ func acceptedCapabilityProviders(
 			return "", false
 		}
 
-		sort.Strings(matches)
+		// Prefer explicitly capability-specific validated facts. Integrity flags,
+		// generic facts, and provider IDs are not evidence of task suitability.
+		// Ties retain the previous stable identity ordering.
+		sort.Slice(matches, func(i, j int) bool {
+			left := capabilityEvidenceCount(st.Accepted[matches[i]], requiredPart)
+			right := capabilityEvidenceCount(st.Accepted[matches[j]], requiredPart)
+			if left != right {
+				return left > right
+			}
+			return matches[i] < matches[j]
+		})
 
 		providers = append(
 			providers,
