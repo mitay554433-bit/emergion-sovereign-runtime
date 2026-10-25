@@ -276,6 +276,17 @@ func acceptedCapabilityProviderPopulation(
 		next := make([]string, 0, len(population)*len(matches))
 		for _, prefix := range population {
 			for _, id := range matches {
+				// A provider trajectory is an ordered edge path. Do not emit a
+				// combination whose next edge would self-reference; the edge
+				// validator remains the downstream fail-closed invariant.
+				if prefix != "" {
+					last := prefix[strings.LastIndex(prefix, ",")+1:]
+					_, previousID, ok := strings.Cut(last, ":")
+					if ok && strings.TrimSpace(previousID) == id {
+						continue
+					}
+				}
+
 				entry := requiredPart + ":" + id
 				if prefix != "" {
 					entry = prefix + "," + entry
