@@ -845,6 +845,7 @@ func TestRunDrivesSuccessiveGovernedCyclesWithoutManualInvocation(t *testing.T) 
 
 	cycles := make(chan cycleObservation, 4)
 	runErr := make(chan error, 1)
+	started := time.Now()
 
 	go func() {
 		runErr <- rt.Run(
@@ -858,6 +859,7 @@ func TestRunDrivesSuccessiveGovernedCyclesWithoutManualInvocation(t *testing.T) 
 				signal core.EmergION,
 				executed bool,
 			) {
+				t.Logf("unattended cycle elapsed=%s circulated=%d executed=%t signal=%s", time.Since(started), len(circulated), executed, signal.IDN)
 				cycles <- cycleObservation{
 					circulated: circulated,
 					signal:     signal,
