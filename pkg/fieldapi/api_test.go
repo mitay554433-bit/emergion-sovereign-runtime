@@ -1827,3 +1827,211 @@ func TestGovernedCycleDiscoveredSelectionStopsAtHumanFinal(t *testing.T) {
 		t.Fatal("selection boundary manufactured action authorization")
 	}
 }
+
+func TestRunExecutesTwoDistinctSafeWorksAcrossProductiveGovernedCycles(t *testing.T) {
+	root := t.TempDir()
+	binary := os.Getenv("GEMMA_BIN")
+	model := os.Getenv("GEMMA_MODEL")
+	if binary == "" || model == "" {
+		t.Skip("set GEMMA_BIN and GEMMA_MODEL for unattended Run integration test")
+	}
+
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rt := &Runtime{
+		store:    s,
+		reasoner: sawCirculationReasoner{},
+	}
+
+	accept := func(em core.EmergION, reasonText string, evidence []byte) {
+		t.Helper()
+
+		em.STA = core.StateAtGOV
+		em.VAL.Recoil = true
+		em.VAL.WVC = true
+
+		if em.EVO.Version == 0 {
+			em.EVO.Version = 1
+		}
+		if em.EVO.Metadata == nil {
+			em.EVO.Metadata = &core.Metadata{
+				CapturedAt:   time.Now().UTC(),
+				AIIntegrated: false,
+				PromptSchema: "MXPD/2",
+			}
+		}
+
+		if len(evidence) == 0 {
+
+			evidence = []byte(em.IDN)
+
+		}
+		preserved, err := s.Preserve(evidence)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		em.MEM.SourceHash = preserved.Hash
+		em.MEM.Codec = preserved.Codec
+		em.MEM.Bytes = preserved.Bytes
+		em.MEM.Stored = preserved.Stored
+
+		if _, err := s.SaveCandidate(em); err != nil {
+			t.Fatal(err)
+		}
+
+		approved, decision, err := gov.Decide(
+			em,
+			gov.Approve,
+			"HUMAN_FINAL",
+			reasonText,
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		decisionID, err := s.SaveDecision(decision)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, receipt, err := reg.Accept(approved, decisionID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := s.SaveAccepted(receipt); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	safeWork := core.EmergION{
+		IDN: "E-RUN-AUTONOMY-SAFE-WORK",
+		CAP: []string{"ANALYZE"},
+		EVO: core.Evolution{
+			Version: 1,
+			Metadata: &core.Metadata{
+				CapturedAt:   time.Now().UTC(),
+				AIIntegrated: false,
+				PromptSchema: "MXPD/2",
+				Facets: []core.Facet{
+					core.FacetAnalyticsForecast,
+				},
+			},
+		},
+	}
+
+	accept(safeWork, "accept unattended run safe work", []byte("This preserved source is an analytics forecast workload for analysis."))
+
+	secondWork := safeWork
+	secondWork.IDN = "E-RUN-AUTONOMY-SAFE-WORK-SECOND"
+	accept(secondWork, "accept second unattended safe work", []byte("Second independent preserved analytics forecast workload."))
+
+	gemma := reason.GemmaCLI{
+		Binary:    binary,
+		Model:     model,
+		Threads:   4,
+		Context:   2048,
+		MaxTokens: 80,
+		Timeout:   180 * time.Second,
+		ExtraArgs: []string{"--seed", "1"},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	type cycleObservation struct {
+		circulated []core.EmergION
+		signal     core.EmergION
+		executed   bool
+	}
+
+	cycles := make(chan cycleObservation, 4)
+	runErr := make(chan error, 1)
+	started := time.Now()
+
+	go func() {
+		runErr <- rt.Run(
+			ctx,
+			filepath.Join(root, "dropzone"),
+			10*time.Millisecond,
+			gemma,
+			nil,
+			func(
+				circulated []core.EmergION,
+				signal core.EmergION,
+				executed bool,
+			) {
+				t.Logf("unattended cycle elapsed=%s circulated=%d executed=%t signal=%s", time.Since(started), len(circulated), executed, signal.IDN)
+				cycles <- cycleObservation{
+					circulated: circulated,
+					signal:     signal,
+					executed:   executed,
+				}
+			},
+		)
+	}()
+
+	var productive []cycleObservation
+	timeout := time.NewTimer(300 * time.Second)
+	defer timeout.Stop()
+	for len(productive) < 2 {
+		select {
+		case cycle := <-cycles:
+			if cycle.executed {
+				productive = append(productive, cycle)
+			}
+		case err := <-runErr:
+			t.Fatalf("Run exited before two productive cycles: %v", err)
+		case <-timeout.C:
+			t.Fatal("Run did not execute two distinct safe works in unattended cycles")
+		}
+	}
+
+	cancel()
+
+	select {
+	case err := <-runErr:
+		if err != nil && err != context.Canceled {
+			t.Fatalf("Run cancellation error = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run did not stop after context cancellation")
+	}
+
+	parents := map[string]bool{}
+	for _, cycle := range productive {
+		signal := cycle.signal
+		if signal.IDN == "" || signal.STA != core.StateAtGOV {
+			t.Fatalf("productive cycle missing AtGOV execution signal: %+v", signal)
+		}
+		if !signal.VAL.Recoil || !signal.VAL.WVC {
+			t.Fatal("productive execution signal bypassed RECOIL/WVC")
+		}
+		parent := signal.REL["kin_emergion"]
+		if parent != safeWork.IDN && parent != secondWork.IDN {
+			t.Fatalf("unexpected execution parent %q", parent)
+		}
+		if parents[parent] {
+			t.Fatalf("safe work %q executed twice rather than two distinct works", parent)
+		}
+		parents[parent] = true
+	}
+	state, err := rt.state()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, cycle := range productive {
+		if _, ok := state.AtGOV[cycle.signal.IDN]; !ok {
+			t.Fatalf("execution signal %q missing from AtGOV", cycle.signal.IDN)
+		}
+		if _, ok := state.Accepted[cycle.signal.IDN]; ok {
+			t.Fatalf("execution signal %q self-authorized into REG", cycle.signal.IDN)
+		}
+	}
+
+}
+
