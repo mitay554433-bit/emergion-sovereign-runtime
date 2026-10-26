@@ -9,6 +9,11 @@ if [[ ! -x "$GEMMA_BIN" || ! -r "$GEMMA_MODEL" ]]; then
   echo "Gemma executable/model missing or unreadable" >&2
   exit 1
 fi
+# Record source identity and available storage before resource-heavy inference.
+echo "Verification source: $(git rev-parse HEAD)"
+echo "Verification UTC: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+git status --short
+df -h . || true
 # Keep the full suite and real inference tests; serialize packages rather
 # than disabling the live tests or weakening source-grounding.
 export GOMAXPROCS="${GOMAXPROCS:-2}"
