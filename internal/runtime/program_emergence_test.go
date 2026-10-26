@@ -38,10 +38,10 @@ func TestProposeOneProgramPatchAdmitsPatchAtGOVWithRuntimeOrigin(t *testing.T) {
 	if out, err := exec.Command("git", "init", repo).CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v: %s", err, out)
 	}
-		moduleFile := filepath.Join(repo, "go.mod")
-		if err := os.WriteFile(moduleFile, []byte("module program-emergence-proof\n\ngo 1.23\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
+	moduleFile := filepath.Join(repo, "go.mod")
+	if err := os.WriteFile(moduleFile, []byte("module program-emergence-proof\n\ngo 1.23\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	target := "internal/a.go"
 	original := []byte("package internal\n\nconst value = 1\n")
@@ -164,126 +164,126 @@ func TestProposeOneProgramPatchAdmitsPatchAtGOVWithRuntimeOrigin(t *testing.T) {
 	if _, ok := state.Accepted[em.IDN]; ok {
 		t.Fatal("proposal self-authorized into REG")
 	}
-        approvedPatch, decision, err := gov.Decide(
-                em,
-                gov.Approve,
-                "HUMAN_FINAL",
-                "approve generated PROGRAM patch",
-        )
-        if err != nil {
-                t.Fatal(err)
-        }
+	approvedPatch, decision, err := gov.Decide(
+		em,
+		gov.Approve,
+		"HUMAN_FINAL",
+		"approve generated PROGRAM patch",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-        decisionID, err = s.SaveDecision(decision)
-        if err != nil {
-                t.Fatal(err)
-        }
+	decisionID, err = s.SaveDecision(decision)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-        acceptedPatch, receipt, err := reg.Accept(approvedPatch, decisionID)
-        if err != nil {
-                t.Fatal(err)
-        }
-        if _, err := s.SaveAccepted(receipt); err != nil {
-                t.Fatal(err)
-        }
+	acceptedPatch, receipt, err := reg.Accept(approvedPatch, decisionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveAccepted(receipt); err != nil {
+		t.Fatal(err)
+	}
 
-        if _, err := r.AuthorizeAction(
-                acceptedPatch.IDN,
-                "GITHUB",
-                "PROGRAM",
-                "authorize generated PROGRAM patch",
-                false,
-        ); err != nil {
-                t.Fatal(err)
-        }
+	if _, err := r.AuthorizeAction(
+		acceptedPatch.IDN,
+		"GITHUB",
+		"PROGRAM",
+		"authorize generated PROGRAM patch",
+		false,
+	); err != nil {
+		t.Fatal(err)
+	}
 
-        oldDir, err := os.Getwd()
-        if err != nil {
-                t.Fatal(err)
-        }
-        if err := os.Chdir(repo); err != nil {
-                t.Fatal(err)
-        }
-        defer os.Chdir(oldDir)
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(repo); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(oldDir)
 
-        request, result, signal, duplicate, err := r.ExecuteAction(
-                context.Background(),
-                acceptedPatch.IDN,
-                "GITHUB",
-                "PROGRAM",
-                reason.GemmaCLI{},
-        )
-        if err != nil {
-                t.Fatal(err)
-        }
-        if duplicate {
-                t.Fatal("PROGRAM execution RECAPTURE unexpectedly duplicate")
-        }
-        if !result.Succeeded {
-                t.Fatalf("PROGRAM execution did not succeed: %#v", result)
-        }
-        if request.AuthorizationID == "" {
-                t.Fatal("PROGRAM execution missing authorization identity")
-        }
-        if signal.STA != core.StateAtGOV {
-                t.Fatalf("PROGRAM execution RECAPTURE state = %q want %q", signal.STA, core.StateAtGOV)
-        }
-        if !signal.VAL.Recoil || !signal.VAL.WVC {
-                t.Fatal("PROGRAM execution RECAPTURE did not pass RECOIL/WVC")
-        }
-        if signal.REL["parent_emergion"] != acceptedPatch.IDN {
-                t.Fatalf(
-                        "PROGRAM execution parent = %q want %q",
-                        signal.REL["parent_emergion"],
-                        acceptedPatch.IDN,
-                )
-        }
+	request, result, signal, duplicate, err := r.ExecuteAction(
+		context.Background(),
+		acceptedPatch.IDN,
+		"GITHUB",
+		"PROGRAM",
+		reason.GemmaCLI{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate {
+		t.Fatal("PROGRAM execution RECAPTURE unexpectedly duplicate")
+	}
+	if !result.Succeeded {
+		t.Fatalf("PROGRAM execution did not succeed: %#v", result)
+	}
+	if request.AuthorizationID == "" {
+		t.Fatal("PROGRAM execution missing authorization identity")
+	}
+	if signal.STA != core.StateAtGOV {
+		t.Fatalf("PROGRAM execution RECAPTURE state = %q want %q", signal.STA, core.StateAtGOV)
+	}
+	if !signal.VAL.Recoil || !signal.VAL.WVC {
+		t.Fatal("PROGRAM execution RECAPTURE did not pass RECOIL/WVC")
+	}
+	if signal.REL["kin_emergion"] != acceptedPatch.IDN {
+		t.Fatalf(
+			"PROGRAM execution parent = %q want %q",
+			signal.REL["kin_emergion"],
+			acceptedPatch.IDN,
+		)
+	}
 
-        finalSource, err := os.ReadFile(filepath.Join(repo, target))
-        if err != nil {
-                t.Fatal(err)
-        }
-        if string(finalSource) != "package internal\n\nconst value = 2\n" {
-                t.Fatalf("PROGRAM patch did not change source: %s", finalSource)
-        }
+	finalSource, err := os.ReadFile(filepath.Join(repo, target))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(finalSource) != "package internal\n\nconst value = 2\n" {
+		t.Fatalf("PROGRAM patch did not change source: %s", finalSource)
+	}
 
-        if result.ResultSourceHash == "" {
-                t.Fatal("PROGRAM execution missing preserved result source")
-        }
-        if result.ResultSourceHash == request.SourceHash {
-                t.Fatal("PROGRAM result source evidence unexpectedly equals patch evidence")
-        }
-        if signal.REL["result_source_hash"] != result.ResultSourceHash {
-                t.Fatalf(
-                        "PROGRAM result source relationship = %q want %q",
-                        signal.REL["result_source_hash"],
-                        result.ResultSourceHash,
-                )
-        }
-        preservedResult, err := s.ReadEvidence(result.ResultSourceHash)
-        if err != nil {
-                t.Fatal(err)
-        }
-        if string(preservedResult) != string(finalSource) {
-                t.Fatal("preserved PROGRAM result source does not equal verified filesystem source")
-        }
+	if result.ResultSourceHash == "" {
+		t.Fatal("PROGRAM execution missing preserved result source")
+	}
+	if result.ResultSourceHash == request.SourceHash {
+		t.Fatal("PROGRAM result source evidence unexpectedly equals patch evidence")
+	}
+	if signal.REL["result_source_hash"] != result.ResultSourceHash {
+		t.Fatalf(
+			"PROGRAM result source relationship = %q want %q",
+			signal.REL["result_source_hash"],
+			result.ResultSourceHash,
+		)
+	}
+	preservedResult, err := s.ReadEvidence(result.ResultSourceHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(preservedResult) != string(finalSource) {
+		t.Fatal("preserved PROGRAM result source does not equal verified filesystem source")
+	}
 
-        finalState, err := livefield.Rebuild(mustEvents(t, s))
-        if err != nil {
-                t.Fatal(err)
-        }
-        if _, ok := finalState.Accepted[acceptedPatch.IDN]; !ok {
-                t.Fatal("accepted PROGRAM patch disappeared from FIELD")
-        }
-        finalSignal, ok := finalState.AtGOV[signal.IDN]
-        if !ok {
-                t.Fatal("PROGRAM execution RECAPTURE did not return to GOV")
-        }
-        if finalSignal.REL["result_source_hash"] != result.ResultSourceHash {
-                t.Fatalf(
-                        "rebuilt FIELD result source relationship = %q want %q",
-                        finalSignal.REL["result_source_hash"],
-                        result.ResultSourceHash,
-                )
-        }
+	finalState, err := livefield.Rebuild(mustEvents(t, s))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := finalState.Accepted[acceptedPatch.IDN]; !ok {
+		t.Fatal("accepted PROGRAM patch disappeared from FIELD")
+	}
+	finalSignal, ok := finalState.AtGOV[signal.IDN]
+	if !ok {
+		t.Fatal("PROGRAM execution RECAPTURE did not return to GOV")
+	}
+	if finalSignal.REL["result_source_hash"] != result.ResultSourceHash {
+		t.Fatalf(
+			"rebuilt FIELD result source relationship = %q want %q",
+			finalSignal.REL["result_source_hash"],
+			result.ResultSourceHash,
+		)
+	}
 }

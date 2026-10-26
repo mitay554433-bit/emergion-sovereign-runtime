@@ -186,6 +186,21 @@ func requiredCapabilityRecipe(required string) []string {
 	}
 }
 
+// capabilityEvidenceCount counts only explicitly capability-scoped validated facts.
+// This is a conservative evidence preference, not an authorization or proof of
+// performance. Missing evidence scores zero and cannot be inferred from WVC.
+func capabilityEvidenceCount(em core.EmergION, capability string) int {
+	prefix := "capability_verified:" + capability
+	seen := map[string]bool{}
+	for _, fact := range em.VAL.Facts {
+		fact = strings.TrimSpace(fact)
+		if fact == prefix || strings.HasPrefix(fact, prefix+":") {
+			seen[fact] = true
+		}
+	}
+	return len(seen)
+}
+
 func acceptedCapabilityProviders(
 	required string,
 	st core.State,
@@ -219,7 +234,17 @@ func acceptedCapabilityProviders(
 			return "", false
 		}
 
-		sort.Strings(matches)
+		// Prefer explicitly capability-specific validated facts. Integrity flags,
+		// generic facts, and provider IDs are not evidence of task suitability.
+		// Ties retain the previous stable identity ordering.
+		sort.Slice(matches, func(i, j int) bool {
+			left := capabilityEvidenceCount(st.Accepted[matches[i]], requiredPart)
+			right := capabilityEvidenceCount(st.Accepted[matches[j]], requiredPart)
+			if left != right {
+				return left > right
+			}
+			return matches[i] < matches[j]
+		})
 
 		providers = append(
 			providers,
@@ -276,6 +301,17 @@ func acceptedCapabilityProviderPopulation(
 		next := make([]string, 0, len(population)*len(matches))
 		for _, prefix := range population {
 			for _, id := range matches {
+				// A provider trajectory is an ordered edge path. Do not emit a
+				// combination whose next edge would self-reference; the edge
+				// validator remains the downstream fail-closed invariant.
+				if prefix != "" {
+					last := prefix[strings.LastIndex(prefix, ",")+1:]
+					_, previousID, ok := strings.Cut(last, ":")
+					if ok && strings.TrimSpace(previousID) == id {
+						continue
+					}
+				}
+
 				entry := requiredPart + ":" + id
 				if prefix != "" {
 					entry = prefix + "," + entry
@@ -1861,19 +1897,19 @@ func (r Runtime) executeWithConcurrentObservation(
 
 	observationRuntime := r
 	observationRuntime.Reasoner = fixedReasoner{
-		name: "execution-signal",
+		name:    "execution-signal",
 		version: "v1",
 		result: reason.Result{
 			Summary: "bounded concurrent execution observation",
 			Relationships: map[string]string{
-				"source_kind": "EXECUTION_OBSERVATION",
+				"source_kind":  "EXECUTION_OBSERVATION",
 				"kin_emergion": request.EmergIONID,
-				"adapter": request.Adapter,
-				"action": request.Action,
+				"adapter":      request.Adapter,
+				"action":       request.Action,
 			},
 			Capabilities: []string{"OBS", "CMP"},
-			Facts: []string{"execution_observed_concurrently"},
-			Risk: "L",
+			Facts:        []string{"execution_observed_concurrently"},
+			Risk:         "L",
 		},
 	}
 	observationContent := fmt.Sprintf(
@@ -1940,7 +1976,7 @@ func (r Runtime) ExecuteAction(
 			Gemma: gemma,
 		}
 		execute = func() (adapters.ExecutionResult, error) {
-			return executor.Execute(request)
+			return executor.Execute(ctx, request)
 		}
 	case "GITHUB":
 		executor := adapters.GitHubProgramExecutor{
@@ -2104,7 +2140,7 @@ func (r Runtime) ExecuteOneSafeAction(
 				ctx,
 				request,
 				func() (adapters.ExecutionResult, error) {
-					return executor.Execute(request)
+					return executor.Execute(ctx, request)
 				},
 			)
 			if observationErr != nil {

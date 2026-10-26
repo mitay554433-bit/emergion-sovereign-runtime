@@ -206,7 +206,22 @@ label-next ::= [^:=,|\r\n]
 text-tail ::= [^|\r\n]*
 `
 
+const mxpdOrdinaryGrammarRoot = `root ::= summary risk fact relationship? capability? facet? end`
+
+func gemmaGrammarForSource(content string) string {
+	if strings.HasPrefix(strings.TrimSpace(content), "TARGET_COMPARISON/1\n") {
+		return mxpdGrammar
+	}
+	return strings.Replace(mxpdGrammar,
+		`root ::= summary risk fact (difference requirement?)? relationship? capability? facet? end`,
+		mxpdOrdinaryGrammarRoot, 1)
+}
+
 func gemmaArgs(g GemmaCLI, prompt string) []string {
+	return gemmaArgsWithGrammar(g, prompt, mxpdGrammar)
+}
+
+func gemmaArgsWithGrammar(g GemmaCLI, prompt, grammar string) []string {
 	args := []string{
 		"-m", g.Model,
 	}
@@ -238,7 +253,7 @@ func gemmaArgs(g GemmaCLI, prompt string) []string {
 
 	args = append(args,
 		"--color", "off",
-		"--grammar", mxpdGrammar,
+		"--grammar", grammar,
 		"--simple-io",
 		"--single-turn",
 		"--no-display-prompt",
@@ -264,8 +279,6 @@ func normalizeLlamaCLIAnalyzeCandidate(prompt, candidate string) string {
 }
 
 func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
-	fmt.Fprintln(os.Stderr, "ANALYZE_START")
-	defer fmt.Fprintln(os.Stderr, "ANALYZE_END")
 	if err := g.Validate(); err != nil {
 		return Result{}, err
 	}
@@ -298,19 +311,22 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 	}
 	prompt := buildPrompt(in.Name, content, governedState)
 
-	for attempt := 0; attempt < 2; attempt++ {
-		args := gemmaArgs(g, prompt)
+	// Both inference attempts share one bounded reasoning deadline. A semantic
+	// retry must not double the time UNIFUSION waits for this component.
+	boundedCtx, boundedCancel := context.WithTimeout(ctx, g.Timeout)
+	defer boundedCancel()
 
-		cctx, cancel := context.WithTimeout(ctx, g.Timeout)
-		cmd := exec.CommandContext(cctx, g.Binary, args...)
+	for attempt := 0; attempt < 2; attempt++ {
+		args := gemmaArgsWithGrammar(g, prompt, gemmaGrammarForSource(content))
+
+		cmd := exec.CommandContext(boundedCtx, g.Binary, args...)
 
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
 
 		runErr := cmd.Run()
-		ctxErr := cctx.Err()
-		cancel()
+		ctxErr := boundedCtx.Err()
 
 		if runErr != nil {
 			if errors.Is(ctxErr, context.DeadlineExceeded) {
@@ -570,7 +586,7 @@ Observe SOURCE and emit only source-grounded structure.
 
 S = the direct meaning established by SOURCE.
 K = L, M, or H.
-F = concrete evidence or verified state explicitly established by SOURCE.
+F = concrete evidence or verified state explicitly established by SOURCE. Copy a short, contiguous factual phrase from SOURCE rather than paraphrasing, changing punctuation, or combining unrelated terms. If no factual phrase is supported, do not invent one.
 D = a target-relative Difference only for TARGET_COMPARISON/1.
 Outside TARGET_COMPARISON/1, never emit D.
 For TARGET_COMPARISON/1, compare TARGET_STATE with source-grounded ACCEPTED_FACT values inside REALITY.
