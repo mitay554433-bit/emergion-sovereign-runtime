@@ -27,13 +27,21 @@ Typed Go runtime; COSL/REG authority; FIELD reconstruction/projection; EmergION 
 ## Verified vs unverified
 
 - Prior recorded test results: two distinct unattended productive cycles PASS (140.11s); governed cycle PASS (150.67s); realistic analysis PASS (95.55s); target comparison PASS (129.37s). These are historical test reports, not fresh CI for the current branch.
-- On branch `evidence-provider-selection-20261025`, commit `f1a947fe9069a46f65e604f584d1a352974eeebf` added assertions that a causally derived Wave n+1 source remains AtGOV, is not REG-accepted, and cannot execute before authorization. Commit confirmed; tests have **not** been executed or confirmed passing for that commit.
+- On branch `evidence-provider-selection-20261025`, commit `f1a947fe9069a46f65e604f584d1a352974eeebf` added assertions that a causally derived Wave n+1 source remains AtGOV, is not REG-accepted, and cannot execute before authorization. The latest branch head `7237565d6e6c61358bacc5ff6a1ff4bcd46d1ae7`, which includes this regression, has GitHub Actions verification run `40259456518` (run #38) **SUCCESS**: `go test ./...` and `go vet ./...` both passed on the CI host. This verifies the current checked-in Go suite in CI, **not** live Termux/Gemma behavior.
 - Sustained causal multi-wave unattended closure under phone resource pressure and current operator HUMAN_FINAL surface still need end-to-end verification.
-- Oct 24 Go verification failures were reported on other commits/branches; reconcile exact SHAs and jobs rather than generalizing to all tests.
+- Oct 24 Go verification failures were reported on other commits/branches; do not generalize them to the passing October 25 head. Any distinct live-host failures remain separately unresolved.
+- Existing operator navigation test checks seven sections (`realization-field`, `human-final`, `verified-deliveries`, `lifecycle-projection`, `spatial-convergence`, `spatial-emergion`, `saw-work`) and unchanged canonical tip; the current CI run passes this checked-in test. This is not proof of live operator usability.
+- GitHub draft PR #30 compares this development branch against the repository default branch `governed-demand-v1`: 38 commits ahead, zero behind, 25 changed files; not merged. Reviews and review threads were empty when inspected; mergeability had not been established.
+- Existing `scripts/verify_termux_live.sh` runs serialized full Go tests with live Gemma and vet on the phone, but has **not** been run as part of this reconciliation.
+- `REPOSITORY_MANIFEST.json` is stale (2026-08-05, 29 files versus 96 tracked files in October 24 inventory); `scripts/generate_manifest.py` exists but a regenerated manifest has not been verified.
 
 ## Operational constraints
 
 October 20 user-reported phone constraints included ~90 MB free RAM, ~4 GB swap used, 99% storage occupancy, and an orphaned long-running llama-cli process. These are historical observations, not verified current health. They can confound latency and sustained-loop verification.
+
+## Broader system inventory boundary
+
+The October 24 source-audited full-system reconciliation identifies VERITEX V12, PIVOTAI, separate UNIFUSION Python services, WVC/SHEEN ledgers, startup scripts and external adapters as phone-local or outside this Go repository. Their existence is historically reported, but current operation is **not verified** by GitHub CI. The October 8 living implementation record documents existing target recurrence, provider population, Returned continuation, verified deliverable serving and UTF-8-safe Gemma boundaries; preserve these as implemented, not fresh gaps. The operator UI must extend existing FIELD projection, not become a second authority.
 
 ## Safe next work / authority
 
