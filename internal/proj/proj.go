@@ -743,22 +743,32 @@ async function loadDeliveries() {
 loadDeliveries();
 
 async function humanFinal(id, decision) {
-  if (!confirm(decision + " " + id + "?")) return;
-  const response = await fetch("/decide", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
-      emergion_id: id,
-      decision: decision,
-      reason: "HUMAN_FINAL PIVOTAI decision"
-    })
-  });
-  const result = await response.json();
-  if (result.error) {
-    alert(result.error);
+  const reason = prompt("Reason for " + decision + " of " + id + " (required):");
+  if (reason === null) return;
+  if (!reason.trim()) {
+    alert("A HUMAN_FINAL decision requires an explicit reason.");
     return;
   }
-  location.reload();
+  if (!confirm(decision + " " + id + "? This records a governed decision.")) return;
+  try {
+    const response = await fetch("/decide", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        emergion_id: id,
+        decision: decision,
+        reason: reason.trim()
+      })
+    });
+    const result = await response.json();
+    if (!response.ok || result.error) {
+      alert(result.error || "HUMAN_FINAL decision was not accepted.");
+      return;
+    }
+    location.reload();
+  } catch (err) {
+    alert("HUMAN_FINAL decision could not be confirmed. Refresh the FIELD before retrying.");
+  }
 }
 </script>
 </body>
