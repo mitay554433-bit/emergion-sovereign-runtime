@@ -3,12 +3,10 @@ name: UNIFUSION Go verification
 on:
   push:
     branches:
+      - governed-demand-v1
+      - evidence-provider-selection-20261025
       - unifusion-system-reconciliation-20261024
   pull_request:
-    paths:
-      - '**/*.go'
-      - go.mod
-      - .github/workflows/go-verification.yml
 
 permissions:
   contents: read
