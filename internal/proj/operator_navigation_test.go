@@ -46,3 +46,30 @@ func TestOperatorNavigationProjectsExistingSectionsWithoutAuthorityMutation(t *t
         t.Fatal("operator navigation must disclose its non-authoritative role")
     }
 }
+
+func TestHumanFinalOperatorRequiresExplicitReasonAndHandlesFailures(t *testing.T) {
+    root := t.TempDir()
+    st := core.EmptyState()
+    if _, err := Current(root, st); err != nil {
+        t.Fatal(err)
+    }
+    htmlBytes, err := os.ReadFile(filepath.Join(root, "field.html"))
+    if err != nil {
+        t.Fatal(err)
+    }
+    html := string(htmlBytes)
+    for _, expected := range []string{
+        "Reason for ",
+        "reason: reason.trim()",
+        "if (!reason.trim())",
+        "if (!response.ok || result.error)",
+        "HUMAN_FINAL decision could not be confirmed",
+    } {
+        if !strings.Contains(html, expected) {
+            t.Errorf("missing governed operator decision safeguard %q", expected)
+        }
+    }
+    if strings.Contains(html, "HUMAN_FINAL PIVOTAI decision") {
+        t.Fatal("operator decision must not use a fabricated fixed reason")
+    }
+}
