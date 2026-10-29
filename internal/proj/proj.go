@@ -420,6 +420,11 @@ html,body{max-width:100%;overflow-x:hidden;box-sizing:border-box}
 body{width:100%}
 .panel,.field-topology,.field-facet,.field-emergion{box-sizing:border-box;min-width:0;max-width:100%}
 table{width:100%;max-width:100%;min-width:0;table-layout:fixed;border-collapse:collapse}
+.human-final-tools{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin:.75rem 0}
+.human-final-tools input{min-width:0;flex:1 1 220px;padding:.65rem;background:#071120;color:#e6eaf0;border:1px solid #2a3548;border-radius:8px}
+.human-final-tools button{padding:.65rem;border-radius:8px}
+#human-final-count{color:#9ca3af}
+#human-final-table tr[hidden]{display:none!important}
 pre{max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere}
 
 th,td{text-align:left;vertical-align:top;padding:.7rem;border-bottom:1px solid #2b3140;overflow-wrap:anywhere;word-break:break-word}
@@ -499,8 +504,9 @@ box-sizing:border-box;
 
 <span id="human-final"></span><h2>HUMAN_FINAL</h2>
 {{if .HumanFinal}}
-<p class="small">{{len .HumanFinal}} decision(s) awaiting HUMAN_FINAL.</p>
-<table class="operator-table">
+<p class="small">{{len .HumanFinal}} decision(s) awaiting HUMAN_FINAL. Decisions require an explicit reason and confirmation.</p>
+<div class="human-final-tools"><label for="human-final-filter">Find decision</label><input id="human-final-filter" type="search" placeholder="Filter by ID, risk, proof or meaning" aria-controls="human-final-table"><button type="button" id="human-final-clear">Clear</button><span id="human-final-count" role="status" aria-live="polite"></span></div>
+<table class="operator-table" id="human-final-table">
 <thead>
 <tr>
 <th>EmergION</th>
@@ -538,7 +544,7 @@ box-sizing:border-box;
 <details class="panel diagnostic">
 <span id="lifecycle-projection"></span><summary>Lifecycle Projection · {{len .Rows}} records</summary>
 <p class="small">Complete reconstructed lifecycle history. Projection only; COSL + governance remain authoritative.</p>
-<table>
+<table class="operator-table">
 <thead>
 <tr>
 <th>EmergION</th>
@@ -553,13 +559,13 @@ box-sizing:border-box;
 <tbody>
 {{range .Rows}}
 <tr>
-<td><code>{{.ID}}</code></td>
-<td class="{{.State}}">{{.State}}</td>
-<td>{{.Risk}}</td>
-<td><code>{{.Proof}}</code></td>
-<td>{{.Governance}}</td>
-<td>{{.Relationships}}</td>
-<td>{{.Summary}}</td>
+<td data-label="EmergION"><code>{{.ID}}</code></td>
+<td data-label="State" class="{{.State}}">{{.State}}</td>
+<td data-label="Risk">{{.Risk}}</td>
+<td data-label="Evidence proof"><code>{{.Proof}}</code></td>
+<td data-label="Governance">{{.Governance}}</td>
+<td data-label="Relationships">{{.Relationships}}</td>
+<td data-label="Meaning">{{.Summary}}</td>
 </tr>
 {{end}}
 </tbody>
@@ -570,7 +576,7 @@ box-sizing:border-box;
 <summary id="spatial-convergence">SPATIAL CONVERGENCE ZONE · {{len .Convergence}} accepted</summary>
 <p class="small">Accepted governed structures only. Diagnostic structural projection; canonical authority remains COSL + REG.</p>
 
-<table>
+<table class="operator-table">
 <thead>
 <tr>
 <th>EmergION</th>
@@ -588,16 +594,16 @@ box-sizing:border-box;
 <tbody>
 {{range .Convergence}}
 <tr>
-<td><code>{{.ID}}</code></td>
-<td>{{.Summary}}</td>
-<td>{{.Archonym}}</td>
-<td>{{.Kin}}</td>
-<td>{{.Topology}}</td>
-<td>{{.Facets}}</td>
-<td>{{.Capabilities}}</td>
-<td>{{.Relationships}}</td>
-<td>{{.BuildNodes}}</td>
-<td>{{.BuildEdges}}</td>
+<td data-label="EmergION"><code>{{.ID}}</code></td>
+<td data-label="Meaning">{{.Summary}}</td>
+<td data-label="Archonym">{{.Archonym}}</td>
+<td data-label="Kin">{{.Kin}}</td>
+<td data-label="Topology">{{.Topology}}</td>
+<td data-label="Facets">{{.Facets}}</td>
+<td data-label="Capabilities">{{.Capabilities}}</td>
+<td data-label="Relationships">{{.Relationships}}</td>
+<td data-label="Build Nodes">{{.BuildNodes}}</td>
+<td data-label="Build Edges">{{.BuildEdges}}</td>
 </tr>
 {{end}}
 </tbody>
@@ -741,6 +747,31 @@ async function loadDeliveries() {
 }
 
 loadDeliveries();
+
+(function initHumanFinalFilter() {
+  const input = document.getElementById("human-final-filter");
+  const table = document.getElementById("human-final-table");
+  if (!input || !table) return;
+  const rows = Array.from(table.querySelectorAll("tbody tr"));
+  const count = document.getElementById("human-final-count");
+  function update() {
+    const query = input.value.trim().toLocaleLowerCase();
+    let visible = 0;
+    rows.forEach(function(row) {
+      const matches = row.textContent.toLocaleLowerCase().includes(query);
+      row.hidden = !matches;
+      if (matches) visible++;
+    });
+    count.textContent = visible + " of " + rows.length + " shown";
+  }
+  input.addEventListener("input", update);
+  document.getElementById("human-final-clear").addEventListener("click", function() {
+    input.value = "";
+    update();
+    input.focus();
+  });
+  update();
+})();
 
 async function humanFinal(id, decision) {
   const reason = prompt("Reason for " + decision + " of " + id + " (required):");
