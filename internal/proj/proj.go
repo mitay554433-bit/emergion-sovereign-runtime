@@ -538,7 +538,7 @@ box-sizing:border-box;
 <details class="panel diagnostic">
 <span id="lifecycle-projection"></span><summary>Lifecycle Projection · {{len .Rows}} records</summary>
 <p class="small">Complete reconstructed lifecycle history. Projection only; COSL + governance remain authoritative.</p>
-<table>
+<table class="operator-table">
 <thead>
 <tr>
 <th>EmergION</th>
@@ -553,13 +553,13 @@ box-sizing:border-box;
 <tbody>
 {{range .Rows}}
 <tr>
-<td><code>{{.ID}}</code></td>
-<td class="{{.State}}">{{.State}}</td>
-<td>{{.Risk}}</td>
-<td><code>{{.Proof}}</code></td>
-<td>{{.Governance}}</td>
-<td>{{.Relationships}}</td>
-<td>{{.Summary}}</td>
+<td data-label="EmergION"><code>{{.ID}}</code></td>
+<td data-label="State" class="{{.State}}">{{.State}}</td>
+<td data-label="Risk">{{.Risk}}</td>
+<td data-label="Evidence proof"><code>{{.Proof}}</code></td>
+<td data-label="Governance">{{.Governance}}</td>
+<td data-label="Relationships">{{.Relationships}}</td>
+<td data-label="Meaning">{{.Summary}}</td>
 </tr>
 {{end}}
 </tbody>
@@ -570,7 +570,7 @@ box-sizing:border-box;
 <summary id="spatial-convergence">SPATIAL CONVERGENCE ZONE · {{len .Convergence}} accepted</summary>
 <p class="small">Accepted governed structures only. Diagnostic structural projection; canonical authority remains COSL + REG.</p>
 
-<table>
+<table class="operator-table">
 <thead>
 <tr>
 <th>EmergION</th>
@@ -588,16 +588,16 @@ box-sizing:border-box;
 <tbody>
 {{range .Convergence}}
 <tr>
-<td><code>{{.ID}}</code></td>
-<td>{{.Summary}}</td>
-<td>{{.Archonym}}</td>
-<td>{{.Kin}}</td>
-<td>{{.Topology}}</td>
-<td>{{.Facets}}</td>
-<td>{{.Capabilities}}</td>
-<td>{{.Relationships}}</td>
-<td>{{.BuildNodes}}</td>
-<td>{{.BuildEdges}}</td>
+<td data-label="EmergION"><code>{{.ID}}</code></td>
+<td data-label="Meaning">{{.Summary}}</td>
+<td data-label="Archonym">{{.Archonym}}</td>
+<td data-label="Kin">{{.Kin}}</td>
+<td data-label="Topology">{{.Topology}}</td>
+<td data-label="Facets">{{.Facets}}</td>
+<td data-label="Capabilities">{{.Capabilities}}</td>
+<td data-label="Relationships">{{.Relationships}}</td>
+<td data-label="Build Nodes">{{.BuildNodes}}</td>
+<td data-label="Build Edges">{{.BuildEdges}}</td>
 </tr>
 {{end}}
 </tbody>
