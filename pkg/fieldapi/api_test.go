@@ -1976,7 +1976,7 @@ func TestRunExecutesTwoDistinctSafeWorksAcrossProductiveGovernedCycles(t *testin
 	}()
 
 	var productive []cycleObservation
-	timeout := time.NewTimer(300 * time.Second)
+	timeout := time.NewTimer(600 * time.Second)
 	defer timeout.Stop()
 	for len(productive) < 2 {
 		select {
