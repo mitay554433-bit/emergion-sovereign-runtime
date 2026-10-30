@@ -187,6 +187,13 @@ func (s *Store) appendLocked(kind, subject string, em *core.EmergION, d *core.De
 	if err != nil {
 		return "", err
 	}
+	if kind == "C" && em != nil {
+		for _, event := range events {
+			if event.EmergION != nil && event.EmergION.MEM.SourceHash == em.MEM.SourceHash {
+				return event.EmergION.IDN, nil
+			}
+		}
+	}
 	prev := ""
 	if len(events) > 0 {
 		prev = events[len(events)-1].SelfHash
@@ -256,11 +263,6 @@ func (s *Store) SaveCandidate(em core.EmergION) (string, error) {
 	}
 	if err := em.EVO.Metadata.Validate(); err != nil {
 		return "", fmt.Errorf("candidate metadata invalid: %w", err)
-	}
-	if existing, ok, err := s.FindBySourceHash(em.MEM.SourceHash); err != nil {
-		return "", err
-	} else if ok {
-		return existing.IDN, nil
 	}
 	return s.append("C", em.IDN, &em, nil, nil, nil)
 }
