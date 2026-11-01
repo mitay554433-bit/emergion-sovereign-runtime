@@ -1642,7 +1642,7 @@ func (r Runtime) admitAnalyzedCandidate(
 		return core.EmergION{}, false, err
 	}
 
-	if provenance != "provider_population" {
+	if provenance == "governed_target_comparison" {
 		if required := strings.TrimSpace(em.REL["required_capability"]); required != "" {
 			if _, err := r.materializeCapabilityProviderPopulation(
 				ctx,
