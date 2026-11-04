@@ -32,6 +32,52 @@ func TestStore(t *testing.T) {
 	}
 }
 
+func TestSaveCandidateRejectsConflictingIdentityBeforeAppend(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstEvidence, err := s.Preserve([]byte("first execution observation"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondEvidence, err := s.Preserve([]byte("second execution observation"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := core.EmergION{
+		IDN: "E-SAME-TRANSITION", STA: core.StateAtGOV,
+		MEM: core.Memory{SourceHash: firstEvidence.Hash, Codec: firstEvidence.Codec, Bytes: firstEvidence.Bytes, Stored: firstEvidence.Stored},
+		VAL: core.Validation{Recoil: true, WVC: true},
+		EVO: core.Evolution{Version: 1},
+	}
+	if _, err := s.SaveCandidate(first); err != nil {
+		t.Fatal(err)
+	}
+	second := first
+	second.MEM = core.Memory{SourceHash: secondEvidence.Hash, Codec: secondEvidence.Codec, Bytes: secondEvidence.Bytes, Stored: secondEvidence.Stored}
+	if _, err := s.SaveCandidate(second); err == nil {
+		t.Fatal("different evidence reused an existing candidate ID")
+	}
+	events, err := s.Events()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].EmergION == nil || events[0].EmergION.MEM.SourceHash != firstEvidence.Hash {
+		t.Fatalf("collision modified canonical ledger: %+v", events)
+	}
+	if _, err := s.SaveCandidate(first); err != nil {
+		t.Fatal(err)
+	}
+	events, err = s.Events()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("exact source replay appended %d events, want 1", len(events))
+	}
+}
+
 func TestSaveCandidateRejectsInvalidMetadata(t *testing.T) {
 	s, err := Open(t.TempDir())
 	if err != nil {
