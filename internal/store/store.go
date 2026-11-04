@@ -187,6 +187,19 @@ func (s *Store) appendLocked(kind, subject string, em *core.EmergION, d *core.De
 	if err != nil {
 		return "", err
 	}
+	if kind == "C" && em != nil {
+		for _, event := range events {
+			if event.Type != "C" || event.EmergION == nil {
+				continue
+			}
+			if event.EmergION.MEM.SourceHash == em.MEM.SourceHash {
+				return event.EmergION.IDN, nil
+			}
+			if event.EmergION.IDN == em.IDN {
+				return "", fmt.Errorf("candidate identity collision %s: existing source %s, incoming source %s", em.IDN, event.EmergION.MEM.SourceHash, em.MEM.SourceHash)
+			}
+		}
+	}
 	prev := ""
 	if len(events) > 0 {
 		prev = events[len(events)-1].SelfHash
