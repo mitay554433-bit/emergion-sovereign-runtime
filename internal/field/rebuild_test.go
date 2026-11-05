@@ -8,7 +8,7 @@ import (
 
 func TestRebuildExecutionObservationIdentityCollisionPreservesFirstCandidate(t *testing.T) {
 	first := core.EmergION{
-		IDN: "E-OBSERVATION-COLLISION",
+		IDN: "E-51DF57FED69B9B80",
 		STA: core.StateAtGOV,
 		MEM: core.Memory{SourceHash: "original-observation", Provenance: "execution_observation"},
 		REL: map[string]string{
