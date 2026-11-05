@@ -6,6 +6,48 @@ import (
 	"time"
 )
 
+func TestRebuildExecutionObservationIdentityCollisionPreservesFirstCandidate(t *testing.T) {
+	first := core.EmergION{
+		IDN: "E-OBSERVATION-COLLISION",
+		STA: core.StateAtGOV,
+		MEM: core.Memory{SourceHash: "original-observation", Provenance: "execution_observation"},
+		REL: map[string]string{
+			"source_kind": "EXECUTION_OBSERVATION",
+			"kin_emergion": "E-ACCEPTED-KIN",
+			"adapter": "LOCAL_GEMMA",
+			"action": "ANALYZE",
+		},
+		EVO: core.Evolution{Version: 1},
+	}
+	retry := first
+	retry.MEM = core.Memory{SourceHash: "retry-observation", Provenance: "execution_observation"}
+	events := []core.Event{
+		{Type: "C", ID: "EV-FIRST", SelfHash: "first-tip", EmergION: &first},
+		{Type: "C", ID: "EV-RETRY", SelfHash: "retry-tip", EmergION: &retry},
+	}
+	st, err := Rebuild(events)
+	if err != nil {
+		t.Fatalf("historical execution observation collision blocked FIELD: %v", err)
+	}
+	got, ok := st.AtGOV[first.IDN]
+	if !ok || got.MEM.SourceHash != first.MEM.SourceHash {
+		t.Fatalf("original observation lost authority: %+v", got)
+	}
+	if st.Events != 2 || st.TipHash != "retry-tip" {
+		t.Fatalf("historical event continuity lost: events=%d tip=%s", st.Events, st.TipHash)
+	}
+}
+
+func TestRebuildRejectsUnrelatedCandidateIdentityCollision(t *testing.T) {
+	first := core.EmergION{IDN: "E-UNRELATED-COLLISION", STA: core.StateAtGOV, MEM: core.Memory{SourceHash: "one"}, EVO: core.Evolution{Version: 1}}
+	second := first
+	second.MEM.SourceHash = "two"
+	events := []core.Event{{Type: "C", EmergION: &first}, {Type: "C", EmergION: &second}}
+	if _, err := Rebuild(events); err == nil {
+		t.Fatal("unrelated candidate identity collision must remain rejected")
+	}
+}
+
 func TestRebuild(t *testing.T) {
 	em := core.EmergION{IDN: "E-1", STA: core.StateAtGOV, EVO: core.Evolution{Version: 1}}
 	d := core.DecisionReceipt{EmergIONID: "E-1", Decision: "APPROVE", Authority: "HUMAN_FINAL", At: time.Now()}
