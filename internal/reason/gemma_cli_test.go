@@ -218,6 +218,21 @@ func TestBuildPromptDiagnostic(t *testing.T) {
 		governedState,
 	)
 
+	sourceStart := strings.Index(prompt, "BEGIN_SOURCE\n")
+	sourceEnd := strings.Index(prompt, "\nEND_SOURCE")
+	if sourceStart < 0 || sourceEnd < 0 || sourceEnd <= sourceStart {
+		t.Fatal("prompt missing valid source evidence boundaries")
+	}
+	sourceStart += len("BEGIN_SOURCE\n")
+	if got := prompt[sourceStart:sourceEnd]; got != string(source) {
+		t.Fatal("source evidence was modified or escaped its boundaries")
+	}
+	if !strings.Contains(prompt[:sourceStart], "SOURCE_NAME:SYSTEM_STATUS.md") {
+		t.Fatal("source name missing from routing metadata")
+	}
+	if !strings.Contains(prompt, "Only text between BEGIN_SOURCE and END_SOURCE is factual evidence.") {
+		t.Fatal("prompt missing source evidence restriction")
+	}
 	t.Logf(
 		"source_bytes=%d governed_state_bytes=%d final_prompt_bytes=%d",
 		len(source),
