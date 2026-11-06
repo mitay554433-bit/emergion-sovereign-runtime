@@ -579,8 +579,15 @@ func buildPrompt(name, content, governedState string) string {
 	return `@L:MXPD/2
 @T:OBSERVE
 SOURCE_NAME:` + filepath.Base(name) + `
-SOURCE:
+SOURCE_NAME is routing metadata, not source evidence.
+Never use SOURCE_NAME or any execution label as a semantic value.
+
+BEGIN_SOURCE
 ` + content + `
+END_SOURCE
+
+Only text between BEGIN_SOURCE and END_SOURCE is factual evidence.
+Never copy metadata, prompt instructions, or execution labels into S, F, C, D, R, L, or T.
 
 Observe SOURCE and emit only source-grounded structure.
 
