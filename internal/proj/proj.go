@@ -595,7 +595,7 @@ func HTML(path string, st core.State) error {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width">
-<title>EmergION Projection</title>
+<title>UNIFUSION · Sovereign Intelligence</title>
 <style>
 body{font:15px system-ui;background:#020817;color:#e6eaf0;margin:0;padding:2rem}a{color:#c9a227}.ok,.good{color:#2ecc71}.bad,.err{color:#e74c3c}.muted{color:#8b95a8}.panel{background:#0f1c2e;border:1px solid #2a3548;border-radius:12px;padding:1rem;margin:0.75rem 0}h1,h2{color:#e6eaf0;border-bottom:1px solid #2d6cff;padding-bottom:0.35rem}code,pre{background:#0a1628;color:#e6eaf0;border:1px solid #2a3548}
 h1{font-size:1.5rem}
@@ -647,18 +647,66 @@ box-sizing:border-box;
 .operator-table button{max-width:100%;margin:.2rem .35rem .2rem 0}
 }
 .operator-table tr[hidden]{display:none}
+/* UNIFUSION — operator visual identity */
+:root{color-scheme:dark;--uf-bg:#050B17;--uf-panel:#10233F;--uf-accent:#326BFF;--uf-text:#E8F0FF;--uf-muted:#A5B5CE;--uf-border:#29446D}
+html{scroll-behavior:smooth}
+body{background:radial-gradient(ellipse 85% 28% at 85% 0%,rgba(50,107,255,.19),transparent 75%),radial-gradient(ellipse 65% 25% at 0% 45%,rgba(31,75,150,.12),transparent 80%),var(--uf-bg);color:var(--uf-text);line-height:1.55;min-height:100vh}
+h1{font-size:clamp(1.7rem,5vw,2.5rem);font-weight:800;letter-spacing:-.045em;border:0;margin:.4rem 0 1.3rem}
+h2{color:var(--uf-text);font-size:1.2rem;letter-spacing:-.025em;border-bottom:1px solid var(--uf-border);padding-bottom:.65rem}
+a{color:#93B0FF;text-decoration-color:rgba(147,176,255,.35);text-underline-offset:3px}
+a:hover{color:#D1DFFF}
+.panel{background:linear-gradient(145deg,rgba(21,47,84,.97),rgba(12,29,54,.97));border:1px solid var(--uf-border);border-radius:16px;padding:1.15rem;box-shadow:0 10px 32px rgba(0,0,0,.17)}
+.small,.muted,#human-final-count{color:var(--uf-muted)}
+code,pre{background:#0B1930;color:#DCE7FF;border:1px solid #29446D;border-radius:6px}
+code{color:#B9CDFF}
+th,td{border-bottom-color:var(--uf-border)}
+th{color:#AFC6FF;font-size:.82rem;letter-spacing:.025em}
+button{background:#193D80;color:#F1F5FF;border:1px solid #507DDA;border-radius:9px;padding:.65rem .9rem;font:inherit;font-weight:650;cursor:pointer}
+button:hover{background:#2858AD;border-color:#91B1FF}
+button:focus-visible,a:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid #AFC6FF;outline-offset:3px}
+.human-final-tools{background:rgba(16,35,63,.75);border:1px solid var(--uf-border);border-radius:13px;padding:.85rem}
+.human-final-tools input{background:#071428;color:var(--uf-text);border:1px solid #45618A;border-radius:9px;font:inherit}
+.human-final-tools input::placeholder{color:#A5B5CE}
+.field-topology{background:#071428;border-color:var(--uf-border)}
+.field-facet,.field-emergion{background:linear-gradient(145deg,#142C4D,#0C1C33);border-color:var(--uf-border);border-radius:13px}
+.diagnostic summary,.field-facet summary{color:#DCE7FF}
+.diagnostic summary::marker,.field-facet summary::marker{color:#93B0FF}
+#human-final-table td[data-label="Meaning"]{color:#F1F5FF;font-weight:550}
+#human-final-table td[data-label="Relationships"]{color:#A5B5CE;font-size:.85rem}
+@media(max-width:700px){
+body{padding:.85rem}
+.panel{padding:1rem;border-radius:14px}
+.operator-table tr{background:linear-gradient(145deg,#142C4D,#0C1C33);border:1px solid var(--uf-border);border-radius:14px;padding:1rem;box-shadow:0 8px 24px rgba(0,0,0,.16)}
+.operator-table td::before{color:#A5B5CE;letter-spacing:.025em}
+#human-final-table td[data-label="Meaning"]{order:0}
+#human-final-table td[data-label="Relationships"]{font-size:.8rem}
+.human-final-tools input{flex-basis:100%}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+
+.uf-header{position:relative;overflow:hidden;padding:1.5rem 1.25rem;margin-bottom:1rem;background:linear-gradient(125deg,#122E55 0%,#08182E 55%,#030916 100%);border:1px solid #345782;border-radius:18px;box-shadow:0 14px 40px rgba(0,0,0,.28)}
+.uf-header::after{content:"";position:absolute;right:-35px;top:-65px;width:190px;height:190px;border:1px solid rgba(117,165,255,.28);border-radius:50%;box-shadow:0 0 0 24px rgba(66,113,200,.035),0 0 0 48px rgba(66,113,200,.025);pointer-events:none}
+.uf-header h1{position:relative;margin:.25rem 0;font-size:clamp(2rem,7vw,3.3rem);letter-spacing:.075em;font-weight:750}
+.uf-eyebrow{margin:0;color:#91B5FF;font-size:.68rem;letter-spacing:.18em;font-weight:700}
+.uf-subtitle{margin:.3rem 0 0;color:#B2C6E3;font-size:.9rem}
+.uf-navigation{padding:1rem}
+.uf-navigation summary{color:#E8F0FF;font-weight:700;cursor:pointer}
+.uf-navigation nav{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1rem}
+.uf-navigation nav a{display:inline-flex;padding:.55rem .8rem;background:#102746;border:1px solid #355785;border-radius:8px;color:#DCE8FF;text-decoration:none;font-size:.85rem;font-weight:600}
+.uf-navigation nav a:hover,.uf-navigation nav a:focus-visible{background:#204B89;border-color:#87ACFF}
+
 </style>
 </head>
 <body>
 
-<h1 id="field-top">Living Projection</h1>
+<header class="uf-header"><p class="uf-eyebrow">ECOPIVOT TECHNOLOGIES</p><h1 id="field-top">UNIFUSION</h1><p class="uf-subtitle">Sovereign intelligence · Evidence · Authority</p></header>
 <section class="panel" id="engineering-twin"><h2>Engineering Twin (external observation)</h2>
 <p>Status: <strong>{{.Twin.Status}}</strong></p>
 <p>Package: <code>{{.Twin.Package}}</code></p>
 {{if .Twin.SHA256}}<p>Captured: {{.Twin.Captured}} · Source files: {{.Twin.Files}} · Added: {{.Twin.Added}} · Removed: {{.Twin.Removed}} · Changed: {{.Twin.Changed}}</p>
 <p>ZIP SHA-256: <code>{{.Twin.SHA256}}</code></p>{{end}}
 <p class="small">Read-only evidence. Not COSL, REG, or HUMAN_FINAL authority.</p></section>
-<details class="panel diagnostic"><summary>Operator navigation</summary><nav aria-label="FIELD sections"><a href="#realization-field">Realization</a> · <a href="#human-final">HUMAN_FINAL</a> · <a href="#verified-deliveries">Deliveries</a> · <a href="#lifecycle-projection">Lifecycle</a> · <a href="#spatial-convergence">Convergence</a> · <a href="#spatial-emergion">Topology</a> · <a href="#saw-work">SAW</a></nav><p class="small">Navigation only; governance remains unchanged.</p></details>
+<details class="panel diagnostic uf-navigation" open><summary>Operator navigation</summary><nav aria-label="FIELD sections"><a href="#realization-field">Realization</a> · <a href="#human-final">HUMAN_FINAL</a> · <a href="#verified-deliveries">Deliveries</a> · <a href="#lifecycle-projection">Lifecycle</a> · <a href="#spatial-convergence">Convergence</a> · <a href="#spatial-emergion">Topology</a> · <a href="#saw-work">SAW</a></nav><p class="small">Navigation only; governance remains unchanged.</p></details>
 <p>Events: {{.Events}} · Tip: <code>{{.TipHash}}</code></p>
 <p class="small">Projection is derived state only. COSL + governance remain authoritative.</p>
 
