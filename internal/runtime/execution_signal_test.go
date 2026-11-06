@@ -1291,6 +1291,22 @@ func TestGovernedRecursiveEmergenceTinyLoop(t *testing.T) {
 		)
 	}
 
+	// Wave n+1 is derived from governed Wave n evidence, but must not
+	// become executable merely because its source was captured.
+	beforeSAWDecision, err := livefield.Rebuild(mustEvents(t, s))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := beforeSAWDecision.AtGOV[sawEmergION.IDN]; !ok {
+		t.Fatal("derived wave n+1 source missing from HUMAN_FINAL queue")
+	}
+	if _, ok := beforeSAWDecision.Accepted[sawEmergION.IDN]; ok {
+		t.Fatal("derived wave n+1 source bypassed HUMAN_FINAL/REG")
+	}
+	if _, err := adapters.PrepareExecution(beforeSAWDecision, sawEmergION.IDN, "LOCAL_GEMMA", "ANALYZE", true); err == nil {
+		t.Fatal("derived wave n+1 became executable before HUMAN_FINAL/REG")
+	}
+
 	approvedSAW, sawDecision, err := gov.Decide(
 		sawEmergION,
 		gov.Approve,

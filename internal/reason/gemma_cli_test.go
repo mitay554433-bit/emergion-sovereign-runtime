@@ -218,6 +218,21 @@ func TestBuildPromptDiagnostic(t *testing.T) {
 		governedState,
 	)
 
+	sourceStart := strings.Index(prompt, "BEGIN_SOURCE\n")
+	sourceEnd := strings.Index(prompt, "\nEND_SOURCE")
+	if sourceStart < 0 || sourceEnd < 0 || sourceEnd <= sourceStart {
+		t.Fatal("prompt missing valid source evidence boundaries")
+	}
+	sourceStart += len("BEGIN_SOURCE\n")
+	if got := prompt[sourceStart:sourceEnd]; got != string(source) {
+		t.Fatal("source evidence was modified or escaped its boundaries")
+	}
+	if !strings.Contains(prompt[:sourceStart], "SOURCE_NAME:SYSTEM_STATUS.md") {
+		t.Fatal("source name missing from routing metadata")
+	}
+	if !strings.Contains(prompt, "Only text between BEGIN_SOURCE and END_SOURCE is factual evidence.") {
+		t.Fatal("prompt missing source evidence restriction")
+	}
 	t.Logf(
 		"source_bytes=%d governed_state_bytes=%d final_prompt_bytes=%d",
 		len(source),
@@ -970,3 +985,36 @@ func TestCleanTextAndTrimPreserveUTF8(t *testing.T) {
 		}
 	}
 }
+
+
+func TestGemmaGrammarForSourceRestrictsOrdinaryDifference(t *testing.T) {
+	ordinary := gemmaGrammarForSource("existing REG accepted safe local analyze work")
+	if !strings.Contains(ordinary, mxpdOrdinaryGrammarRoot) {
+		t.Fatal("ordinary source grammar does not use restricted root")
+	}
+	if strings.Contains(ordinary, "root ::= summary risk fact (difference requirement?)?") {
+		t.Fatal("ordinary source grammar still permits Difference and Requirement")
+	}
+	if got := gemmaGrammarForSource("TARGET_COMPARISON/1\nTARGET_STATE:\ndeployed\nREALITY:\nACCEPTED_FACT:observation-only\nZ\n"); got != mxpdGrammar {
+		t.Fatal("structured target comparison lost canonical grammar")
+	}
+	if got := gemmaGrammarForSource("TARGET_COMPARISON/1 in ordinary prose"); got == mxpdGrammar {
+		t.Fatal("ordinary prose improperly enabled target comparison grammar")
+	}
+}
+
+func TestGemmaArgsWithGrammarUsesRestrictedRoot(t *testing.T) {
+	g := GemmaCLI{Model: "/models/gemma.gguf", Context: 2048, MaxTokens: 80, Threads: 1}
+	grammar := gemmaGrammarForSource("ordinary evidence")
+	args := gemmaArgsWithGrammar(g, "prompt", grammar)
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == "--grammar" {
+			if args[i+1] != grammar {
+				t.Fatal("execution grammar differs from selected source grammar")
+			}
+			return
+		}
+	}
+	t.Fatal("missing grammar argument")
+}
+

@@ -14,6 +14,7 @@ type LocalGemmaExecutor struct {
 }
 
 func (e LocalGemmaExecutor) Execute(
+	ctx context.Context,
 	request ExecutionRequest,
 ) (ExecutionResult, error) {
 	result := BindExecutionResult(request, ExecutionResult{})
@@ -60,7 +61,7 @@ func (e LocalGemmaExecutor) Execute(
 	}
 
 	analyzed, err := e.Gemma.Analyze(
-		context.Background(),
+		ctx,
 		reason.Input{
 			Name:    "governed-execution-" + request.Action,
 			Content: content,

@@ -45,8 +45,8 @@ type AuthorizeParams struct {
 
 func main() {
 	stateDir := flag.String("state", ".field", "Path to sovereign state directory")
-	socketPath := flag.String("socket", "/tmp/fieldd.sock", "Path to Unix domain socket")
-	pidPath := flag.String("pid", "/tmp/fieldd.pid", "Path to PID file")
+	socketPath := flag.String("socket", filepath.Join(os.TempDir(), "fieldd.sock"), "Path to Unix domain socket")
+	pidPath := flag.String("pid", filepath.Join(os.TempDir(), "fieldd.pid"), "Path to PID file")
 	httpAddr := flag.String("http", "", "Optional loopback-only HTTP status listener")
 	flag.Parse()
 

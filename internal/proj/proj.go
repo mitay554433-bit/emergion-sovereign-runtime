@@ -1,13 +1,17 @@
 package proj
 
 import (
+	"archive/zip"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -98,13 +102,18 @@ func rows(st core.State) []row {
 }
 
 func humanFinalRows(rows []row) []row {
-	var out []row
+	var primary, alternatives []row
 	for _, r := range rows {
-		if r.State == core.StateAtGOV {
-			out = append(out, r)
+		if r.State != core.StateAtGOV {
+			continue
+		}
+		if strings.Contains(r.Relationships, "source_name → provider_population") {
+			alternatives = append(alternatives, r)
+		} else {
+			primary = append(primary, r)
 		}
 	}
-	return out
+	return append(primary, alternatives...)
 }
 
 type realizationRow struct {
@@ -138,11 +147,11 @@ func realizationRows(st core.State) []realizationRow {
 		}
 		byTarget[target] = realizationRow{
 			TargetThing: target,
-			Selected: selected,
-			RunnersUp: strings.TrimSpace(em.REL["runners_up"]),
-			SourceID: em.IDN,
-			SourceKind: kind,
-			Status: "REG ACCEPTED",
+			Selected:    selected,
+			RunnersUp:   strings.TrimSpace(em.REL["runners_up"]),
+			SourceID:    em.IDN,
+			SourceKind:  kind,
+			Status:      "REG ACCEPTED",
 		}
 	}
 
@@ -165,11 +174,11 @@ func realizationRows(st core.State) []realizationRow {
 		}
 		byTarget[target] = realizationRow{
 			TargetThing: target,
-			Selected: selected,
-			RunnersUp: strings.TrimSpace(em.REL["runners_up"]),
-			SourceID: em.IDN,
-			SourceKind: "REALIZATION_REORDER",
-			Status: "PENDING HUMAN_FINAL",
+			Selected:    selected,
+			RunnersUp:   strings.TrimSpace(em.REL["runners_up"]),
+			SourceID:    em.IDN,
+			SourceKind:  "REALIZATION_REORDER",
+			Status:      "PENDING HUMAN_FINAL",
 		}
 	}
 
@@ -395,6 +404,181 @@ func convergenceRows(st core.State) ([]convergenceRow, error) {
 	return out, nil
 }
 
+// engineeringTwinStatus is an external observation, never COSL/REG authority.
+// It verifies every source entry against the version manifest before projecting it.
+type engineeringTwinView struct {
+	Status   string
+	Package  string
+	Captured string
+	Files    int
+	Added    int
+	Removed  int
+	Changed  int
+	SHA256   string
+}
+
+func engineeringTwinStatus(dir string) engineeringTwinView {
+	result := engineeringTwinView{Status: "UNAVAILABLE"}
+	paths, err := filepath.Glob(filepath.Join(dir, "UNIFUSION_TWIN_*.zip"))
+	if err != nil || len(paths) == 0 {
+		return result
+	}
+	sort.Strings(paths)
+	path := paths[len(paths)-1]
+	result.Package = filepath.Base(path)
+	result.Status = "UNVERIFIED"
+	f, err := os.Open(path)
+	if err != nil {
+		return result
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return result
+	}
+	z, err := zip.NewReader(f, info.Size())
+	if err != nil {
+		return result
+	}
+	entries := make(map[string]*zip.File, len(z.File))
+	for _, entry := range z.File {
+		if _, exists := entries[entry.Name]; exists {
+			return result
+		}
+		entries[entry.Name] = entry
+	}
+	read := func(name string) ([]byte, error) {
+		entry := entries[name]
+		if entry == nil || entry.UncompressedSize64 > 20<<20 {
+			return nil, fmt.Errorf("missing or oversized metadata %s", name)
+		}
+		r, err := entry.Open()
+		if err != nil {
+			return nil, err
+		}
+		defer r.Close()
+		return io.ReadAll(io.LimitReader(r, 20<<20+1))
+	}
+	manifestBytes, err := read("VERSION_MANIFEST.json")
+	if err != nil {
+		return result
+	}
+	var manifest struct {
+		Schema     string `json:"schema"`
+		Authority  string `json:"authority"`
+		Capture    string `json:"capture"`
+		Captured   string `json:"captured_at_utc"`
+		FileCount  int    `json:"file_count"`
+		LedgerHash string `json:"source_ledger_sha256"`
+		Files      []struct {
+			Bytes  int64  `json:"bytes"`
+			SHA256 string `json:"sha256"`
+		} `json:"files"`
+	}
+	if json.Unmarshal(manifestBytes, &manifest) != nil ||
+		manifest.Schema != "UNIFUSION_VERSIONED_TWIN_v1" ||
+		manifest.Authority != "READ_ONLY_NOT_COSL_REG" ||
+		manifest.FileCount <= 0 || manifest.FileCount != len(manifest.Files) ||
+		result.Package != "UNIFUSION_TWIN_"+manifest.Capture+".zip" {
+		return result
+	}
+	ledger, err := read("EXTERNAL_SOURCE_LEDGER.json")
+	if err != nil {
+		return result
+	}
+	sum := sha256.Sum256(ledger)
+	if !strings.EqualFold(hex.EncodeToString(sum[:]), manifest.LedgerHash) {
+		return result
+	}
+	var ledgerInfo struct {
+		Authority string            `json:"authority"`
+		FileCount int               `json:"file_count"`
+		Gaps      []json.RawMessage `json:"gaps"`
+	}
+	if json.Unmarshal(ledger, &ledgerInfo) != nil || ledgerInfo.Authority != "READ_ONLY_SOURCE_COPY_NOT_COSL_REG" ||
+		ledgerInfo.FileCount != manifest.FileCount || len(ledgerInfo.Gaps) != 0 {
+		return result
+	}
+	reportBytes, err := read("SOURCE_CHANGE_REPORT.json")
+	if err != nil {
+		return result
+	}
+	var report struct {
+		Authority   string `json:"authority"`
+		NewCaptured string `json:"new_captured_at"`
+		Counts      struct {
+			Added     int `json:"added"`
+			Removed   int `json:"removed"`
+			Changed   int `json:"changed"`
+			Unchanged int `json:"unchanged"`
+		} `json:"counts"`
+		Gaps []json.RawMessage `json:"capture_gaps"`
+	}
+	if json.Unmarshal(reportBytes, &report) != nil || report.Authority != manifest.Authority ||
+		report.NewCaptured != manifest.Captured || len(report.Gaps) != 0 ||
+		report.Counts.Added < 0 || report.Counts.Removed < 0 || report.Counts.Changed < 0 ||
+		report.Counts.Unchanged < 0 ||
+		report.Counts.Added+report.Counts.Changed+report.Counts.Unchanged != manifest.FileCount {
+		return result
+	}
+	// Compare source content hashes as a multiset. This does not assume root naming.
+	expected := map[string]int{}
+	for _, item := range manifest.Files {
+		if len(item.SHA256) != 64 || item.Bytes < 0 {
+			return result
+		}
+		expected[strings.ToLower(item.SHA256)+":"+strconv.FormatInt(item.Bytes, 10)]++
+	}
+	found := 0
+	for _, entry := range z.File {
+		if !strings.HasPrefix(entry.Name, "sources/") || entry.FileInfo().IsDir() {
+			continue
+		}
+		if entry.UncompressedSize64 > 100<<20 {
+			return result
+		}
+		reader, err := entry.Open()
+		if err != nil {
+			return result
+		}
+		hash := sha256.New()
+		n, copyErr := io.Copy(hash, io.LimitReader(reader, 100<<20+1))
+		closeErr := reader.Close() // ZIP CRC is checked when fully consumed.
+		if copyErr != nil || closeErr != nil {
+			return result
+		}
+		key := hex.EncodeToString(hash.Sum(nil)) + ":" + strconv.FormatInt(n, 10)
+		if expected[key] == 0 {
+			return result
+		}
+		expected[key]--
+		found++
+	}
+	if found != manifest.FileCount {
+		return result
+	}
+	for _, remaining := range expected {
+		if remaining != 0 {
+			return result
+		}
+	}
+	archiveHash := sha256.New()
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return result
+	}
+	if _, err := io.Copy(archiveHash, f); err != nil {
+		return result
+	}
+	result.Status = "VERIFIED (external observation)"
+	result.Captured = manifest.Captured
+	result.Files = manifest.FileCount
+	result.Added = report.Counts.Added
+	result.Removed = report.Counts.Removed
+	result.Changed = report.Counts.Changed
+	result.SHA256 = hex.EncodeToString(archiveHash.Sum(nil))
+	return result
+}
+
 func HTML(path string, st core.State) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
@@ -411,12 +595,22 @@ func HTML(path string, st core.State) error {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width">
-<title>EmergION Projection</title>
+<title>UNIFUSION · Sovereign Intelligence</title>
 <style>
 body{font:15px system-ui;background:#020817;color:#e6eaf0;margin:0;padding:2rem}a{color:#c9a227}.ok,.good{color:#2ecc71}.bad,.err{color:#e74c3c}.muted{color:#8b95a8}.panel{background:#0f1c2e;border:1px solid #2a3548;border-radius:12px;padding:1rem;margin:0.75rem 0}h1,h2{color:#e6eaf0;border-bottom:1px solid #2d6cff;padding-bottom:0.35rem}code,pre{background:#0a1628;color:#e6eaf0;border:1px solid #2a3548}
 h1{font-size:1.5rem}
 h2{margin-top:2rem;font-size:1.15rem}
-table{width:max-content;min-width:100%;border-collapse:collapse}
+html,body{max-width:100%;overflow-x:hidden;box-sizing:border-box}
+body{width:100%}
+.panel,.field-topology,.field-facet,.field-emergion{box-sizing:border-box;min-width:0;max-width:100%}
+table{width:100%;max-width:100%;min-width:0;table-layout:fixed;border-collapse:collapse}
+.human-final-tools{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin:.75rem 0}
+.human-final-tools input{min-width:0;flex:1 1 220px;padding:.65rem;background:#071120;color:#e6eaf0;border:1px solid #2a3548;border-radius:8px}
+.human-final-tools button{padding:.65rem;border-radius:8px}
+#human-final-count{color:#9ca3af}
+#human-final-table tr[hidden]{display:none!important}
+pre{max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere}
+
 th,td{text-align:left;vertical-align:top;padding:.7rem;border-bottom:1px solid #2b3140;overflow-wrap:anywhere;word-break:break-word}
 code{color:#a78bfa;overflow-wrap:anywhere;word-break:break-all}
 .G{color:#f59e0b}
@@ -452,15 +646,71 @@ box-sizing:border-box;
 .operator-table td::before{content:attr(data-label);display:block;color:#9ca3af;font-size:.75rem;font-weight:700;margin-bottom:.15rem}
 .operator-table button{max-width:100%;margin:.2rem .35rem .2rem 0}
 }
+.operator-table tr[hidden]{display:none}
+/* UNIFUSION — operator visual identity */
+:root{color-scheme:dark;--uf-bg:#050B17;--uf-panel:#10233F;--uf-accent:#326BFF;--uf-text:#E8F0FF;--uf-muted:#A5B5CE;--uf-border:#29446D}
+html{scroll-behavior:smooth}
+body{background:radial-gradient(ellipse 85% 28% at 85% 0%,rgba(50,107,255,.19),transparent 75%),radial-gradient(ellipse 65% 25% at 0% 45%,rgba(31,75,150,.12),transparent 80%),var(--uf-bg);color:var(--uf-text);line-height:1.55;min-height:100vh}
+h1{font-size:clamp(1.7rem,5vw,2.5rem);font-weight:800;letter-spacing:-.045em;border:0;margin:.4rem 0 1.3rem}
+h2{color:var(--uf-text);font-size:1.2rem;letter-spacing:-.025em;border-bottom:1px solid var(--uf-border);padding-bottom:.65rem}
+a{color:#93B0FF;text-decoration-color:rgba(147,176,255,.35);text-underline-offset:3px}
+a:hover{color:#D1DFFF}
+.panel{background:linear-gradient(145deg,rgba(21,47,84,.97),rgba(12,29,54,.97));border:1px solid var(--uf-border);border-radius:16px;padding:1.15rem;box-shadow:0 10px 32px rgba(0,0,0,.17)}
+.small,.muted,#human-final-count{color:var(--uf-muted)}
+code,pre{background:#0B1930;color:#DCE7FF;border:1px solid #29446D;border-radius:6px}
+code{color:#B9CDFF}
+th,td{border-bottom-color:var(--uf-border)}
+th{color:#AFC6FF;font-size:.82rem;letter-spacing:.025em}
+button{background:#193D80;color:#F1F5FF;border:1px solid #507DDA;border-radius:9px;padding:.65rem .9rem;font:inherit;font-weight:650;cursor:pointer}
+button:hover{background:#2858AD;border-color:#91B1FF}
+button:focus-visible,a:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid #AFC6FF;outline-offset:3px}
+.human-final-tools{background:rgba(16,35,63,.75);border:1px solid var(--uf-border);border-radius:13px;padding:.85rem}
+.human-final-tools input{background:#071428;color:var(--uf-text);border:1px solid #45618A;border-radius:9px;font:inherit}
+.human-final-tools input::placeholder{color:#A5B5CE}
+.field-topology{background:#071428;border-color:var(--uf-border)}
+.field-facet,.field-emergion{background:linear-gradient(145deg,#142C4D,#0C1C33);border-color:var(--uf-border);border-radius:13px}
+.diagnostic summary,.field-facet summary{color:#DCE7FF}
+.diagnostic summary::marker,.field-facet summary::marker{color:#93B0FF}
+#human-final-table td[data-label="Meaning"]{color:#F1F5FF;font-weight:550}
+#human-final-table td[data-label="Relationships"]{color:#A5B5CE;font-size:.85rem}
+@media(max-width:700px){
+body{padding:.85rem}
+.panel{padding:1rem;border-radius:14px}
+.operator-table tr{background:linear-gradient(145deg,#142C4D,#0C1C33);border:1px solid var(--uf-border);border-radius:14px;padding:1rem;box-shadow:0 8px 24px rgba(0,0,0,.16)}
+.operator-table td::before{color:#A5B5CE;letter-spacing:.025em}
+#human-final-table td[data-label="Meaning"]{order:0}
+#human-final-table td[data-label="Relationships"]{font-size:.8rem}
+.human-final-tools input{flex-basis:100%}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+
+.uf-header{position:relative;overflow:hidden;padding:1.5rem 1.25rem;margin-bottom:1rem;background:linear-gradient(125deg,#122E55 0%,#08182E 55%,#030916 100%);border:1px solid #345782;border-radius:18px;box-shadow:0 14px 40px rgba(0,0,0,.28)}
+.uf-header::after{content:"";position:absolute;right:-35px;top:-65px;width:190px;height:190px;border:1px solid rgba(117,165,255,.28);border-radius:50%;box-shadow:0 0 0 24px rgba(66,113,200,.035),0 0 0 48px rgba(66,113,200,.025);pointer-events:none}
+.uf-header h1{position:relative;margin:.25rem 0;font-size:clamp(2rem,7vw,3.3rem);letter-spacing:.075em;font-weight:750}
+.uf-eyebrow{margin:0;color:#91B5FF;font-size:.68rem;letter-spacing:.18em;font-weight:700}
+.uf-subtitle{margin:.3rem 0 0;color:#B2C6E3;font-size:.9rem}
+.uf-navigation{padding:1rem}
+.uf-navigation summary{color:#E8F0FF;font-weight:700;cursor:pointer}
+.uf-navigation nav{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1rem}
+.uf-navigation nav a{display:inline-flex;padding:.55rem .8rem;background:#102746;border:1px solid #355785;border-radius:8px;color:#DCE8FF;text-decoration:none;font-size:.85rem;font-weight:600}
+.uf-navigation nav a:hover,.uf-navigation nav a:focus-visible{background:#204B89;border-color:#87ACFF}
+
 </style>
 </head>
 <body>
 
-<h1>Living Projection</h1>
+<header class="uf-header"><p class="uf-eyebrow">ECOPIVOT TECHNOLOGIES</p><h1 id="field-top">UNIFUSION</h1><p class="uf-subtitle">Sovereign intelligence · Evidence · Authority</p></header>
+<section class="panel" id="engineering-twin"><h2>Engineering Twin (external observation)</h2>
+<p>Status: <strong>{{.Twin.Status}}</strong></p>
+<p>Package: <code>{{.Twin.Package}}</code></p>
+{{if .Twin.SHA256}}<p>Captured: {{.Twin.Captured}} · Source files: {{.Twin.Files}} · Added: {{.Twin.Added}} · Removed: {{.Twin.Removed}} · Changed: {{.Twin.Changed}}</p>
+<p>ZIP SHA-256: <code>{{.Twin.SHA256}}</code></p>{{end}}
+<p class="small">Read-only evidence. Not COSL, REG, or HUMAN_FINAL authority.</p></section>
+<details class="panel diagnostic uf-navigation" open><summary>Operator navigation</summary><nav aria-label="FIELD sections"><a href="#realization-field">Realization</a> · <a href="#human-final">HUMAN_FINAL</a> · <a href="#verified-deliveries">Deliveries</a> · <a href="#lifecycle-projection">Lifecycle</a> · <a href="#spatial-convergence">Convergence</a> · <a href="#spatial-emergion">Topology</a> · <a href="#saw-work">SAW</a></nav><p class="small">Navigation only; governance remains unchanged.</p></details>
 <p>Events: {{.Events}} · Tip: <code>{{.TipHash}}</code></p>
 <p class="small">Projection is derived state only. COSL + governance remain authoritative.</p>
 
-<h2>REALIZATION FIELD</h2>
+<span id="realization-field"></span><h2>REALIZATION FIELD</h2>
 <p class="small">Target-specific governed order projected from canonical state. Pending reorder is visible but is not canonical until HUMAN_FINAL + REG.</p>
 {{if .Realizations}}
 <table class="operator-table">
@@ -491,10 +741,11 @@ box-sizing:border-box;
 <p class="small">No governed realization population projected.</p>
 {{end}}
 
-<h2>HUMAN_FINAL</h2>
+<span id="human-final"></span><h2>HUMAN_FINAL</h2>
 {{if .HumanFinal}}
-<p class="small">{{len .HumanFinal}} decision(s) awaiting HUMAN_FINAL.</p>
-<table class="operator-table">
+<p class="small">{{len .HumanFinal}} decision(s) awaiting HUMAN_FINAL. Decisions require an explicit reason and confirmation.</p>
+<div class="human-final-tools"><label for="human-final-filter">Find decision</label><input id="human-final-filter" type="search" placeholder="Filter by ID, risk, proof or meaning" aria-controls="human-final-table"><button type="button" id="human-final-clear">Clear</button><span id="human-final-count" role="status" aria-live="polite"></span></div>
+<table class="operator-table" id="human-final-table">
 <thead>
 <tr>
 <th>EmergION</th>
@@ -525,14 +776,14 @@ box-sizing:border-box;
 <p class="small">No decisions awaiting HUMAN_FINAL.</p>
 {{end}}
 
-<h2>VERIFIED DELIVERIES</h2>
+<span id="verified-deliveries"></span><h2>VERIFIED DELIVERIES</h2>
 <p class="small">Operator projection only. Entries are published from REG-accepted successful execution results; canonical authority remains COSL + REG.</p>
 <div id="deliveries" class="panel" data-field-tip="{{.TipHash}}"><span class="muted">Loading verified deliveries…</span></div>
 
 <details class="panel diagnostic">
-<summary>Lifecycle Projection · {{len .Rows}} records</summary>
+<span id="lifecycle-projection"></span><summary>Lifecycle Projection · {{len .Rows}} records</summary>
 <p class="small">Complete reconstructed lifecycle history. Projection only; COSL + governance remain authoritative.</p>
-<table>
+<table class="operator-table">
 <thead>
 <tr>
 <th>EmergION</th>
@@ -547,13 +798,13 @@ box-sizing:border-box;
 <tbody>
 {{range .Rows}}
 <tr>
-<td><code>{{.ID}}</code></td>
-<td class="{{.State}}">{{.State}}</td>
-<td>{{.Risk}}</td>
-<td><code>{{.Proof}}</code></td>
-<td>{{.Governance}}</td>
-<td>{{.Relationships}}</td>
-<td>{{.Summary}}</td>
+<td data-label="EmergION"><code>{{.ID}}</code></td>
+<td data-label="State" class="{{.State}}">{{.State}}</td>
+<td data-label="Risk">{{.Risk}}</td>
+<td data-label="Evidence proof"><code>{{.Proof}}</code></td>
+<td data-label="Governance">{{.Governance}}</td>
+<td data-label="Relationships">{{.Relationships}}</td>
+<td data-label="Meaning">{{.Summary}}</td>
 </tr>
 {{end}}
 </tbody>
@@ -561,10 +812,10 @@ box-sizing:border-box;
 </details>
 
 <details class="panel diagnostic">
-<summary>SPATIAL CONVERGENCE ZONE · {{len .Convergence}} accepted</summary>
+<summary id="spatial-convergence">SPATIAL CONVERGENCE ZONE · {{len .Convergence}} accepted</summary>
 <p class="small">Accepted governed structures only. Diagnostic structural projection; canonical authority remains COSL + REG.</p>
 
-<table>
+<table class="operator-table">
 <thead>
 <tr>
 <th>EmergION</th>
@@ -582,16 +833,16 @@ box-sizing:border-box;
 <tbody>
 {{range .Convergence}}
 <tr>
-<td><code>{{.ID}}</code></td>
-<td>{{.Summary}}</td>
-<td>{{.Archonym}}</td>
-<td>{{.Kin}}</td>
-<td>{{.Topology}}</td>
-<td>{{.Facets}}</td>
-<td>{{.Capabilities}}</td>
-<td>{{.Relationships}}</td>
-<td>{{.BuildNodes}}</td>
-<td>{{.BuildEdges}}</td>
+<td data-label="EmergION"><code>{{.ID}}</code></td>
+<td data-label="Meaning">{{.Summary}}</td>
+<td data-label="Archonym">{{.Archonym}}</td>
+<td data-label="Kin">{{.Kin}}</td>
+<td data-label="Topology">{{.Topology}}</td>
+<td data-label="Facets">{{.Facets}}</td>
+<td data-label="Capabilities">{{.Capabilities}}</td>
+<td data-label="Relationships">{{.Relationships}}</td>
+<td data-label="Build Nodes">{{.BuildNodes}}</td>
+<td data-label="Build Edges">{{.BuildEdges}}</td>
 </tr>
 {{end}}
 </tbody>
@@ -599,7 +850,7 @@ box-sizing:border-box;
 </details>
 
 <details class="panel diagnostic">
-<summary>SPATIAL EMERGION PROJECTION · {{len .FacetGroups}} facets</summary>
+<summary id="spatial-emergion">SPATIAL EMERGION PROJECTION · {{len .FacetGroups}} facets</summary>
 <p class="small">Accepted EmergION structures projected across the canonical FIELD topology. Projection only; authority remains COSL + REG.</p>
 
 <div class="field-topology">
@@ -637,7 +888,7 @@ box-sizing:border-box;
 {{end}}
 </details>
 
-<h2>SAW WORK PROJECTION</h2>
+<span id="saw-work"></span><h2>SAW WORK PROJECTION</h2>
 <p class="small">Deterministic SAW artifacts derived from accepted governed composition.</p>
 
 <table class="operator-table">
@@ -736,23 +987,85 @@ async function loadDeliveries() {
 
 loadDeliveries();
 
-async function humanFinal(id, decision) {
-  if (!confirm(decision + " " + id + "?")) return;
-  const response = await fetch("/decide", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
-      emergion_id: id,
-      decision: decision,
-      reason: "HUMAN_FINAL PIVOTAI decision"
-    })
+(function initHumanFinalFilter() {
+  const input = document.getElementById("human-final-filter");
+  const table = document.getElementById("human-final-table");
+  if (!input || !table) return;
+  const alternativeRows = Array.from(table.querySelectorAll("tbody tr")).filter(function(row) {
+    const cell = row.querySelector('td[data-label="Relationships"]');
+    return cell && cell.textContent.includes("source_name → provider_population");
   });
-  const result = await response.json();
-  if (result.error) {
-    alert(result.error);
+  let alternativeDetails = null;
+  if (alternativeRows.length) {
+    alternativeDetails = document.createElement("details");
+    alternativeDetails.className = "panel diagnostic";
+    alternativeDetails.id = "human-final-alternatives";
+    const summary = document.createElement("summary");
+    summary.textContent = "Provider-population alternatives · " + alternativeRows.length;
+    alternativeDetails.appendChild(summary);
+    const alternativeTable = table.cloneNode(false);
+    alternativeTable.id = "human-final-alternatives-table";
+    alternativeTable.appendChild(table.tHead.cloneNode(true));
+    const body = document.createElement("tbody");
+    alternativeRows.forEach(function(row) { body.appendChild(row); });
+    alternativeTable.appendChild(body);
+    alternativeDetails.appendChild(alternativeTable);
+    table.after(alternativeDetails);
+  }
+  const rows = Array.from(document.querySelectorAll("#human-final-table tbody tr, #human-final-alternatives-table tbody tr"));
+  const count = document.getElementById("human-final-count");
+  function update() {
+    const query = input.value.trim().toLocaleLowerCase();
+    let visible = 0;
+    rows.forEach(function(row) {
+      const matches = row.textContent.toLocaleLowerCase().includes(query);
+      row.hidden = !matches;
+      if (matches) visible++;
+    });
+    count.textContent = visible + " of " + rows.length + " shown";
+    if (alternativeDetails && query) {
+      const matchingAlternative = Array.from(alternativeDetails.querySelectorAll("tbody tr")).some(function(row) {
+        return !row.hidden;
+      });
+      if (matchingAlternative) alternativeDetails.open = true;
+    }
+  }
+  input.addEventListener("input", update);
+  document.getElementById("human-final-clear").addEventListener("click", function() {
+    input.value = "";
+    update();
+    input.focus();
+  });
+  update();
+})();
+
+async function humanFinal(id, decision) {
+  const reason = prompt("Reason for " + decision + " of " + id + " (required):");
+  if (reason === null) return;
+  if (!reason.trim()) {
+    alert("A HUMAN_FINAL decision requires an explicit reason.");
     return;
   }
-  location.reload();
+  if (!confirm(decision + " " + id + "? This records a governed decision.")) return;
+  try {
+    const response = await fetch("/decide", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        emergion_id: id,
+        decision: decision,
+        reason: reason.trim()
+      })
+    });
+    const result = await response.json();
+    if (!response.ok || result.error) {
+      alert(result.error || "HUMAN_FINAL decision was not accepted.");
+      return;
+    }
+    location.reload();
+  } catch (err) {
+    alert("HUMAN_FINAL decision could not be confirmed. Refresh the FIELD before retrying.");
+  }
 }
 </script>
 </body>
@@ -775,16 +1088,17 @@ async function humanFinal(id, decision) {
 	lifecycle := rows(st)
 
 	return t.Execute(f, map[string]any{
-		"Events":      st.Events,
-		"TipHash":     st.TipHash,
-		"Rows":        lifecycle,
-		"HumanFinal":  humanFinalRows(lifecycle),
+		"Twin":         engineeringTwinStatus(filepath.Join(os.Getenv("HOME"), "unifusion-twin-versions")),
+		"Events":       st.Events,
+		"TipHash":      st.TipHash,
+		"Rows":         lifecycle,
+		"HumanFinal":   humanFinalRows(lifecycle),
 		"Realizations": realizationRows(st),
-		"Convergence": convergence,
-		"SAWs":        saws,
-		"Spatial":     spatial,
-		"FacetGroups": facetGroups,
-		"Unassigned":  unassigned,
+		"Convergence":  convergence,
+		"SAWs":         saws,
+		"Spatial":      spatial,
+		"FacetGroups":  facetGroups,
+		"Unassigned":   unassigned,
 	})
 }
 

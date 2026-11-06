@@ -26,7 +26,7 @@ func addComparisonExecutionResult(
 		STA: core.StateAccepted,
 		REL: map[string]string{
 			"source_kind": "EXECUTION_RESULT",
-			"parent_emergion": parent,
+			"kin_emergion": parent,
 			"adapter": adapter,
 			"action": action,
 		},
