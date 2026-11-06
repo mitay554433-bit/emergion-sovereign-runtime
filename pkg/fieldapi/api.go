@@ -410,9 +410,24 @@ func (r *Runtime) CirculateSAWs(
 		Reasoner: r.reasoner,
 	}
 
+	events, err := r.store.Events()
+	if err != nil {
+		return nil, err
+	}
+	knownSourceHashes := make(map[string]struct{}, len(events))
+	for _, event := range events {
+		if event.EmergION != nil {
+			knownSourceHashes[event.EmergION.MEM.SourceHash] = struct{}{}
+		}
+	}
+
 	out := make([]core.EmergION, 0, len(sources))
 
 	for _, source := range sources {
+		if _, exists := knownSourceHashes[store.Hash(source.Content)]; exists {
+			continue
+		}
+
 		em, duplicate, err := runtime.CaptureBytes(
 			ctx,
 			source.ID,
