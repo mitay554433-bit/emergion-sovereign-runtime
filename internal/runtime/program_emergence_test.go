@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -285,5 +286,15 @@ func TestProposeOneProgramPatchAdmitsPatchAtGOVWithRuntimeOrigin(t *testing.T) {
 			finalSignal.REL["result_source_hash"],
 			result.ResultSourceHash,
 		)
+	}
+	_, _, _, _, retryErr := r.ExecuteAction(
+		context.Background(),
+		acceptedPatch.IDN,
+		"GITHUB",
+		"PROGRAM",
+		reason.GemmaCLI{},
+	)
+	if retryErr == nil || !strings.Contains(retryErr.Error(), "execution transition already recorded:") {
+		t.Fatalf("repeated execution must be rejected by transition guard: %v", retryErr)
 	}
 }
