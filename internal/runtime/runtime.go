@@ -1967,6 +1967,12 @@ func (r Runtime) ExecuteAction(
 		return adapters.ExecutionRequest{}, adapters.ExecutionResult{}, core.EmergION{}, false, err
 	}
 
+	for _, event := range events {
+		if event.Type == "C" && event.EmergION != nil && event.EmergION.IDN == request.TransitionEmergIONID {
+			return request, adapters.ExecutionResult{}, core.EmergION{}, false, fmt.Errorf("execution transition already recorded: %s", request.TransitionEmergIONID)
+		}
+	}
+
 	var execute func() (adapters.ExecutionResult, error)
 
 	switch request.Adapter {
