@@ -6018,14 +6018,7 @@ func TestGemmaAnalyzeLiveProofSourceDiagnostic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	g := reason.GemmaCLI{
-		Binary:    binary,
-		Model:     model,
-		Threads:   4,
-		Context:   2048,
-		MaxTokens: 120,
-		Timeout:   180 * time.Second,
-	}
+        g := reason.GemmaFromEnv()
 
 	start := time.Now()
 

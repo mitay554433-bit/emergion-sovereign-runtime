@@ -1023,6 +1023,13 @@ func (r Runtime) validateLineage(analysis *reason.Result) error {
 		}
 	}
 	returnedID := strings.TrimSpace(r.ReturnedPredecessor)
+	if strings.TrimSpace(analysis.Relationships["COMPOSITION_KIN"]) == "" &&
+		returnedID == "" &&
+		strings.TrimSpace(analysis.Supersedes) == "" {
+		analysis.Supersedes = ""
+		analysis.Delta = nil
+		return nil
+	}
 
 	events, err := r.Store.Events()
 	if err != nil {
@@ -1556,7 +1563,7 @@ func (r Runtime) admitAnalyzedCandidate(
 	if em.REL == nil {
 		em.REL = map[string]string{}
 	}
-	if provenance == "saw_projection" {
+	if provenance == "saw_projection" || provenance == "local_dropzone" {
 		em.REL["source_name"] = name
 	}
 

@@ -183,7 +183,9 @@ func (r *Runtime) GovernedCycle(
 ) ([]core.EmergION, core.EmergION, bool, error) {
 	circulated := []core.EmergION{}
 
+	started := time.Now()
 	saws, err := r.CirculateSAWs(ctx)
+	fmt.Fprintln(os.Stderr, "GOVERNED_CYCLE_TIMING", "operation=CirculateSAWs", "elapsed=", time.Since(started))
 	if err != nil {
 		return circulated, core.EmergION{}, false, err
 	}

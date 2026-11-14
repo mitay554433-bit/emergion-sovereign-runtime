@@ -2,8 +2,11 @@ package reason
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -986,7 +989,6 @@ func TestCleanTextAndTrimPreserveUTF8(t *testing.T) {
 	}
 }
 
-
 func TestGemmaGrammarForSourceRestrictsOrdinaryDifference(t *testing.T) {
 	ordinary := gemmaGrammarForSource("existing REG accepted safe local analyze work")
 	if !strings.Contains(ordinary, mxpdOrdinaryGrammarRoot) {
@@ -1018,3 +1020,91 @@ func TestGemmaArgsWithGrammarUsesRestrictedRoot(t *testing.T) {
 	t.Fatal("missing grammar argument")
 }
 
+func TestPredictARCGridInstalledRuntime(t *testing.T) {
+	binary := os.Getenv("GEMMA_BIN")
+	model := os.Getenv("GEMMA_MODEL")
+	if binary == "" || model == "" {
+		t.Skip("set GEMMA_BIN and GEMMA_MODEL")
+	}
+	g := GemmaCLI{
+		Binary: binary, Model: model,
+		Threads: 4, Context: 2048,
+		MaxTokens: 128, Timeout: 180 * time.Second,
+	}
+	grid, err := g.PredictARCGrid(context.Background(),
+		"Return only a JSON 2D integer array representing this grid: first row 1,2; second row 3,4. No explanation.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(grid) != 2 || len(grid[0]) != 2 || len(grid[1]) != 2 {
+		t.Fatalf("unexpected grid dimensions: %v", grid)
+	}
+	if grid[0][0] != 1 || grid[0][1] != 2 || grid[1][0] != 3 || grid[1][1] != 4 {
+		t.Fatalf("unexpected grid: %v", grid)
+	}
+}
+
+func TestPredictARCGridOfficialTaskE8686506(t *testing.T) {
+	binary := os.Getenv("GEMMA_BIN")
+	model := os.Getenv("GEMMA_MODEL")
+	if binary == "" || model == "" {
+		t.Skip("set GEMMA_BIN and GEMMA_MODEL")
+	}
+
+	type example struct {
+		Input  [][]int `json:"input"`
+		Output [][]int `json:"output"`
+	}
+	var task struct {
+		Train []example `json:"train"`
+		Test  []example `json:"test"`
+	}
+
+	data, err := os.ReadFile("../../arc-agi-2/data/evaluation/e8686506.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &task); err != nil {
+		t.Fatal(err)
+	}
+	if len(task.Train) == 0 || len(task.Test) != 1 {
+		t.Fatal("unexpected ARC task structure")
+	}
+
+	var prompt strings.Builder
+	prompt.WriteString("Infer the grid transformation from the examples. Return only the output grid as a JSON array of integer arrays. No explanation.\n")
+
+	for i, ex := range task.Train {
+		input, _ := json.Marshal(ex.Input)
+		output, _ := json.Marshal(ex.Output)
+		fmt.Fprintf(&prompt, "\nTraining example %d\nInput: %s\nOutput: %s\n", i+1, input, output)
+	}
+
+	testInput, _ := json.Marshal(task.Test[0].Input)
+	fmt.Fprintf(&prompt, "\nTest input: %s\nOutput:", testInput)
+
+	g := GemmaCLI{
+		Binary:    binary,
+		Model:     model,
+		Threads:   4,
+		Context:   4096,
+		MaxTokens: 512,
+		Timeout:   300 * time.Second,
+	}
+
+	predicted, err := g.PredictARCGrid(context.Background(), prompt.String())
+	if err != nil {
+		t.Logf("ARC-AGI-2 task=e8686506 exact_match=0/1 inference_error=%v", err)
+		return
+	}
+
+	expected := task.Test[0].Output
+	exact := reflect.DeepEqual(predicted, expected)
+
+	score := 0
+	if exact {
+		score = 1
+	}
+
+	t.Logf("ARC-AGI-2 task=e8686506 exact_match=%d/1 predicted=%v", score, predicted)
+}
