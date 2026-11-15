@@ -190,6 +190,15 @@ func main() {
 			http.ServeFile(w, req, filepath.Join("outputs", "field.json"))
 		})
 
+		mux.HandleFunc("/living-universe", func(w http.ResponseWriter, req *http.Request) {
+			if req.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			http.ServeFile(w, req, filepath.Join("cmd", "fieldd", "living-universe.html"))
+		})
+
 		mux.HandleFunc("/field.json", func(w http.ResponseWriter, req *http.Request) {
 			if req.Method != http.MethodGet {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
