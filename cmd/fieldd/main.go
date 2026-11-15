@@ -199,21 +199,6 @@ func main() {
 			http.ServeFile(w, req, filepath.Join("cmd", "fieldd", "living-universe.html"))
 		})
 
-		mux.HandleFunc("/field.json", func(w http.ResponseWriter, req *http.Request) {
-			if req.Method != http.MethodGet {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			receipt, err := rt.RenderCurrent("outputs")
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			w.Header().Set("X-Field-Tip", receipt.TipHash)
-			w.Header().Set("Content-Type", "application/json")
-			http.ServeFile(w, req, filepath.Join("outputs", "field.json"))
-		})
-
 		mux.HandleFunc("/field.html", func(w http.ResponseWriter, req *http.Request) {
 			if req.Method != http.MethodGet {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
