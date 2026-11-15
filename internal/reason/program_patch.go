@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -97,7 +96,7 @@ func (g GemmaCLI) ProposeProgramPatch(ctx context.Context, in ProgramPatchInput)
 	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), g.Timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(cctx, g.Binary, args...)
+	cmd := gemmaCommand(cctx, g.Binary, args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

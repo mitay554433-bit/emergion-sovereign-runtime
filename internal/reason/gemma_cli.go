@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 	"unicode/utf8"
 )
@@ -159,13 +160,41 @@ func discoverModel(explicit string) string {
 
 func (g GemmaCLI) Name() string { return "gemma-llama-cli" }
 
+// gemmaCommand runs binary under ctx and makes that deadline actually return.
+//
+// CommandContext kills only the direct child. On Termux, llama-cli is often a
+// shell wrapper (and llama-cli itself can leave a descendant). The child keeps
+// the stdout pipe open, so os/exec waits forever after the deadline and the
+// governed cycle stays inside Wait until go test's own timeout. The process
+// group is killed together, and WaitDelay closes any pipe that still outlives
+// that kill.
+func gemmaCommand(ctx context.Context, binary string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.WaitDelay = 200 * time.Millisecond
+	cmd.Cancel = func() error {
+		if cmd.Process == nil {
+			return os.ErrProcessDone
+		}
+		err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		if err == nil {
+			return nil
+		}
+		if errors.Is(err, syscall.ESRCH) {
+			return os.ErrProcessDone
+		}
+		return cmd.Process.Kill()
+	}
+	return cmd
+}
+
 func (g GemmaCLI) Version(ctx context.Context) string {
 	if g.Binary == "" {
 		return "unknown"
 	}
 	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(cctx, g.Binary, "--version").CombinedOutput()
+	out, err := gemmaCommand(cctx, g.Binary, "--version").CombinedOutput()
 	if err != nil {
 		return "unknown"
 	}
@@ -280,6 +309,35 @@ func normalizeLlamaCLIAnalyzeCandidate(prompt, candidate string) string {
 	return candidate
 }
 
+type gemmaOutputTiming struct {
+	writer     io.Writer
+	start      time.Time
+	first      time.Duration
+	last       time.Duration
+	bytes      int
+	afterWrite func()
+}
+
+func (t *gemmaOutputTiming) Write(p []byte) (int, error) {
+	if len(p) > 0 {
+		elapsed := time.Since(t.start)
+		if t.bytes == 0 {
+			t.first = elapsed
+		}
+		t.last = elapsed
+		t.bytes += len(p)
+	}
+	n, err := t.writer.Write(p)
+	if err == nil && n > 0 && t.afterWrite != nil {
+		t.afterWrite()
+	}
+	return n, err
+}
+
+func gemmaEndMarkerSeen(output string) bool {
+	return strings.Contains("\n"+strings.ReplaceAll(output, "\r\n", "\n")+"\n", "\nZ\n")
+}
+
 func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 	if err := g.Validate(); err != nil {
 		return Result{}, err
@@ -324,16 +382,52 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 		fmt.Fprintf(os.Stderr, "[GEMMA_DIAG] attempt=%d start\n", attempt+1)
 		args := gemmaArgsWithGrammar(g, prompt, gemmaGrammarForSource(content))
 
-		cmd := exec.CommandContext(boundedCtx, g.Binary, args...)
+		attemptCtx, cancelAttempt := context.WithCancel(boundedCtx)
+		cmd := gemmaCommand(attemptCtx, g.Binary, args...)
 
 		var stdout, stderr bytes.Buffer
-		cmd.Stdout = io.MultiWriter(&stdout, os.Stderr)
-		cmd.Stderr = io.MultiWriter(&stderr, os.Stderr)
+		outTiming := gemmaOutputTiming{writer: io.MultiWriter(&stdout, os.Stderr), start: attemptStarted}
+		errTiming := gemmaOutputTiming{writer: io.MultiWriter(&stderr, os.Stderr), start: attemptStarted}
+		var completed *Result
+		if filepath.Base(g.Binary) == "llama-cli" {
+			outTiming.afterWrite = func() {
+				if completed != nil || boundedCtx.Err() != nil {
+					return
+				}
+				if !bytes.HasSuffix(bytes.TrimRight(stdout.Bytes(), " \t\r\n"), []byte("\nZ")) {
+					return
+				}
+				candidate := strings.TrimSpace(normalizeLlamaCLIAnalyzeCandidate(prompt, stdout.String()))
+				if !strings.HasPrefix(candidate, "S|") || strings.Contains(prompt, candidate) {
+					return
+				}
+				result, err := parseResult(candidate)
+				if err != nil || len(result.Facts) == 0 || rejectPromptPlaceholders(result, content) != nil {
+					return
+				}
+				if boundedCtx.Err() == nil {
+					completed = &result
+					cancelAttempt()
+				}
+			}
+		}
+		cmd.Stdout = &outTiming
+		cmd.Stderr = &errTiming
 
 		runErr := cmd.Run()
+		cancelAttempt()
 		fmt.Fprintf(os.Stderr,
 			"[GEMMA_DIAG] attempt=%d elapsed=%s run_error=%v\n",
 			attempt+1, time.Since(attemptStarted), runErr)
+		fmt.Fprintf(os.Stderr,
+			"[GEMMA_DIAG] attempt=%d stdout_bytes=%d stdout_first=%s stdout_last=%s stdout_z=%t stderr_bytes=%d stderr_first=%s stderr_last=%s stderr_z=%t\n",
+			attempt+1,
+			outTiming.bytes, outTiming.first, outTiming.last, gemmaEndMarkerSeen(stdout.String()),
+			errTiming.bytes, errTiming.first, errTiming.last, gemmaEndMarkerSeen(stderr.String()))
+		if completed != nil && ctx.Err() == nil {
+			fmt.Fprintf(os.Stderr, "[GEMMA_DIAG] attempt=%d completed from validated stdout\n", attempt+1)
+			return *completed, nil
+		}
 		ctxErr := boundedCtx.Err()
 
 		if runErr != nil {
@@ -994,7 +1088,7 @@ func (g GemmaCLI) PredictARCGrid(ctx context.Context, prompt string) ([][]int, e
 	}
 	boundedCtx, cancel := context.WithTimeout(ctx, g.Timeout)
 	defer cancel()
-	cmd := exec.CommandContext(boundedCtx, g.Binary, args...)
+	cmd := gemmaCommand(boundedCtx, g.Binary, args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

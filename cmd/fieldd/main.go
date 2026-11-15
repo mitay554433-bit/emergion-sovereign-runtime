@@ -50,7 +50,7 @@ func main() {
 	httpAddr := flag.String("http", "", "Optional loopback-only HTTP status listener")
 	flag.Parse()
 
-	if err := writePIDFile(*pidPath); err != nil {
+	if err := writePIDFile(*pidPath, *socketPath); err != nil {
 		log.Fatalf("Failed to write PID file: %v", err)
 	}
 	defer os.Remove(*pidPath)
@@ -226,12 +226,23 @@ func main() {
 	log.Println("Shutting down Field Sovereign Daemon gracefully...")
 }
 
-func writePIDFile(path string) error {
+func writePIDFile(path, socketPath string) error {
+	if conn, err := net.DialTimeout("unix", socketPath, 250000000); err == nil {
+		conn.Close()
+		return fmt.Errorf("fieldd already running on %s", socketPath)
+	}
+
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(fmt.Sprintf("%d\n", os.Getpid())), 0644)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	if err != nil {
+		return fmt.Errorf("fieldd PID file already claimed or unavailable: %w", err)
+	}
+	defer file.Close()
+	_, err = fmt.Fprintf(file, "%d\n", os.Getpid())
+	return err
 }
 
 func handleConn(rt *fieldapi.Runtime, conn net.Conn) {
