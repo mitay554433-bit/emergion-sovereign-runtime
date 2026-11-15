@@ -210,27 +210,27 @@ func (r *Runtime) GovernedCycle(
 		circulated = append(circulated, program)
 	}
 
+	beforeReview, err := r.state()
+	if err != nil {
+		return circulated, core.EmergION{}, false, err
+	}
+
 	reorder, proposedReorder, err := r.capturePendingRealizationReorder(ctx)
 	if err != nil {
 		return circulated, core.EmergION{}, false, err
 	}
 	if proposedReorder {
-		circulated = append(circulated, reorder)
-		// A changed order is new governed evidence. Stop this cycle at AtGOV
-		// rather than executing either the prior or proposed strongest
-		// realization before HUMAN_FINAL/REG resolves the transition.
-		return circulated, core.EmergION{}, false, nil
-	}
-
-	selection, proposedSelection, err := r.capturePendingRealizationSelection(ctx)
-	if err != nil {
-		return circulated, core.EmergION{}, false, err
-	}
-	if proposedSelection {
-		circulated = append(circulated, selection)
-		// A discovered unique strongest realization is only a governed
-		// selection candidate. Stop at AtGOV until HUMAN_FINAL/REG resolves it.
-		return circulated, core.EmergION{}, false, nil
+		if _, pending := beforeReview.AtGOV[reorder.IDN]; !pending {
+			circulated = append(circulated, reorder)
+		}
+	} else {
+		selection, proposedSelection, err := r.capturePendingRealizationSelection(ctx)
+		if err != nil {
+			return circulated, core.EmergION{}, false, err
+		}
+		if _, pending := beforeReview.AtGOV[selection.IDN]; proposedSelection && !pending {
+			circulated = append(circulated, selection)
+		}
 	}
 
 	signal, executed, err := (fieldruntime.Runtime{
