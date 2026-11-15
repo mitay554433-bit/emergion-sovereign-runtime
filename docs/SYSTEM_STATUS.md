@@ -331,3 +331,18 @@ COSL preserves lineage.
 FIELD reconstructs current state.
 Projections describe state; they do not become state authority.
 ```
+
+
+## 19. 2026-11-14 repository reconciliation (GitHub inspection)
+
+This section records a **repository-source inspection**, not a live Termux execution or a new governance decision. It supplements rather than overwrites the dated operational evidence above.
+
+- Inspected on the connected GitHub default branch: `internal/reason/gemma_cli.go`, `internal/reason/gemma_cli_test.go`, `pkg/fieldapi/api_test.go`, `README.md`, `docs/ARCHITECTURE.md`, and `REPOSITORY_MANIFEST.json`.
+- `GemmaFromEnv()` reads `GEMMA_THREADS` (fallback 4), `GEMMA_CONTEXT` (4096), `GEMMA_MAX_TOKENS` (256), and `GEMMA_TIMEOUT_SECONDS` (180). The README example was reconciled to the 256-token implementation fallback in commit `2caed9376c183270616407abefe0a740cd16b792`; these are defaults, not a claim about live Termux environment values.
+- Both `TestGovernedCycleCirculatesAndExecutesExistingSafeWork` and `TestGemmaCLIAnalyzeInstalledRuntime` construct a `GemmaCLI` with context 2048, maximum tokens 80, and timeout 180 seconds, rather than calling `GemmaFromEnv()`. Consequently environment overrides do not alter these test instances.
+- `gemmaArgs` already appends `--simple-io`, `--single-turn`, and `--no-display-prompt` as execution-boundary arguments. Whether the installed Android binary obeys them and exits successfully is not established by this source inspection.
+- `Analyze` currently caps the source content portion at 1000 bytes after context budgeting. This is an existing bounded-input policy, not proof of a defect; changing it requires evidence of an affected use case.
+- The checked-in manifest still reports `generated_at=2026-08-05T17:17:33Z` and historical hashes/test claims. It must not be represented as a current manifest. Regeneration must use the existing manifest workflow and current verified source tree; no hand-edited hashes or invented PASS results.
+- Recent Termux diagnostic output previously supplied by the operator contains `[GEMMA_DIAG]` instrumentation not present in the inspected GitHub `gemma_cli.go`. Treat the phone worktree and GitHub default branch as potentially divergent until their actual revisions are reconciled. Do not overwrite local changes from the remote copy.
+
+**Verification boundary:** No Go tests, local Gemma inference, daemon operation, COSL verification, or manifest regeneration were executed during this GitHub inspection. No runtime, registry, governance, or execution state was modified. The next engineering change must be based on the exact current target revision and focused test evidence.
