@@ -64,3 +64,16 @@ Every subsystem has an owner/source, implementation state, evidence, verificatio
 **Branch and local-state boundary:** `governed-demand-v1` and `unifusion-live-20261024` have diverged (comparison observed: live branch 34 ahead / 4 behind; 26 files changed). The preserved live branch was not modified by this correction. Phone-local `[GEMMA_DIAG]` instrumentation is absent from inspected remote `gemma_cli.go`, so do not overwrite the phone's newer worktree with either remote branch. No merge, release, production registry modification, or manifest regeneration is implied.
 
 **Outstanding acceptance:** verify exact local Git revision/diff, run existing serial `scripts/verify_termux_live.sh` and existing runtime doctor/projection integrity checks on the authoritative device, then regenerate the tracked-source manifest through the existing workflow only when the exact source revision and verification results are established. Historical manifest PASS flags are not current proof.
+
+
+## November 14, 2026 — remote reconciliation verification
+
+**Inspected remote:** `mitay554433-bit/emergion-sovereign-runtime`; comparison `unifusion-live-20261024...unifusion-system-reconciliation-20261024` after engineering commits `33e9c2b` and `477983f`.
+
+**Remote branch comparison:** status `diverged`; engineering branch is 2 commits ahead and 6 commits behind preservation/live branch. GitHub reports exactly two changed paths in the comparison: `pkg/fieldapi/api_test.go` (+3/-3) and this reconciliation document (+13/-1 at time of comparison). The test change matches the previously operator-proven 4096 context, 1024 maximum tokens, 600-second per-inference timeout, retaining 4 threads and seed 1. No automatic merge was performed; the six commits not on the engineering branch require review before integration.
+
+**Existing verification workflow inspected:** `scripts/verify_termux_live.sh` checks the configured executable/model, then runs `go test -p 1 -parallel 1 -count=1 -timeout 40m ./...` and `go vet -p 1 ./...` serially. This script was inspected, **not executed** here. Its default `GEMMA_TIMEOUT_SECONDS=300` is an environment fallback; the specifically corrected governed-cycle fixture uses a literal 600-second timeout.
+
+**Commit verification evidence:** GitHub combined commit-status query for `477983f185fa40973d6c9718262aadec442ceb4e` returned zero statuses; the available pull-request workflow-run query returned zero runs. Neither result establishes PASS or FAIL, and the latter does not enumerate every possible push-triggered run. No CI proof is claimed.
+
+**Saved reconciliation decision:** retain `unifusion-live-20261024` unchanged; retain the test correction on `unifusion-system-reconciliation-20261024` without merging divergent history. Operator-provided Termux focused-test PASS remains the only observed live test result. Full-suite execution, local Git status/revision, field doctor, COSL/REG integrity, and manifest generation remain **not verified in this session**. Do not claim they were executed or fabricate hashes. Once live-tree state is known, integrate by an explicit reviewed merge/cherry-pick that preserves local diagnostic changes and lineage.
