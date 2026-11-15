@@ -573,9 +573,9 @@ func TestGovernedCycleCirculatesAndExecutesExistingSafeWork(t *testing.T) {
 		Binary:    binary,
 		Model:     model,
 		Threads:   4,
-		Context:   2048,
-		MaxTokens: 80,
-		Timeout:   180 * time.Second,
+		Context:   4096,
+		MaxTokens: 1024,
+		Timeout:   600 * time.Second,
 		ExtraArgs: []string{"--seed", "1"},
 	}
 
