@@ -40,3 +40,32 @@ func TestGemmaAnalyzeSemanticRetrySharesDeadline(t *testing.T) {
         t.Fatalf("retry renewed inference deadline: %v", elapsed)
     }
 }
+
+func TestGemmaAnalyzeCompletesBeforeCLIExit(t *testing.T) {
+    dir := t.TempDir()
+    binary := filepath.Join(dir, "llama-cli")
+    model := filepath.Join(dir, "fake.gguf")
+    if err := os.WriteFile(model, []byte("test"), 0600); err != nil {
+        t.Fatal(err)
+    }
+    script := "#!/bin/sh\nprintf 'S|clean assistant result\\nK|L\\nF|clean assistant fact\\nZ'\nexec sleep 15\n"
+    if err := os.WriteFile(binary, []byte(script), 0700); err != nil {
+        t.Fatal(err)
+    }
+    g := GemmaCLI{
+        Binary: binary, Model: model, Threads: 1, Context: 2048,
+        MaxTokens: 64, Timeout: 2 * time.Second,
+    }
+    result, err := g.Analyze(context.Background(), Input{
+        Name: "source.txt",
+        Content: []byte("clean assistant result\nclean assistant fact\n"),
+    })
+    if err != nil {
+        t.Fatal(err)
+    }
+    if result.Summary != "clean assistant result" ||
+        result.Risk != "L" ||
+        len(result.Facts) != 1 || result.Facts[0] != "clean assistant fact" {
+        t.Fatalf("unexpected result: %+v", result)
+    }
+}

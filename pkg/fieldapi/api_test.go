@@ -1651,7 +1651,7 @@ func TestHumanFinalApprovalRenderCurrentPublishesVerifiedDeliverable(t *testing.
 }
 
 
-func TestGovernedCycleReorderBoundaryStopsAtHumanFinal(t *testing.T) {
+func TestGovernedCyclePendingReorderAllowsIndependentSafeWork(t *testing.T) {
 	root := t.TempDir()
 	rt, err := Open(filepath.Join(root, "state"), sawCirculationReasoner{})
 	if err != nil { t.Fatal(err) }
@@ -1735,7 +1735,7 @@ func TestGovernedCycleReorderBoundaryStopsAtHumanFinal(t *testing.T) {
 
 	reorder, pending, err := rt.capturePendingRealizationReorder(context.Background())
 	if err != nil { t.Fatal(err) }
-	if !pending { t.Fatal("changed order did not stop cycle for HUMAN_FINAL") }
+	if !pending { t.Fatal("changed order was not submitted for HUMAN_FINAL") }
 	if reorder.STA != core.StateAtGOV {
 		t.Fatalf("reorder state = %q want AtGOV", reorder.STA)
 	}
@@ -1746,12 +1746,45 @@ func TestGovernedCycleReorderBoundaryStopsAtHumanFinal(t *testing.T) {
 		t.Fatalf("selected = %q want %q", reorder.REL["selected_realization"], b.IDN)
 	}
 
-	// Re-check before HUMAN_FINAL. The same pending evidence must continue to
-	// stop the cycle rather than allowing execution to fall through.
+	// Re-check before HUMAN_FINAL to confirm the same proposal stays pending.
 	same, pending, err := rt.capturePendingRealizationReorder(context.Background())
 	if err != nil { t.Fatal(err) }
 	if !pending || same.IDN != reorder.IDN {
-		t.Fatal("pending reorder did not remain a cycle stop condition")
+		t.Fatal("pending reorder was not reused")
+	}
+
+	work := member("E-INDEPENDENT-SAFE-WORK")
+	work.REL = nil
+	work.EVO.Metadata = &core.Metadata{
+		CapturedAt:   time.Now().UTC(),
+		PromptSchema: "MXPD/2",
+		Facets:       []core.Facet{core.FacetAnalyticsForecast},
+	}
+	accept(work, "accept independent safe work")
+
+	binary := filepath.Join(root, "llama-cli")
+	model := filepath.Join(root, "fake.gguf")
+	if err := os.WriteFile(model, []byte("test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	script := "#!/bin/sh\nprintf 'S|E-INDEPENDENT-SAFE-WORK evidence\\nK|L\\nF|E-INDEPENDENT-SAFE-WORK evidence\\nZ\\n'\n"
+	if err := os.WriteFile(binary, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	circulated, signal, executed, err := rt.GovernedCycle(context.Background(), reason.GemmaCLI{
+		Binary: binary, Model: model, Threads: 1,
+		Context: 2048, MaxTokens: 64, Timeout: 5 * time.Second,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !executed || signal.REL["kin_emergion"] != work.IDN {
+		t.Fatalf("independent work did not execute: executed=%t kin=%q", executed, signal.REL["kin_emergion"])
+	}
+	for _, em := range circulated {
+		if em.IDN == reorder.IDN {
+			t.Fatal("existing pending reorder was reported as new work")
+		}
 	}
 
 	state, err := rt.state()
