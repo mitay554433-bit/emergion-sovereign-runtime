@@ -102,3 +102,25 @@ Every subsystem has an owner/source, implementation state, evidence, verificatio
 6. **Source integration and release (separate approval gate).** Review the six remote commits missing from the engineering branch and the phone-local diff. Only then propose the smallest safe integration, with exact commit IDs, tests, and rollback boundary. No implicit merge or deployment.
 
 **Current owner handoff:** Operator action **#1 only**. The assistant can review its output and proceed through existing source paths. All later items are pending; this list is an operator work queue, not evidence of execution.
+
+
+## November 14, 2026 — authoritative phone worktree identified
+
+**Operator-provided read-only Git inspection:**
+
+- Current Termux branch: `evidence-provider-selection-20261025`.
+- Local HEAD: `50e53312793b5999fe39eea7ce18c0f43467e0f0`.
+- Tracked local modifications: `pkg/fieldapi/api.go` and `pkg/fieldapi/api_test.go`.
+- Untracked material includes `HUMAN_FINAL_MOBILE_REVIEW.txt`, multiple `LIVE_PROOF_*` directories, `PILOT_ACCEPTANCE_2026-10-17/`, `arc-agi-2/`, `helix_evidence.txt`, `-h/`, pre-edit source copies, and several malformed-looking quoted names. Their contents and disposition have **not** been inspected; do not classify them as disposable.
+- Remote: `git@github.com:mitay554433-bit/emergion-sovereign-runtime.git`.
+- Operator-observed focused `TestGovernedCycleCirculatesAndExecutesExistingSafeWork` PASS (455.454s) belongs to this locally modified working tree, **not** necessarily the committed remote revision.
+
+**Remote reconciliation verification:** GitHub comparison `evidence-provider-selection-20261025...unifusion-system-reconciliation-20261024` reports `diverged`, engineering branch 4 commits ahead / 36 behind; comparison paths are this reconciliation document and `pkg/fieldapi/api_test.go`. The exact local modifications in `api.go` and `api_test.go` remain unknown until their local diff is inspected. Do **not** merge the engineering branch into the phone, overwrite the local fixture, or cherry-pick the test correction on top of unreviewed edits.
+
+**Next operator step (read-only, no file mutation):**
+
+```sh
+cd "$HOME/AXM/emergion-sovereign-runtime" && git diff -- pkg/fieldapi/api.go pkg/fieldapi/api_test.go
+```
+
+Review this diff before proposing any modification. The existing successful test does not need repeating. The previous operator work queue's first step is complete; the full-suite and manifest remain pending.
