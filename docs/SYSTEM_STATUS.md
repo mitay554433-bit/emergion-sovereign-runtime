@@ -346,3 +346,18 @@ This section records a **repository-source inspection**, not a live Termux execu
 - Recent Termux diagnostic output previously supplied by the operator contains `[GEMMA_DIAG]` instrumentation not present in the inspected GitHub `gemma_cli.go`. Treat the phone worktree and GitHub default branch as potentially divergent until their actual revisions are reconciled. Do not overwrite local changes from the remote copy.
 
 **Verification boundary:** No Go tests, local Gemma inference, daemon operation, COSL verification, or manifest regeneration were executed during this GitHub inspection. No runtime, registry, governance, or execution state was modified. The next engineering change must be based on the exact current target revision and focused test evidence.
+
+
+## 20. 2026-11-14 operator-observed live Gemma inference
+
+The operator supplied Termux output from the existing governed-cycle integration run. This is **operator-observed runtime evidence**, not a Go test PASS or a GitHub CI result.
+
+- First `CirculateSAWs` completed in `2.802604ms`.
+- First local Gemma attempt reported `prompt_bytes=2308`, `source_bytes=33`, `governed_bytes=0`, `context=4096`, `max_tokens=1024`, `threads=4`.
+- The installed `gemma-2-2b-it.Q4_K_M.gguf` model generated a complete structured response: `S|governed cycle composition source`, `K|L`, `F|governed cycle composition source`, `Z`.
+- The CLI printed `Exiting...`; the diagnostic reported `attempt=1 elapsed=4m53.290561451s run_error=<nil>`. This proves the first observed inference process exited successfully, not that the entire test or governance cycle passed.
+- A second `CirculateSAWs` completed in `843.698µs`. A second inference started with `prompt_bytes=2769`, `source_bytes=494`, `governed_bytes=0`, `context=4096`, `max_tokens=1024`, `threads=4`. Its completion and the overall test result were not present in the supplied output.
+- The CLI displayed `Prompt: 3.1 t/s | Generation: 0.2 t/s` for the first invocation. This is a reported performance observation; no root cause or recommended parameter change is established by it alone.
+- These live test values differ from the hardcoded limits still visible on the connected GitHub default branch. The local Termux test tree therefore contains at least a different test configuration. Preserve local changes; do not replace them from the remote branch without reconciliation.
+
+**Next verification boundary:** Obtain the terminal outcome of the same governed-cycle test, including the second inference and all assertions. No additional model-configuration changes are justified by the first successful exit alone. This section does not assert a successful production daemon cycle, REG acceptance, or full-system completion.
