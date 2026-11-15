@@ -14,8 +14,10 @@ import (
 	"emergion-sovereign-runtime/internal/core"
 	"emergion-sovereign-runtime/internal/emerger"
 	livefield "emergion-sovereign-runtime/internal/field"
+	"emergion-sovereign-runtime/internal/gov"
 	"emergion-sovereign-runtime/internal/pivot"
 	"emergion-sovereign-runtime/internal/reason"
+	"emergion-sovereign-runtime/internal/reg"
 	"emergion-sovereign-runtime/internal/store"
 )
 
@@ -1023,9 +1025,14 @@ func (r Runtime) validateLineage(analysis *reason.Result) error {
 		}
 	}
 	returnedID := strings.TrimSpace(r.ReturnedPredecessor)
+	kinTarget := ""
+	if analysis.TargetComparison != nil {
+		kinTarget = strings.TrimSpace(analysis.TargetComparison.KINTargetEmergIONID)
+	}
 	if strings.TrimSpace(analysis.Relationships["COMPOSITION_KIN"]) == "" &&
 		returnedID == "" &&
-		strings.TrimSpace(analysis.Supersedes) == "" {
+		strings.TrimSpace(analysis.Supersedes) == "" &&
+		kinTarget == "" {
 		analysis.Supersedes = ""
 		analysis.Delta = nil
 		return nil
@@ -1049,6 +1056,16 @@ func (r Runtime) validateLineage(analysis *reason.Result) error {
 			)
 		}
 		analysis.Relationships["COMPOSITION_KIN"] = compositionTarget
+	}
+
+	if kinTarget != "" {
+		if _, ok := st.Accepted[kinTarget]; !ok {
+			return fmt.Errorf(
+				"KIN target %q is not REG-accepted",
+				kinTarget,
+			)
+		}
+		analysis.TargetComparison.KINTargetEmergIONID = kinTarget
 	}
 
 	if returnedID != "" {
@@ -1340,9 +1357,79 @@ func targetComparisonEvidence(target core.EmergION, reality map[string]core.Emer
 	return []byte(b.String())
 }
 
+// resolveTargetComparison labels a typed comparison. It does not approve,
+// accept, or authorize anything. The September source referred to an
+// undefined token; token is the trimmed gap so the original condition holds.
+func resolveTargetComparison(comparison reason.TargetComparison, kinTarget, capResolution string) (string, string) {
+	if strings.TrimSpace(comparison.TargetEmergIONID) == "" || strings.TrimSpace(comparison.TargetState) == "" || strings.TrimSpace(comparison.RealityState) == "" {
+		return "INSUFFICIENT", "HOLD"
+	}
+	if comparison.TargetState == comparison.RealityState || len(comparison.Difference) == 0 {
+		return "SATISFIED", "RECAPTURE_CLOSED"
+	}
+	if strings.TrimSpace(kinTarget) != "" {
+		return "RESOLVED", "existing machinery"
+	}
+	if strings.TrimSpace(capResolution) == "COMPOSABLE_CANDIDATE" {
+		return "RESOLVED", "existing machinery"
+	}
+	exactGap := false
+	for _, gap := range comparison.Gap {
+		token := strings.TrimSpace(gap)
+		if token != "" && !strings.ContainsAny(token, "\n") {
+			exactGap = true
+			break
+		}
+	}
+	if !exactGap && strings.TrimSpace(capResolution) == "" {
+		return "INSUFFICIENT", "HOLD"
+	}
+	return "UNRESOLVED", "HOLD"
+}
+
+// resolveKINTarget returns one REG-accepted EmergION whose capability equals
+// a gap token exactly. Prose gaps do not match. The target itself is excluded.
+func resolveKINTarget(comparison reason.TargetComparison, st core.State) string {
+	targetID := strings.TrimSpace(comparison.TargetEmergIONID)
+	if targetID == "" || len(comparison.Gap) == 0 {
+		return ""
+	}
+
+	for _, gap := range comparison.Gap {
+		required := strings.ToUpper(strings.TrimSpace(gap))
+		if required == "" {
+			continue
+		}
+
+		var matches []string
+		for id, em := range st.Accepted {
+			if id == targetID || em.STA != core.StateAccepted {
+				continue
+			}
+
+			for _, capability := range em.CAP {
+				if strings.ToUpper(strings.TrimSpace(capability)) == required {
+					matches = append(matches, id)
+					break
+				}
+			}
+		}
+
+		if len(matches) == 0 {
+			continue
+		}
+
+		sort.Strings(matches)
+		return matches[0]
+	}
+
+	return ""
+}
+
 type targetComparisonReasoner struct {
 	observer reason.Reasoner
 	target   core.EmergION
+	reality  string
 }
 
 func (t targetComparisonReasoner) Analyze(ctx context.Context, in reason.Input) (reason.Result, error) {
@@ -1367,23 +1454,65 @@ func (t targetComparisonReasoner) Analyze(ctx context.Context, in reason.Input) 
 	facts := append([]string(nil), observed.Facts...)
 	differences := append([]string(nil), observed.Differences...)
 
+	comparison := reason.TargetComparison{
+		TargetEmergIONID: t.target.IDN,
+		TargetState:      strings.TrimSpace(t.target.REL["target_state"]),
+		RealityState:     t.reality,
+		Lineage:          t.target.IDN,
+	}
+	if observed.TargetComparison != nil {
+		src := observed.TargetComparison
+		if strings.TrimSpace(src.TargetEmergIONID) != "" {
+			comparison.TargetEmergIONID = strings.TrimSpace(src.TargetEmergIONID)
+		}
+		if strings.TrimSpace(src.TargetState) != "" {
+			comparison.TargetState = strings.TrimSpace(src.TargetState)
+		}
+		if strings.TrimSpace(src.RealityState) != "" {
+			comparison.RealityState = src.RealityState
+		}
+		if strings.TrimSpace(src.Lineage) != "" {
+			comparison.Lineage = strings.TrimSpace(src.Lineage)
+		}
+		comparison.Difference = append([]string(nil), src.Difference...)
+		comparison.Gap = append([]string(nil), src.Gap...)
+		comparison.KINTargetEmergIONID = strings.TrimSpace(src.KINTargetEmergIONID)
+		comparison.Torque = src.Torque
+	}
+	if len(comparison.Difference) == 0 {
+		comparison.Difference = append([]string(nil), differences...)
+	}
+	if len(comparison.Gap) == 0 {
+		comparison.Gap = append([]string(nil), observed.Requirements...)
+	}
+
 	relationships := map[string]string{
 		"source_kind":      "TARGET_COMPARISON",
-		"target_emergion":  t.target.IDN,
-		"target_state":     strings.TrimSpace(t.target.REL["target_state"]),
+		"target_emergion":  comparison.TargetEmergIONID,
+		"target_state":     comparison.TargetState,
 		"comparison_state": "UNRESOLVED",
 	}
 	if len(differences) > 0 && len(observed.Requirements) == 1 {
 		relationships["required_capability"] = observed.Requirements[0]
 	}
+	if len(comparison.Difference) > 0 {
+		relationships["comparison_difference"] = strings.Join(comparison.Difference, ";")
+	}
+	if len(comparison.Gap) > 0 {
+		relationships["comparison_gap"] = strings.Join(comparison.Gap, ";")
+		if comparison.KINTargetEmergIONID != "" {
+			relationships["kin_target_emergion"] = comparison.KINTargetEmergIONID
+		}
+	}
 
 	return reason.Result{
-		Summary:       "bounded governed target comparison: " + strings.TrimSpace(observed.Summary),
-		Relationships: relationships,
-		Capabilities:  []string{"CMP", "DIF", "PRJ"},
-		Facts:         facts,
-		Differences:   differences,
-		Risk:          observed.Risk,
+		Summary:          "bounded governed target comparison: " + strings.TrimSpace(observed.Summary),
+		Relationships:    relationships,
+		Capabilities:     []string{"CMP", "DIF", "PRJ"},
+		Facts:            facts,
+		Differences:      differences,
+		Risk:             observed.Risk,
+		TargetComparison: &comparison,
 	}, nil
 }
 
@@ -1406,6 +1535,7 @@ func (r Runtime) CaptureTargetComparison(ctx context.Context, target core.EmergI
 	comparisonRuntime.Reasoner = targetComparisonReasoner{
 		observer: r.Reasoner,
 		target:   target,
+		reality:  observeAcceptedReality(reality),
 	}
 
 	return comparisonRuntime.CaptureBytes(
@@ -1498,6 +1628,26 @@ func (r Runtime) admitAnalyzedCandidate(
 	runtimeIdentity ...string,
 ) (core.EmergION, bool, error) {
 	analysis = reason.Calibrate(analysis)
+	if analysis.TargetComparison != nil {
+		kinTarget := resolveKINTarget(*analysis.TargetComparison, boundary)
+		if kinTarget != "" {
+			analysis.TargetComparison.KINTargetEmergIONID = kinTarget
+			if analysis.Relationships == nil {
+				analysis.Relationships = map[string]string{}
+			}
+			analysis.Relationships["kin_target_emergion"] = kinTarget
+		}
+		capResolution := ""
+		if analysis.Relationships != nil {
+			capResolution = analysis.Relationships["capability_resolution"]
+		}
+		if analysis.Relationships == nil {
+			analysis.Relationships = map[string]string{}
+		}
+		kind, next := resolveTargetComparison(*analysis.TargetComparison, kinTarget, capResolution)
+		analysis.Relationships["comparison_state"] = kind
+		analysis.Relationships["comparison_next"] = next
+	}
 	if len(runtimeIdentity) > 1 {
 		return core.EmergION{}, false, fmt.Errorf("multiple runtime EmergION identities supplied")
 	}
@@ -2033,6 +2183,52 @@ func (r Runtime) ExecuteAction(
 	return request, result, signal, duplicate, nil
 }
 
+func (r Runtime) Govern(
+	emergionID string,
+	decision gov.Decision,
+	authority string,
+	reasonText string,
+) (core.EmergION, core.DecisionReceipt, core.REGReceipt, error) {
+	if r.Store == nil {
+		return core.EmergION{}, core.DecisionReceipt{}, core.REGReceipt{}, fmt.Errorf("runtime store not configured")
+	}
+	emergionID = strings.TrimSpace(emergionID)
+	if emergionID == "" {
+		return core.EmergION{}, core.DecisionReceipt{}, core.REGReceipt{}, fmt.Errorf("empty EmergION ID")
+	}
+	events, err := r.Store.Events()
+	if err != nil {
+		return core.EmergION{}, core.DecisionReceipt{}, core.REGReceipt{}, err
+	}
+	st, err := livefield.Rebuild(events)
+	if err != nil {
+		return core.EmergION{}, core.DecisionReceipt{}, core.REGReceipt{}, err
+	}
+	em, ok := st.AtGOV[emergionID]
+	if !ok {
+		return core.EmergION{}, core.DecisionReceipt{}, core.REGReceipt{}, fmt.Errorf("EmergION %q is not at GOV", emergionID)
+	}
+	decided, receipt, err := gov.Decide(em, decision, authority, reasonText)
+	if err != nil {
+		return em, core.DecisionReceipt{}, core.REGReceipt{}, err
+	}
+	decisionID, err := r.Store.SaveDecision(receipt)
+	if err != nil {
+		return em, core.DecisionReceipt{}, core.REGReceipt{}, err
+	}
+	if gov.Decision(strings.ToUpper(string(decision))) != gov.Approve {
+		return decided, receipt, core.REGReceipt{}, nil
+	}
+	accepted, regReceipt, err := reg.Accept(decided, decisionID)
+	if err != nil {
+		return decided, receipt, core.REGReceipt{}, err
+	}
+	if _, err := r.Store.SaveAccepted(regReceipt); err != nil {
+		return accepted, receipt, core.REGReceipt{}, err
+	}
+	return accepted, receipt, regReceipt, nil
+}
+
 func (r Runtime) ExecuteOneSafeAction(
 	ctx context.Context,
 	gemma reason.GemmaCLI,
@@ -2188,34 +2384,50 @@ func (r Runtime) Once(ctx context.Context, dropzone string) ([]string, error) {
 	if err := os.MkdirAll(dropzone, 0o700); err != nil {
 		return nil, err
 	}
-	ents, err := os.ReadDir(dropzone)
+
+	var paths []string
+	err := filepath.WalkDir(dropzone, func(path string, ent os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if path != dropzone && ent.IsDir() {
+			if strings.HasPrefix(ent.Name(), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if path == dropzone || strings.HasPrefix(ent.Name(), ".") {
+			return nil
+		}
+		paths = append(paths, path)
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	sort.Slice(ents, func(i, j int) bool { return ents[i].Name() < ents[j].Name() })
+
+	sort.Strings(paths)
+
 	var ids []string
-	for _, ent := range ents {
-		if ent.IsDir() || strings.HasPrefix(ent.Name(), ".") {
-			continue
-		}
-		path := filepath.Join(dropzone, ent.Name())
+	for _, path := range paths {
 		em, _, err := r.Capture(ctx, path, true)
+		rel, _ := filepath.Rel(dropzone, path)
 		if err != nil {
 			var recaptured *RecaptureError
 			if !errors.As(err, &recaptured) {
-				return ids, fmt.Errorf("%s: %w", ent.Name(), err)
+				return ids, fmt.Errorf("%s: %w", rel, err)
 			}
 
 			if recaptured.EmergION.STA != core.StateAtGOV ||
 				!recaptured.EmergION.VAL.Recoil ||
 				!recaptured.EmergION.VAL.WVC {
-				return ids, fmt.Errorf("%s: RECAPTURE not GOV-ready", ent.Name())
+				return ids, fmt.Errorf("%s: RECAPTURE not GOV-ready", rel)
 			}
 
 			if removeErr := os.Remove(path); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
 				return ids, fmt.Errorf(
 					"%s: RECAPTURE succeeded but source could not clear dropzone: %w",
-					ent.Name(),
+					rel,
 					removeErr,
 				)
 			}

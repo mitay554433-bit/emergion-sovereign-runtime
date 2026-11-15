@@ -9,21 +9,36 @@ type Input struct {
 }
 
 type Result struct {
-	Summary       string
-	Archonym      string
-	Relationships map[string]string
-	Capabilities  []string
-	Facts         []string
-	Differences   []string
-	Requirements  []string
-	Gaps          []string
-	Risk          string
-	Supersedes    string
-	Delta         []string
-	Facets        []string
-	BuildNodes    []BuildNode
-	BuildEdges    []BuildEdge
-	Monetization  *Monetization
+	Summary          string
+	Archonym         string
+	Relationships    map[string]string
+	Capabilities     []string
+	Facts            []string
+	Differences      []string
+	Requirements     []string
+	Gaps             []string
+	Risk             string
+	Supersedes       string
+	Delta            []string
+	Facets           []string
+	BuildNodes       []BuildNode
+	BuildEdges       []BuildEdge
+	Monetization     *Monetization
+	TargetComparison *TargetComparison
+}
+
+// TargetComparison is the typed target/reality boundary carried with a
+// TARGET_COMPARISON analysis. Torque is never invented here; it stays empty
+// until a later governed derivation exists.
+type TargetComparison struct {
+	TargetEmergIONID    string
+	TargetState         string
+	RealityState        string
+	Difference          []string
+	Gap                 []string
+	KINTargetEmergIONID string
+	Torque              string
+	Lineage             string
 }
 
 type BuildNode struct {

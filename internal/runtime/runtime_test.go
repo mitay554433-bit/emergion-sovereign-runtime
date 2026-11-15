@@ -6018,7 +6018,7 @@ func TestGemmaAnalyzeLiveProofSourceDiagnostic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-        g := reason.GemmaFromEnv()
+	g := reason.GemmaFromEnv()
 
 	start := time.Now()
 
@@ -6049,7 +6049,6 @@ func TestGemmaAnalyzeLiveProofSourceDiagnostic(t *testing.T) {
 		got.Capabilities,
 	)
 }
-
 
 func TestAcceptedCapabilityProviderPopulationExcludesAdjacentSelfReference(t *testing.T) {
 	st := core.EmptyState()
@@ -6085,5 +6084,517 @@ func TestAcceptedCapabilityProviderPopulationExcludesAdjacentSelfReference(t *te
 
 	if len(population) != 3 {
 		t.Fatalf("population size = %d want 3: %v", len(population), population)
+	}
+}
+
+func TestRuntimeGovernApprovesAndPersistsREG(t *testing.T) {
+	root := t.TempDir()
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	em := core.EmergION{
+		IDN: "E-RUNTIME-GOVERN-TEST",
+		STA: core.StateAtGOV,
+		MEM: core.Memory{
+			SourceHash: "runtime-govern-source-hash",
+			Bytes:      1,
+			Stored:     1,
+		},
+		VAL: core.Validation{
+			Recoil: true,
+			WVC:    true,
+		},
+		EVO: core.Evolution{Version: 1},
+	}
+	if _, err := s.SaveCandidate(em); err != nil {
+		t.Fatal(err)
+	}
+
+	r := Runtime{Store: s}
+	accepted, decision, receipt, err := r.Govern(
+		em.IDN,
+		gov.Approve,
+		"HUMAN_FINAL",
+		"runtime Govern approval regression proof",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if accepted.STA != core.StateAccepted {
+		t.Fatalf("accepted state = %q want %q", accepted.STA, core.StateAccepted)
+	}
+	if decision.EmergIONID != em.IDN {
+		t.Fatalf("decision EmergIONID = %q want %q", decision.EmergIONID, em.IDN)
+	}
+	if receipt.EmergIONID != em.IDN {
+		t.Fatalf("REG receipt EmergIONID = %q want %q", receipt.EmergIONID, em.IDN)
+	}
+	if receipt.DecisionID == "" {
+		t.Fatal("REG receipt missing decision ID")
+	}
+
+	events, err := s.Events()
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := livefield.Rebuild(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := st.Accepted[em.IDN]; !ok {
+		t.Fatal("Runtime.Govern did not persist EmergION into REG")
+	}
+}
+
+func TestComparisonReasonerCarriesTargetComparison(t *testing.T) {
+	base := &interpretationRevisionReasoner{
+		result: reason.Result{
+			Summary: "comparison base",
+			Relationships: map[string]string{
+				"source_kind": "TARGET_COMPARISON",
+			},
+		},
+	}
+	want := reason.TargetComparison{
+		TargetEmergIONID: "E-TARGET",
+		TargetState:      "target state",
+		RealityState:     "E-REALITY=reality state",
+		Lineage:          "E-TARGET",
+	}
+	r := targetComparisonReasoner{
+		observer: base,
+		target: core.EmergION{
+			IDN: "E-TARGET",
+			REL: map[string]string{"target_state": want.TargetState},
+		},
+		reality: want.RealityState,
+	}
+
+	result, err := r.Analyze(context.Background(), reason.Input{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.TargetComparison == nil {
+		t.Fatal("TargetComparison missing")
+	}
+	got := result.TargetComparison
+	if got.TargetEmergIONID != want.TargetEmergIONID || got.TargetState != want.TargetState || got.RealityState != want.RealityState || got.Lineage != want.Lineage {
+		t.Fatalf("TargetComparison = %#v want %#v", *got, want)
+	}
+}
+
+func TestComparisonReasonerProjectsCanonicalTargetComparisonRelationships(t *testing.T) {
+	base := &interpretationRevisionReasoner{
+		result: reason.Result{
+			Summary: "comparison base",
+			Relationships: map[string]string{
+				"source_kind": "TARGET_COMPARISON",
+			},
+		},
+	}
+	r := targetComparisonReasoner{
+		observer: base,
+		target: core.EmergION{
+			IDN: "E-TARGET",
+			REL: map[string]string{"target_state": "target state"},
+		},
+		reality: "E-REALITY=reality state",
+	}
+
+	result, err := r.Analyze(context.Background(), reason.Input{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Relationships["source_kind"] != "TARGET_COMPARISON" {
+		t.Fatalf("source_kind = %q", result.Relationships["source_kind"])
+	}
+	if result.Relationships["target_emergion"] != "E-TARGET" {
+		t.Fatalf("target_emergion = %q", result.Relationships["target_emergion"])
+	}
+	if result.Relationships["target_state"] != "target state" {
+		t.Fatalf("target_state = %q", result.Relationships["target_state"])
+	}
+	if result.Relationships["comparison_state"] != "UNRESOLVED" {
+		t.Fatalf("comparison_state = %q want UNRESOLVED", result.Relationships["comparison_state"])
+	}
+}
+
+func TestComparisonReasonerPreservesStructuredDifferenceAndGap(t *testing.T) {
+	base := &interpretationRevisionReasoner{
+		result: reason.Result{
+			Summary: "comparison base",
+			TargetComparison: &reason.TargetComparison{
+				Difference: []string{"target requires X; reality provides Y"},
+				Gap:        []string{"X capability remains unresolved"},
+			},
+			Relationships: map[string]string{
+				"source_kind": "TARGET_COMPARISON",
+			},
+		},
+	}
+	r := targetComparisonReasoner{
+		observer: base,
+		target: core.EmergION{
+			IDN: "E-TARGET",
+			REL: map[string]string{"target_state": "target state"},
+		},
+		reality: "E-REALITY=reality state",
+	}
+
+	result, err := r.Analyze(context.Background(), reason.Input{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.TargetComparison == nil {
+		t.Fatal("TargetComparison missing")
+	}
+	got := result.TargetComparison
+	if !reflect.DeepEqual(got.Difference, []string{"target requires X; reality provides Y"}) {
+		t.Fatalf("Difference = %#v", got.Difference)
+	}
+	if !reflect.DeepEqual(got.Gap, []string{"X capability remains unresolved"}) {
+		t.Fatalf("Gap = %#v", got.Gap)
+	}
+	if got.Torque != "" {
+		t.Fatalf("Torque populated unexpectedly: %q", got.Torque)
+	}
+	if result.Relationships["comparison_difference"] != "target requires X; reality provides Y" {
+		t.Fatalf("comparison_difference = %q", result.Relationships["comparison_difference"])
+	}
+	if result.Relationships["comparison_gap"] != "X capability remains unresolved" {
+		t.Fatalf("comparison_gap = %q", result.Relationships["comparison_gap"])
+	}
+}
+
+func TestComparisonReasonerPreservesKINTarget(t *testing.T) {
+	base := &interpretationRevisionReasoner{
+		result: reason.Result{
+			TargetComparison: &reason.TargetComparison{
+				KINTargetEmergIONID: "E-KIN-TARGET",
+			},
+		},
+	}
+	r := targetComparisonReasoner{
+		observer: base,
+		target: core.EmergION{
+			IDN: "E-TARGET",
+			REL: map[string]string{"target_state": "target state"},
+		},
+		reality: "reality state",
+	}
+
+	result, err := r.Analyze(context.Background(), reason.Input{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.TargetComparison == nil {
+		t.Fatal("TargetComparison missing")
+	}
+	if result.TargetComparison.KINTargetEmergIONID != "E-KIN-TARGET" {
+		t.Fatalf("KINTargetEmergIONID = %q want E-KIN-TARGET", result.TargetComparison.KINTargetEmergIONID)
+	}
+	if result.TargetComparison.Torque != "" {
+		t.Fatalf("Torque populated unexpectedly: %q", result.TargetComparison.Torque)
+	}
+}
+
+func TestResolveKINTargetRequiresExactAcceptedCapability(t *testing.T) {
+	st := core.State{
+		Accepted: map[string]core.EmergION{
+			"E-TARGET": {IDN: "E-TARGET", STA: core.StateAccepted, CAP: []string{"CMP"}},
+			"E-CMP":    {IDN: "E-CMP", STA: core.StateAccepted, CAP: []string{"CMP"}},
+		},
+	}
+	got := resolveKINTarget(reason.TargetComparison{
+		TargetEmergIONID: "E-TARGET",
+		Gap:              []string{"CMP"},
+	}, st)
+	if got != "E-CMP" {
+		t.Fatalf("KIN target = %q want E-CMP", got)
+	}
+}
+
+func TestResolveKINTargetDoesNotParseGapProse(t *testing.T) {
+	st := core.State{
+		Accepted: map[string]core.EmergION{
+			"E-CMP": {IDN: "E-CMP", STA: core.StateAccepted, CAP: []string{"CMP"}},
+		},
+	}
+	got := resolveKINTarget(reason.TargetComparison{
+		TargetEmergIONID: "E-TARGET",
+		Gap:              []string{"CMP capability remains unresolved"},
+	}, st)
+	if got != "" {
+		t.Fatalf("KIN target = %q; prose GAP must remain unresolved", got)
+	}
+}
+
+func TestCaptureTargetComparisonPersistsResolvedKINTarget(t *testing.T) {
+	root := t.TempDir()
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	provider := core.EmergION{
+		IDN: "E-KIN-CMP",
+		STA: core.StateAtGOV,
+		MEM: core.Memory{
+			SourceHash: "kin-cmp-source",
+			Bytes:      1,
+			Stored:     1,
+		},
+		CAP: []string{"CMP"},
+		VAL: core.Validation{Recoil: true, WVC: true},
+		EVO: core.Evolution{Version: 1},
+	}
+	if _, err := s.SaveCandidate(provider); err != nil {
+		t.Fatal(err)
+	}
+	approved, decision, err := gov.Decide(provider, gov.Approve, "HUMAN_FINAL", "accept KIN comparison provider")
+	if err != nil {
+		t.Fatal(err)
+	}
+	decisionID, err := s.SaveDecision(decision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted, receipt, err := reg.Accept(approved, decisionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if accepted.STA != core.StateAccepted {
+		t.Fatalf("provider was not REG accepted: %s", accepted.STA)
+	}
+	if _, err := s.SaveAccepted(receipt); err != nil {
+		t.Fatal(err)
+	}
+
+	targetRuntime := Runtime{
+		Store: s,
+		Reasoner: &interpretationRevisionReasoner{
+			result: reason.Result{
+				Summary: "bounded governed target comparison",
+				TargetComparison: &reason.TargetComparison{
+					Gap: []string{"CMP"},
+				},
+				Relationships: map[string]string{
+					"source_kind":      "TARGET_COMPARISON",
+					"target_state":     "persistent governed target",
+					"comparison_state": "UNRESOLVED",
+				},
+				Capabilities: []string{"CMP", "DIF", "PRJ"},
+				Facts:        []string{"target_comparison_required"},
+				Risk:         "L",
+			},
+		},
+	}
+
+	target, _, err := targetRuntime.CaptureTarget(context.Background(), "persistent governed target")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	comparison, duplicate, err := targetRuntime.CaptureTargetComparison(
+		context.Background(),
+		target,
+		map[string]core.EmergION{},
+		[]byte("resolved KIN target evidence"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate {
+		t.Fatal("target comparison unexpectedly reported duplicate")
+	}
+	if comparison.REL["kin_target_emergion"] != provider.IDN {
+		t.Fatalf("kin_target_emergion = %q want %q", comparison.REL["kin_target_emergion"], provider.IDN)
+	}
+
+	events, err := s.Events()
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := livefield.Rebuild(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	active, ok := st.AtGOV[comparison.IDN]
+	if !ok {
+		t.Fatal("target comparison missing from AtGOV")
+	}
+	if active.REL["kin_target_emergion"] != provider.IDN {
+		t.Fatalf("rebuilt kin_target_emergion = %q want %q", active.REL["kin_target_emergion"], provider.IDN)
+	}
+}
+
+func TestComparisonReasonerProducesResolvableKINTarget(t *testing.T) {
+	base := &interpretationRevisionReasoner{
+		result: reason.Result{
+			TargetComparison: &reason.TargetComparison{
+				Gap: []string{"CMP"},
+			},
+		},
+	}
+	r := targetComparisonReasoner{
+		observer: base,
+		target: core.EmergION{
+			IDN: "E-TARGET",
+			REL: map[string]string{"target_state": "target state"},
+		},
+		reality: "reality state",
+	}
+	result, err := r.Analyze(context.Background(), reason.Input{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.TargetComparison == nil {
+		t.Fatal("TargetComparison missing")
+	}
+	if result.TargetComparison.TargetEmergIONID != "E-TARGET" {
+		t.Fatalf("target ID = %q want E-TARGET", result.TargetComparison.TargetEmergIONID)
+	}
+	if len(result.TargetComparison.Gap) != 1 || result.TargetComparison.Gap[0] != "CMP" {
+		t.Fatalf("GAP = %#v want [CMP]", result.TargetComparison.Gap)
+	}
+}
+
+func TestDeriveKINTorqueRequiresResolvedKINTarget(t *testing.T) {
+	comparison := reason.TargetComparison{
+		TargetEmergIONID: "E-TARGET",
+		TargetState:      "target state",
+		RealityState:     "reality state",
+		Difference:       []string{"target requires X; reality provides Y"},
+		Gap:              []string{"CMP"},
+		Lineage:          "E-TARGET",
+	}
+	if comparison.KINTargetEmergIONID != "" {
+		t.Fatalf("KIN target unexpectedly resolved: %q", comparison.KINTargetEmergIONID)
+	}
+	if comparison.Torque != "" {
+		t.Fatalf("TORQUE populated without resolved KIN target: %q", comparison.Torque)
+	}
+}
+
+func TestDeriveKINTorqueRequiresResolvedComparison(t *testing.T) {
+	comparison := reason.TargetComparison{
+		TargetEmergIONID:    "E-TARGET",
+		TargetState:         "target state",
+		RealityState:        "reality state",
+		Difference:          []string{"target differs from reality"},
+		Gap:                 []string{"CMP"},
+		KINTargetEmergIONID: "E-KIN-TARGET",
+		Lineage:             "E-TARGET",
+	}
+	if comparison.TargetEmergIONID == "" || comparison.TargetState == "" || comparison.RealityState == "" || len(comparison.Gap) == 0 || comparison.KINTargetEmergIONID == "" {
+		t.Fatal("resolved comparison inputs missing")
+	}
+	if comparison.Torque != "" {
+		t.Fatalf("Torque populated unexpectedly: %q", comparison.Torque)
+	}
+}
+
+func TestKINTorqueContractRequiresCompleteSemanticInputs(t *testing.T) {
+	base := reason.TargetComparison{
+		TargetEmergIONID:    "E-TARGET",
+		TargetState:         "target state",
+		RealityState:        "reality state",
+		Difference:          []string{"target differs from reality"},
+		Gap:                 []string{"CMP"},
+		KINTargetEmergIONID: "E-KIN-TARGET",
+		Lineage:             "E-TARGET",
+	}
+	cases := []struct {
+		name string
+		edit func(*reason.TargetComparison)
+	}{
+		{name: "missing target identity", edit: func(c *reason.TargetComparison) { c.TargetEmergIONID = "" }},
+		{name: "missing target state", edit: func(c *reason.TargetComparison) { c.TargetState = "" }},
+		{name: "missing reality state", edit: func(c *reason.TargetComparison) { c.RealityState = "" }},
+		{name: "missing gap", edit: func(c *reason.TargetComparison) { c.Gap = nil }},
+		{name: "missing KIN target", edit: func(c *reason.TargetComparison) { c.KINTargetEmergIONID = "" }},
+		{name: "missing lineage", edit: func(c *reason.TargetComparison) { c.Lineage = "" }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			comparison := base
+			tc.edit(&comparison)
+			if comparison.Torque != "" {
+				t.Fatalf("Torque populated unexpectedly: %q", comparison.Torque)
+			}
+		})
+	}
+	if base.Torque != "" {
+		t.Fatalf("Torque populated before derivation: %q", base.Torque)
+	}
+}
+
+func TestFractureInputContainsNoPredeclaredSemanticAnswer(t *testing.T) {
+	comparison := reason.TargetComparison{
+		TargetEmergIONID: "E-TARGET",
+		TargetState:      "target state",
+		RealityState:     "E-REALITY=reality state",
+		Difference:       []string{"target state differs from reality state"},
+		Lineage:          "E-TARGET",
+	}
+	if len(comparison.Gap) != 0 {
+		t.Fatalf("fracture input predeclares Gap: %#v", comparison.Gap)
+	}
+	if comparison.KINTargetEmergIONID != "" {
+		t.Fatalf("fracture input predeclares KIN target: %q", comparison.KINTargetEmergIONID)
+	}
+	if comparison.Torque != "" {
+		t.Fatalf("fracture input predeclares TORQUE: %q", comparison.Torque)
+	}
+}
+
+func TestFractureBoundaryIsObservableBeforeDiscovery(t *testing.T) {
+	comparison := reason.TargetComparison{
+		TargetEmergIONID: "E-TARGET",
+		TargetState:      "target state",
+		RealityState:     "E-REALITY=reality state",
+		Difference:       []string{"target state differs from reality state"},
+		Lineage:          "E-TARGET",
+	}
+	if comparison.TargetState == "" || comparison.RealityState == "" {
+		t.Fatal("boundary state missing")
+	}
+	if comparison.TargetState == comparison.RealityState {
+		t.Fatal("boundary is not exposed: target and reality are equal")
+	}
+	if len(comparison.Difference) == 0 {
+		t.Fatal("boundary has no observable difference")
+	}
+	if len(comparison.Gap) != 0 || comparison.KINTargetEmergIONID != "" || comparison.Torque != "" {
+		t.Fatal("boundary predeclares gap, KIN target, or torque")
+	}
+}
+
+func TestGovernedStateContextIsDeterministicAndStatePreserving(t *testing.T) {
+	root := t.TempDir()
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := Runtime{Store: s, Reasoner: reason.Heuristic{}}
+
+	before, projectedBefore, err := r.governedStateContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, projectedAfter, err := r.governedStateContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(before, after) {
+		t.Fatal("governed state changed during read-only observation")
+	}
+	if projectedBefore != projectedAfter {
+		t.Fatal("bounded governed-state observation was not deterministic")
+	}
+	if before.Events != after.Events || before.TipHash != after.TipHash {
+		t.Fatalf("governed state changed: events %d -> %d, tip %q -> %q", before.Events, after.Events, before.TipHash, after.TipHash)
 	}
 }

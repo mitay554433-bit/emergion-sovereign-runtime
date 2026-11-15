@@ -24,7 +24,6 @@ import (
 	"emergion-sovereign-runtime/internal/gov"
 	"emergion-sovereign-runtime/internal/proj"
 	"emergion-sovereign-runtime/internal/reason"
-	"emergion-sovereign-runtime/internal/reg"
 	fieldruntime "emergion-sovereign-runtime/internal/runtime"
 	"emergion-sovereign-runtime/internal/store"
 	"emergion-sovereign-runtime/pkg/fieldapi"
@@ -397,30 +396,23 @@ func main() {
 		if len(args) < 3 {
 			fail(fmt.Errorf("decide <id> <APPROVE|HOLD|REJECT|RETURN> [reason]"))
 		}
-		st := loadState(s)
-		em, ok := st.AtGOV[args[1]]
-		if !ok {
-			fail(fmt.Errorf("candidate not at GOV"))
-		}
 		reasonText := ""
 		if len(args) > 3 {
 			reasonText = args[3]
 		}
-		em, receipt, err := gov.Decide(em, gov.Decision(args[2]), "HUMAN_FINAL", reasonText)
-		if err != nil {
-			fail(err)
-		}
-		decisionEventID, err := s.SaveDecision(receipt)
+		rt := fieldruntime.Runtime{Store: s}
+		em, receipt, regReceipt, err := rt.Govern(
+			args[1],
+			gov.Decision(args[2]),
+			"HUMAN_FINAL",
+			reasonText,
+		)
 		if err != nil {
 			fail(err)
 		}
 		if receipt.Decision == string(gov.Approve) {
-			_, regReceipt, err := reg.Accept(em, decisionEventID)
-			if err != nil {
-				fail(err)
-			}
-			if _, err = s.SaveAccepted(regReceipt); err != nil {
-				fail(err)
+			if regReceipt.EmergIONID == "" {
+				fail(fmt.Errorf("approval returned empty REG receipt"))
 			}
 			renderField(s, *output)
 			fmt.Println(em.IDN, "REG_ACCEPTED")
