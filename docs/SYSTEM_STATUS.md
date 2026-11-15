@@ -361,3 +361,27 @@ The operator supplied Termux output from the existing governed-cycle integration
 - These live test values differ from the hardcoded limits still visible on the connected GitHub default branch. The local Termux test tree therefore contains at least a different test configuration. Preserve local changes; do not replace them from the remote branch without reconciliation.
 
 **Next verification boundary:** Obtain the terminal outcome of the same governed-cycle test, including the second inference and all assertions. No additional model-configuration changes are justified by the first successful exit alone. This section does not assert a successful production daemon cycle, REG acceptance, or full-system completion.
+
+
+## 21. 2026-11-14 governed-cycle integration test PASS (operator Termux evidence)
+
+The operator supplied the completed output of the existing Termux test invocation:
+
+```sh
+go test ./pkg/fieldapi -run '^TestGovernedCycleCirculatesAndExecutesExistingSafeWork$' -count=1 -v -timeout 15m
+```
+
+**Observed terminal result:**
+
+```text
+--- PASS: TestGovernedCycleCirculatesAndExecutesExistingSafeWork (455.44s)
+PASS
+ok      emergion-sovereign-runtime/pkg/fieldapi     455.454s
+```
+
+- The operator first used `sed -i` on the existing local `pkg/fieldapi/api_test.go` to change test-literal `Context: 2048` to `4096`, `MaxTokens: 80` to `1024`, and `Timeout: 180 * time.Second` to `600 * time.Second`. This is **operator-reported local test configuration**, not a committed source change in this repository inspection.
+- First Gemma attempt: `prompt_bytes=2308`, `source_bytes=33`, `context=4096`, `max_tokens=1024`, `threads=4`; generated `S|governed cycle composition source`, `K|L`, `F|governed cycle composition source`, `Z`; `elapsed=4m53.290561451s`, `run_error=<nil>`.
+- Second Gemma attempt: `prompt_bytes=2769`, `source_bytes=494`, same context/max tokens/threads; generated `S|E-GOVERNED-CYCLE-COMPOSITION+E-GOVERNED-CYCLE-TARGET`, `K|L`, `F|E-GOVERNED-CYCLE-COMPOSITION+E-GOVERNED-CYCLE-TARGET`, `C|ANALYZE`, `Z`; `elapsed=2m42.081435615s`, `run_error=<nil>`.
+- The completed test passed its circulation and safe-work assertions after both inference invocations. This **supersedes the pending second-inference/test-outcome status in section 20**, without changing its historical observation.
+
+**Verification boundary:** This is a passing *focused integration test*, not `go test ./...`, a production daemon acceptance test, a regenerated manifest, or evidence of an externally authorized action. The test used its temporary fixture state. The current local Termux changes still need exact revision reconciliation before any GitHub code synchronization. No COSL/REG/HUMAN_FINAL production authority was changed by this documentation update.
