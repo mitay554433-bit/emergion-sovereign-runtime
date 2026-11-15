@@ -124,3 +124,12 @@ cd "$HOME/AXM/emergion-sovereign-runtime" && git diff -- pkg/fieldapi/api.go pkg
 ```
 
 Review this diff before proposing any modification. The existing successful test does not need repeating. The previous operator work queue's first step is complete; the full-suite and manifest remain pending.
+
+
+## November 14, 2026 — local RETURNED continuation diff reviewed
+
+**Evidence:** operator-pasted `git --no-pager diff -- pkg/fieldapi/api.go` from Termux branch `evidence-provider-selection-20261025`, local HEAD `50e53312793b5999fe39eea7ce18c0f43467e0f0`, with uncommitted modifications. In `Runtime.Run` near line 299, the existing `RETURNED_CONTINUATION` JSON evidence map is assigned to `evidenceFields` and enriched from nonblank, whitespace-trimmed `returned.REL` values for `transition_emergion`, `required_capability`, `capability_resolution`, and `capability_provider_edge_proposal` before `json.Marshal`. Original source kind, returned identity/state, and source hash remain included. No new authority transition is visible in this diff.
+
+**Related local test excerpt:** operator-pasted `api_test.go` diff reads persisted continuation evidence and asserts the four exact properties (`E-TEST-TRANSITION`, `DERIVE_CAPABILITY`, `UNRESOLVED`, `TEST_PROVIDER_EDGE`). Other local test fixtures adjust context 4096 / max tokens 1024, and the real-Gemma fixture timeout 600s. These test modifications are not yet committed or individually re-run in the provided evidence. The previously observed governed-cycle PASS is separate.
+
+**Disposition:** reviewed; no implementation defect demonstrated by the visible diff. **Do not overwrite or automatically commit the operator's local changes.** Next smallest proof: run the existing focused RETURNED-continuation regression test on the phone and capture its PASS/FAIL. After that, operator may explicitly approve committing the local changes to their current branch. Full suite and manifest remain unverified.
