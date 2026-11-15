@@ -2055,9 +2055,31 @@ func (r Runtime) ExecuteOneSafeAction(
 		return core.EmergION{}, false, err
 	}
 
+	// Keep the realizations under review out of the safe-action scan.
+	underReview := make(map[string]bool)
+	for _, pending := range st.AtGOV {
+		kind := pending.REL["source_kind"]
+		if kind != "REALIZATION_SELECTION" && kind != "REALIZATION_REORDER" {
+			continue
+		}
+		evidence, err := r.Store.ReadEvidence(pending.MEM.SourceHash)
+		if err != nil {
+			return core.EmergION{}, false, err
+		}
+		population, err := populationFromRealizationEvidence(pending, evidence)
+		if err != nil {
+			return core.EmergION{}, false, err
+		}
+		for _, id := range population.Members {
+			underReview[id] = true
+		}
+	}
+
 	ids := make([]string, 0, len(st.Accepted))
 	for id := range st.Accepted {
-		ids = append(ids, id)
+		if !underReview[id] {
+			ids = append(ids, id)
+		}
 	}
 	sort.Strings(ids)
 
