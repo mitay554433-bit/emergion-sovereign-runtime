@@ -52,3 +52,15 @@ VERITEX V12, PIVOTAI, separate UNIFUSION Python services, WVC/SHEEN ledgers, dev
 
 ## Completion rule
 Every subsystem has an owner/source, implementation state, evidence, verification result, dependencies, and next action. Only tested and evidenced capabilities may be called complete.
+
+## November 14, 2026 — governed-cycle proof and engineering-branch correction
+
+**Source:** operator-supplied Termux output of `go test ./pkg/fieldapi -run '^TestGovernedCycleCirculatesAndExecutesExistingSafeWork$' -count=1 -v -timeout 15m`.
+
+**Observed result:** `--- PASS: TestGovernedCycleCirculatesAndExecutesExistingSafeWork (455.44s)`; `PASS`; `ok emergion-sovereign-runtime/pkg/fieldapi 455.454s`. Two local Gemma inference processes exited with `run_error=<nil>`, at `4m53.290561451s` and `2m42.081435615s`. The first emitted source-grounded `S/K/F/Z`; the second emitted `S/K/F/C|ANALYZE/Z`. This closes the previously pending **focused multi-cycle integration test**, not the full suite or live daemon verification.
+
+**Engineering correction:** commit `33e9c2b2434fa5ab43dd7c1220a3d3309376e83e` on this engineering branch changes only the `TestGovernedCycleCirculatesAndExecutesExistingSafeWork` fixture's context from 2048 to 4096, maximum tokens from 80 to 1024, and per-inference timeout from 180s to 600s, matching the operator-tested local fixture. Four threads and the existing seed remain unchanged. This is a source update; it has **not** been independently re-run against this GitHub commit.
+
+**Branch and local-state boundary:** `governed-demand-v1` and `unifusion-live-20261024` have diverged (comparison observed: live branch 34 ahead / 4 behind; 26 files changed). The preserved live branch was not modified by this correction. Phone-local `[GEMMA_DIAG]` instrumentation is absent from inspected remote `gemma_cli.go`, so do not overwrite the phone's newer worktree with either remote branch. No merge, release, production registry modification, or manifest regeneration is implied.
+
+**Outstanding acceptance:** verify exact local Git revision/diff, run existing serial `scripts/verify_termux_live.sh` and existing runtime doctor/projection integrity checks on the authoritative device, then regenerate the tracked-source manifest through the existing workflow only when the exact source revision and verification results are established. Historical manifest PASS flags are not current proof.
