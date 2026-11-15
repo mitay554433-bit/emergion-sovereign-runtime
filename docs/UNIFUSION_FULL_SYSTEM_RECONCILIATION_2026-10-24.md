@@ -77,3 +77,28 @@ Every subsystem has an owner/source, implementation state, evidence, verificatio
 **Commit verification evidence:** GitHub combined commit-status query for `477983f185fa40973d6c9718262aadec442ceb4e` returned zero statuses; the available pull-request workflow-run query returned zero runs. Neither result establishes PASS or FAIL, and the latter does not enumerate every possible push-triggered run. No CI proof is claimed.
 
 **Saved reconciliation decision:** retain `unifusion-live-20261024` unchanged; retain the test correction on `unifusion-system-reconciliation-20261024` without merging divergent history. Operator-provided Termux focused-test PASS remains the only observed live test result. Full-suite execution, local Git status/revision, field doctor, COSL/REG integrity, and manifest generation remain **not verified in this session**. Do not claim they were executed or fabricate hashes. Once live-tree state is known, integrate by an explicit reviewed merge/cherry-pick that preserves local diagnostic changes and lineage.
+
+
+## November 14, 2026 — operator work queue (ordered, no merge authorized)
+
+**Purpose:** exact next operator tasks for the authoritative Android/Termux tree. The successful focused real-Gemma governed-cycle test is already evidenced as PASS and does **not** need repeating as the first action. No new file, script, registry, or runner is required. Perform tasks in order and stop at the first discrepancy; do not overwrite the local tree.
+
+1. **Identify live code and local edits (read-only).** In Termux run:
+
+   ```sh
+   cd "$HOME/AXM/emergion-sovereign-runtime" && git branch --show-current && git rev-parse HEAD && git status --short && git remote -v
+   ```
+
+   **Return:** the full output. **Gate:** compare actual local branch, HEAD, and dirty paths with the remote engineering commit `33e9c2b2434fa5ab43dd7c1220a3d3309376e83e` and preservation branch. Preserve `[GEMMA_DIAG]` and any uncommitted modifications. **No pull, checkout, reset, merge, cherry-pick, or clean yet.**
+
+2. **Inspect the exact test fixture (read-only), only after step 1.** Confirm `TestGovernedCycleCirculatesAndExecutesExistingSafeWork` still has context 4096, max tokens 1024, timeout 600s, threads 4, seed 1. The already supplied Termux run passed in 455.454s. If the local file differs, inspect and reconcile before any edit; do not apply broad substitutions.
+
+3. **Full verification (only when branch and edits are reconciled).** Use the existing `scripts/verify_termux_live.sh` on the authoritative device, with the established `GEMMA_BIN` and `GEMMA_MODEL` environment. It runs serial `go test -p 1 -parallel 1 -count=1 -timeout 40m ./...` and `go vet -p 1 ./...`. Capture complete PASS/FAIL output; do not infer success from a partial log. No Gemma parameter recalibration without new evidence and approval.
+
+4. **Runtime integrity (after tests).** Use the existing built `field doctor`, `field verify`, `field status`, and `field daemon status` commands available in the current CLI. Record exact command results, current tip hash, and evidence/projection health. Do not issue `decide`, `accept`, `authorize`, `execute`, or other authority-changing actions as part of inspection.
+
+5. **Manifest (after exact source revision and verification are known).** Regenerate only through the repository's existing manifest workflow. The existing `scripts/generate_manifest.py` is an already-tracked tool, but do not introduce a replacement tool or hand-edit hashes. Its output is build inventory, never COSL/REG authority. Confirm the generated file's inventory matches the verified tree before declaring it current.
+
+6. **Source integration and release (separate approval gate).** Review the six remote commits missing from the engineering branch and the phone-local diff. Only then propose the smallest safe integration, with exact commit IDs, tests, and rollback boundary. No implicit merge or deployment.
+
+**Current owner handoff:** Operator action **#1 only**. The assistant can review its output and proceed through existing source paths. All later items are pending; this list is an operator work queue, not evidence of execution.
