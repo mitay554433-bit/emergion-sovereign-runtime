@@ -573,9 +573,9 @@ func TestGovernedCycleCirculatesAndExecutesExistingSafeWork(t *testing.T) {
 		Binary:    binary,
 		Model:     model,
 		Threads:   4,
-		Context:   2048,
-		MaxTokens: 80,
-		Timeout:   180 * time.Second,
+		Context:   4096,
+		MaxTokens: 1024,
+		Timeout:   600 * time.Second,
 		ExtraArgs: []string{"--seed", "1"},
 	}
 
@@ -828,9 +828,9 @@ func TestRunDrivesSuccessiveGovernedCyclesWithoutManualInvocation(t *testing.T) 
 		Binary:    binary,
 		Model:     model,
 		Threads:   4,
-		Context:   2048,
-		MaxTokens: 80,
-		Timeout:   180 * time.Second,
+		Context:   4096,
+		MaxTokens: 1024,
+		Timeout:   600 * time.Second,
 		ExtraArgs: []string{"--seed", "1"},
 	}
 
@@ -967,8 +967,8 @@ func TestRunContinuesHumanFinalReturnedBeforeIdleProjection(t *testing.T) {
 	gemma := reason.GemmaCLI{
 		Binary:    fake,
 		Model:     model,
-		Context:   2048,
-		MaxTokens: 80,
+		Context:   4096,
+		MaxTokens: 1024,
 		Threads:   1,
 		Timeout:   5 * time.Second,
 	}
@@ -986,7 +986,11 @@ func TestRunContinuesHumanFinalReturnedBeforeIdleProjection(t *testing.T) {
 			Summary:    "governed source requiring HUMAN_FINAL rework",
 		},
 		REL: map[string]string{
-			"source_kind": "SOURCE",
+			"source_kind":                       "SOURCE",
+			"transition_emergion":               "E-TEST-TRANSITION",
+			"required_capability":               "DERIVE_CAPABILITY",
+			"capability_resolution":             "UNRESOLVED",
+			"capability_provider_edge_proposal": "TEST_PROVIDER_EDGE",
 		},
 		CAP: []string{"OBS", "CMP"},
 		VAL: core.Validation{
@@ -1070,6 +1074,25 @@ func TestRunContinuesHumanFinalReturnedBeforeIdleProjection(t *testing.T) {
 	if continuation.IDN == "" {
 		t.Fatal("Run did not derive governed continuation from HUMAN_FINAL RETURNED source")
 	}
+        evidence, err := rt.store.ReadEvidence(continuation.MEM.SourceHash)
+        if err != nil {
+                t.Fatal(err)
+        }
+        var fields map[string]any
+        if err := json.Unmarshal(evidence, &fields); err != nil {
+                t.Fatal(err)
+        }
+        for key, want := range map[string]string{
+                "transition_emergion": "E-TEST-TRANSITION",
+                "required_capability": "DERIVE_CAPABILITY",
+                "capability_resolution": "UNRESOLVED",
+                "capability_provider_edge_proposal": "TEST_PROVIDER_EDGE",
+        } {
+                if got := fields[key]; got != want {
+                        t.Fatalf("continuation evidence %s = %v; want %q", key, got, want)
+                }
+        }
+
 	if continuation.STA != core.StateAtGOV {
 		t.Fatalf("continuation state = %q want %q", continuation.STA, core.StateAtGOV)
 	}
@@ -1205,8 +1228,8 @@ func TestGovernedCycleCirculatesSAWBeforeProgramProposalFailure(t *testing.T) {
 		reason.GemmaCLI{
 			Binary:    fake,
 			Model:     model,
-			Context:   2048,
-			MaxTokens: 80,
+			Context:   4096,
+			MaxTokens: 1024,
 			Threads:   1,
 			Timeout:   5 * time.Second,
 		},
@@ -1264,8 +1287,8 @@ func TestRunRecomparesPersistentTargetWhenAcceptedRealityChanges(t *testing.T) {
 	gemma := reason.GemmaCLI{
 		Binary:    fake,
 		Model:     model,
-		Context:   2048,
-		MaxTokens: 80,
+		Context:   4096,
+		MaxTokens: 1024,
 		Threads:   1,
 		Timeout:   5 * time.Second,
 	}
@@ -1934,9 +1957,9 @@ func TestRunExecutesTwoDistinctSafeWorksAcrossProductiveGovernedCycles(t *testin
 		Binary:    binary,
 		Model:     model,
 		Threads:   4,
-		Context:   2048,
-		MaxTokens: 80,
-		Timeout:   180 * time.Second,
+		Context:   4096,
+		MaxTokens: 1024,
+		Timeout:   600 * time.Second,
 		ExtraArgs: []string{"--seed", "1"},
 	}
 

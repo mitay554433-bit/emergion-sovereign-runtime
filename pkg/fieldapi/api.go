@@ -299,12 +299,25 @@ func (r *Runtime) Run(
 						}
 					}
 					if returned.IDN != "" {
-						evidence, marshalErr := json.Marshal(map[string]any{
+
+						evidenceFields := map[string]any{
 							"source_kind":       "RETURNED_CONTINUATION",
 							"returned_emergion": returned.IDN,
 							"returned_state":    returned.STA,
 							"source_hash":       returned.MEM.SourceHash,
-						})
+						}
+						for _, key := range []string{
+							"transition_emergion",
+							"required_capability",
+							"capability_resolution",
+							"capability_provider_edge_proposal",
+						} {
+							if value := strings.TrimSpace(returned.REL[key]); value != "" {
+								evidenceFields[key] = value
+							}
+						}
+						evidence, marshalErr := json.Marshal(evidenceFields)
+
 						if marshalErr != nil {
 							return marshalErr
 						}
