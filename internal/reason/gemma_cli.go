@@ -57,6 +57,53 @@ func truncateUTF8(s string, limit int) string {
 	return s[:limit]
 }
 
+// Prompt budgeting.
+//
+// llama.cpp counts tokens, not bytes. Dense text in the governed state (hex
+// hashes, IDs, pipes, JSON) and non-ASCII text can tokenize at well under
+// 3 bytes per token, so a bytes = tokens*3 budget can overflow the context.
+// The default here is a conservative 2 bytes/token, overridable with
+// GEMMA_BYTES_PER_TOKEN once measured with llama-tokenize for the model.
+const (
+	defaultBytesPerToken  = 2
+	chatTemplateReserve   = 128 // tokens for the model's chat wrapper/BOS
+	minInputTokens        = 256
+	maxContentBytes       = 1000
+	governedStateFraction = 4 // governed state gets at most 1/4 of input bytes
+)
+
+// analyzeBudget returns byte limits for governed state and content.
+// templateBytes is the measured size of the fixed prompt template.
+func analyzeBudget(contextTokens, maxTokens, templateBytes, bytesPerToken int) (governedLimit, contentLimit int, err error) {
+	if bytesPerToken < 1 {
+		bytesPerToken = 1
+	}
+	templateTokens := (templateBytes + bytesPerToken - 1) / bytesPerToken
+	inputTokens := contextTokens - maxTokens - templateTokens - chatTemplateReserve
+	if inputTokens < minInputTokens {
+		return 0, 0, fmt.Errorf("Gemma context too small for bounded analysis (ctx=%d, n=%d, template~%d tokens)", contextTokens, maxTokens, templateTokens)
+	}
+	inputBytes := inputTokens * bytesPerToken
+	governedLimit = inputBytes / governedStateFraction
+	contentLimit = min(maxContentBytes, inputBytes-governedLimit)
+	if contentLimit < 1 {
+		return 0, 0, fmt.Errorf("Gemma context exhausted by governed state")
+	}
+	return governedLimit, contentLimit, nil
+}
+
+// truncateAtLine cuts s to at most limit bytes, preferring the last complete
+// line so governed-state records are not split mid-record.
+func truncateAtLine(s string, limit int) string {
+	cut := truncateUTF8(s, limit)
+	if len(cut) < len(s) {
+		if i := strings.LastIndexByte(cut, '\n'); i > 0 {
+			return cut[:i]
+		}
+	}
+	return cut
+}
+
 func envInt(name string, fallback int) int {
 	v, err := strconv.Atoi(os.Getenv(name))
 	if err != nil || v <= 0 {
@@ -290,23 +337,16 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 	content := string(in.Content)
 	governedState := strings.TrimSpace(in.GovernedState)
 
-	inputTokens := g.Context - g.MaxTokens - 1024
-	if inputTokens < 256 {
-		return Result{}, fmt.Errorf("Gemma context too small for bounded analysis")
+	governedLimit, contentLimit, err := analyzeBudget(
+		g.Context, g.MaxTokens,
+		len(buildPrompt(in.Name, "", "")),
+		envInt("GEMMA_BYTES_PER_TOKEN", defaultBytesPerToken),
+	)
+	if err != nil {
+		return Result{}, err
 	}
-
-	inputBytes := inputTokens * 3
-	governedLimit := inputBytes / 4
 	if len(governedState) > governedLimit {
-		governedState = truncateUTF8(governedState, governedLimit)
-	}
-
-	contentLimit := inputBytes - len(governedState)
-	if contentLimit > 1000 {
-		contentLimit = 1000
-	}
-	if contentLimit < 1 {
-		return Result{}, fmt.Errorf("Gemma context exhausted by governed state")
+		governedState = truncateAtLine(governedState, governedLimit)
 	}
 	if len(content) > contentLimit {
 		content = truncateUTF8(content, contentLimit)
