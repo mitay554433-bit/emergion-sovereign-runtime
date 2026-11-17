@@ -120,7 +120,7 @@ func TestExecuteOneSafeActionPrioritizesAcceptedReorderSelection(t *testing.T) {
 	if err != nil { t.Fatal(err) }
 	if !executed { t.Fatal("accepted reorder selection was not executed") }
 	if signal.REL["kin_emergion"] != "E-B" {
-		t.Fatalf("execution parent = %q want selected E-B", signal.REL["kin_emergion"])
+		t.Fatalf("execution kin lineage = %q want selected E-B", signal.REL["kin_emergion"])
 	}
 
 	state, _, err := r.governedStateContext()

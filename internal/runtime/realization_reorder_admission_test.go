@@ -28,16 +28,16 @@ func TestCaptureObservedRealizationReorderAdmitsAtGOV(t *testing.T) {
 
 	r := Runtime{Store: s}
 	for _, outcome := range []struct {
-		parent    string
+		kin    string
 		succeeded bool
 	}{
-		{parent: "E-A", succeeded: false},
-		{parent: "E-B", succeeded: true},
+		{kin: "E-A", succeeded: false},
+		{kin: "E-B", succeeded: true},
 	} {
 		request := adapters.ExecutionRequest{
-			EmergIONID:      outcome.parent,
-			SourceHash:      outcome.parent + "-source",
-			AuthorizationID: "EV-Q-" + outcome.parent,
+			EmergIONID:      outcome.kin,
+			SourceHash:      outcome.kin + "-source",
+			AuthorizationID: "EV-Q-" + outcome.kin,
 			Authority:       "HUMAN_FINAL",
 			Adapter:         "LOCAL_GEMMA",
 			Action:          "ANALYZE",
