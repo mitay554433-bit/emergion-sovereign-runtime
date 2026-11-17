@@ -423,10 +423,10 @@ func TestPRMCrystallizesAcceptedGovernedPrimitive(t *testing.T) {
 	}
 
 	em := core.EmergION{
-		IDN: "E-PRM-CHILD",
+		IDN: "E-PRM-KIN",
 		STA: core.StateAccepted,
 		MEM: core.Memory{
-			SourceHash: "source-child",
+			SourceHash: "source-kin",
 			Summary:    "accepted reusable mechanism",
 		},
 		REL: map[string]string{
@@ -571,11 +571,11 @@ func TestPRMCrystallizationDoesNotMergeSovereignKin(t *testing.T) {
 		CAP: []string{"ANALYZE"},
 	}
 
-	child := core.EmergION{
-		IDN: "E-PRM-KIN-CHILD",
+	kin := core.EmergION{
+		IDN: "E-PRM-KIN-LINEAGE",
 		STA: core.StateAccepted,
 		MEM: core.Memory{
-			SourceHash: "kin-child-source",
+			SourceHash: "kin-lineage-source",
 		},
 		CAP: []string{"SIMULATE"},
 		EVO: core.Evolution{
@@ -585,7 +585,7 @@ func TestPRMCrystallizationDoesNotMergeSovereignKin(t *testing.T) {
 
 	st := core.EmptyState()
 	st.Accepted[root.IDN] = root
-	st.Accepted[child.IDN] = child
+	st.Accepted[kin.IDN] = kin
 
 	prms, err := crystallizePRMs(st)
 	if err != nil {
@@ -607,8 +607,8 @@ func TestPRMCrystallizationDoesNotMergeSovereignKin(t *testing.T) {
 		t.Fatal("PRM crystallization mutated root EmergION")
 	}
 
-	if st.Accepted[child.IDN].CAP[0] != "SIMULATE" {
-		t.Fatal("PRM crystallization mutated child EmergION")
+	if st.Accepted[kin.IDN].CAP[0] != "SIMULATE" {
+		t.Fatal("PRM crystallization mutated kin EmergION")
 	}
 }
 

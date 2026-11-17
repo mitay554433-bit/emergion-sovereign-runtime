@@ -67,8 +67,8 @@ func TestProposeOneProgramPatchAdmitsPatchAtGOVWithRuntimeOrigin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	parent := core.EmergION{
-		IDN: "E-PROGRAM-PARENT",
+	origin := core.EmergION{
+		IDN: "E-PROGRAM-ORIGIN",
 		STA: core.StateAtGOV,
 		MEM: core.Memory{
 			SourceHash: preserved.Hash,
@@ -88,10 +88,10 @@ func TestProposeOneProgramPatchAdmitsPatchAtGOVWithRuntimeOrigin(t *testing.T) {
 			Facets:       []core.Facet{core.FacetProgramForge},
 		}},
 	}
-	if _, err := s.SaveCandidate(parent); err != nil {
+	if _, err := s.SaveCandidate(origin); err != nil {
 		t.Fatal(err)
 	}
-	approved, decision, err := gov.Decide(parent, gov.Approve, "HUMAN_FINAL", "accept program source")
+	approved, decision, err := gov.Decide(origin, gov.Approve, "HUMAN_FINAL", "accept program source")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,8 +144,8 @@ func TestProposeOneProgramPatchAdmitsPatchAtGOVWithRuntimeOrigin(t *testing.T) {
 	if em.STA != core.StateAtGOV || !em.VAL.Recoil || !em.VAL.WVC {
 		t.Fatalf("proposal not GOV-ready: %#v", em)
 	}
-	if em.REL["origin"] != parent.IDN {
-		t.Fatalf("origin = %q want %q", em.REL["origin"], parent.IDN)
+	if em.REL["origin"] != origin.IDN {
+		t.Fatalf("origin = %q want %q", em.REL["origin"], origin.IDN)
 	}
 	if em.REL["source_kind"] != "PROGRAM_PATCH" {
 		t.Fatalf("source_kind = %q", em.REL["source_kind"])
@@ -234,7 +234,7 @@ func TestProposeOneProgramPatchAdmitsPatchAtGOVWithRuntimeOrigin(t *testing.T) {
 	}
 	if signal.REL["kin_emergion"] != acceptedPatch.IDN {
 		t.Fatalf(
-			"PROGRAM execution parent = %q want %q",
+			"PROGRAM execution kin lineage = %q want %q",
 			signal.REL["kin_emergion"],
 			acceptedPatch.IDN,
 		)
