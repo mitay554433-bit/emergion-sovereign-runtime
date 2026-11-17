@@ -52,15 +52,15 @@ func (r Runtime) ProposeOneProgramPatch(
 	sort.Strings(ids)
 
 	for _, id := range ids {
-		parent := st.Accepted[id]
-		if !acceptedProgramActionEnabled(parent, gemma.Validate() == nil) {
+		origin := st.Accepted[id]
+		if !acceptedProgramActionEnabled(origin, gemma.Validate() == nil) {
 			continue
 		}
-		if programPatchPending(st, parent.IDN) {
+		if programPatchPending(st, origin.IDN) {
 			continue
 		}
 
-		target, content, err := currentProgramTarget(workDir, parent)
+		target, content, err := currentProgramTarget(workDir, origin)
 		if err != nil {
 			continue
 		}
@@ -68,7 +68,7 @@ func (r Runtime) ProposeOneProgramPatch(
 		patch, err := gemma.ProposeProgramPatch(ctx, reason.ProgramPatchInput{
 			Name:          target,
 			Content:       content,
-			GovernedState: programGovernedState(parent),
+			GovernedState: programGovernedState(origin),
 		})
 		if err != nil {
 			return core.EmergION{}, false, err
@@ -101,7 +101,7 @@ func (r Runtime) ProposeOneProgramPatch(
 			"program_emergence",
 			boundary,
 			governedState,
-			parent.IDN,
+			origin.IDN,
 			analysis,
 		)
 		if err != nil {
@@ -162,10 +162,10 @@ func programPatchPending(st core.State, origin string) bool {
 	return false
 }
 
-func currentProgramTarget(workDir string, parent core.EmergION) (string, []byte, error) {
-	sourceName := filepath.ToSlash(strings.TrimSpace(parent.REL["source_name"]))
+func currentProgramTarget(workDir string, origin core.EmergION) (string, []byte, error) {
+	sourceName := filepath.ToSlash(strings.TrimSpace(origin.REL["source_name"]))
 	if sourceName == "" {
-		return "", nil, fmt.Errorf("PROGRAM source %s has no source_name", parent.IDN)
+		return "", nil, fmt.Errorf("PROGRAM source %s has no source_name", origin.IDN)
 	}
 
 	workDir = strings.TrimSpace(workDir)
@@ -229,29 +229,29 @@ func containsExact(values []string, want string) bool {
 	return false
 }
 
-func programGovernedState(parent core.EmergION) string {
+func programGovernedState(origin core.EmergION) string {
 	var b strings.Builder
 	write := func(key, value string) { fmt.Fprintf(&b, "%s=%d:%s\n", key, len(value), value) }
-	write("I", parent.IDN)
-	write("S", parent.MEM.Summary)
-	for _, capability := range parent.CAP {
+	write("I", origin.IDN)
+	write("S", origin.MEM.Summary)
+	for _, capability := range origin.CAP {
 		write("C", capability)
 	}
-	keys := make([]string, 0, len(parent.REL))
-	for key := range parent.REL {
+	keys := make([]string, 0, len(origin.REL))
+	for key := range origin.REL {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
 		write("K", key)
-		write("V", parent.REL[key])
+		write("V", origin.REL[key])
 	}
-	if parent.EVO.Metadata != nil {
-		for _, facet := range parent.EVO.Metadata.Facets {
+	if origin.EVO.Metadata != nil {
+		for _, facet := range origin.EVO.Metadata.Facets {
 			write("F", string(facet))
 		}
-		write("T", string(parent.EVO.Metadata.Topology))
+		write("T", string(origin.EVO.Metadata.Topology))
 	}
-	write("Z", parent.IDN)
+	write("Z", origin.IDN)
 	return b.String()
 }

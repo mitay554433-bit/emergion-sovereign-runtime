@@ -1542,7 +1542,7 @@ func TestExecutionAlreadyObservedUsesCanonicalFieldLineage(t *testing.T) {
 		IDN: "E-EXECUTION-SIGNAL",
 		REL: map[string]string{
 			"source_kind":  "EXECUTION_RESULT",
-			"kin_emergion": "E-PARENT",
+			"kin_emergion": "E-KIN",
 			"adapter":      "LOCAL_GEMMA",
 			"action":       "ANALYZE",
 		},
@@ -1552,7 +1552,7 @@ func TestExecutionAlreadyObservedUsesCanonicalFieldLineage(t *testing.T) {
 
 	if !executionAlreadyObserved(
 		st,
-		"E-PARENT",
+		"E-KIN",
 		"LOCAL_GEMMA",
 		"ANALYZE",
 	) {
@@ -1565,12 +1565,12 @@ func TestExecutionAlreadyObservedUsesCanonicalFieldLineage(t *testing.T) {
 		"LOCAL_GEMMA",
 		"ANALYZE",
 	) {
-		t.Fatal("different parent was incorrectly suppressed")
+		t.Fatal("different kin lineage was incorrectly suppressed")
 	}
 
 	if executionAlreadyObserved(
 		st,
-		"E-PARENT",
+		"E-KIN",
 		"LOCAL_GEMMA",
 		"DRAFT",
 	) {
@@ -1583,6 +1583,9 @@ func TestCaptureRejectsRuntimeOwnedExecutionLineageRelationships(t *testing.T) {
 		"kin_emergion",
 		"authorization_event",
 		"parent",
+		"child",
+		"father",
+		"family",
 		"origin",
 		"predecessor",
 		"ancestor",
@@ -2243,7 +2246,7 @@ func TestSAWSourceReentersGovernedExecutionAndRecapture(t *testing.T) {
 
 	if signal.REL["kin_emergion"] != accepted.IDN {
 		t.Fatalf(
-			"execution signal parent = %q want %q",
+			"execution signal kin lineage = %q want %q",
 			signal.REL["kin_emergion"],
 			accepted.IDN,
 		)
@@ -4079,7 +4082,7 @@ func TestGovernedProviderCompositionCirculatesThroughSAWExecutionRecapture(t *te
 
 	if signal.REL["kin_emergion"] != acceptedSAW.IDN {
 		t.Fatalf(
-			"execution parent = %q want %q",
+			"execution kin lineage = %q want %q",
 			signal.REL["kin_emergion"],
 			acceptedSAW.IDN,
 		)

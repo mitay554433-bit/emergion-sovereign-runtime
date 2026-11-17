@@ -32,16 +32,19 @@ type Deliverable struct {
 }
 
 type historicalExecutionSignalV1 struct {
-	Schema         string `json:"schema"`
-	SourceKind     string `json:"source_kind"`
-	ParentEmergION string `json:"parent_emergion"`
-	KinEmergION    string `json:"kin_emergion"`
-	SourceHash     string `json:"source_hash"`
-	Authority      string `json:"authority"`
-	Adapter        string `json:"adapter"`
-	Action         string `json:"action"`
-	Succeeded      bool   `json:"succeeded"`
-	Output         string `json:"output"`
+	Schema     string `json:"schema"`
+	SourceKind string `json:"source_kind"`
+	// LegacyKinEmergION reads the pre-kin key written into historical,
+	// hash-addressed EXECUTION_SIGNAL_V1 evidence. The key is wire format and
+	// stays byte-identical; new evidence uses kin_emergion only.
+	LegacyKinEmergION string `json:"parent_emergion"`
+	KinEmergION       string `json:"kin_emergion"`
+	SourceHash        string `json:"source_hash"`
+	Authority         string `json:"authority"`
+	Adapter           string `json:"adapter"`
+	Action            string `json:"action"`
+	Succeeded         bool   `json:"succeeded"`
+	Output            string `json:"output"`
 }
 
 func parseHistoricalExecutionSignalV1(content []byte) (adapters.ExecutionResult, error) {
@@ -52,12 +55,12 @@ func parseHistoricalExecutionSignalV1(content []byte) (adapters.ExecutionResult,
 	if signal.Schema != "EXECUTION_SIGNAL_V1" || signal.SourceKind != "EXECUTION_RESULT" {
 		return adapters.ExecutionResult{}, fmt.Errorf("not an EXECUTION_SIGNAL_V1 execution result")
 	}
-	if signal.ParentEmergION != "" && signal.KinEmergION != "" && signal.ParentEmergION != signal.KinEmergION {
+	if signal.LegacyKinEmergION != "" && signal.KinEmergION != "" && signal.LegacyKinEmergION != signal.KinEmergION {
 		return adapters.ExecutionResult{}, fmt.Errorf("conflicting EXECUTION_SIGNAL_V1 kin lineage")
 	}
 	lineage := signal.KinEmergION
 	if lineage == "" {
-		lineage = signal.ParentEmergION
+		lineage = signal.LegacyKinEmergION
 	}
 	if lineage == "" || signal.SourceHash == "" || signal.Authority == "" || signal.Adapter == "" || signal.Action == "" {
 		return adapters.ExecutionResult{}, fmt.Errorf("incomplete EXECUTION_SIGNAL_V1 execution result")
@@ -117,6 +120,8 @@ func (r Runtime) MaterializeAcceptedExecutionResult(id string) (Deliverable, err
 	}
 
 	kinLineage := em.REL["kin_emergion"]
+	// Pre-kin accepted records carry the same lineage under the legacy
+	// "parent_emergion" REL key; it is read-only and never written.
 	if legacy := em.REL["parent_emergion"]; legacy != "" {
 		if kinLineage != "" && kinLineage != legacy {
 			return Deliverable{}, fmt.Errorf("conflicting accepted execution kin lineage: %s", id)
