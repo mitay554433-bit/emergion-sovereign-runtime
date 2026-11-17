@@ -428,6 +428,55 @@ func main() {
 			renderField(s, *output)
 			fmt.Println(em.IDN, receipt.Decision)
 		}
+	case "decide-batch":
+		if len(args) < 2 {
+			fail(fmt.Errorf("decide-batch preview | decide-batch <APPROVE|HOLD|REJECT|RETURN> <batch-id> [reason]"))
+		}
+		st := loadState(s)
+		candidates := make([]core.EmergION, 0, len(st.AtGOV))
+		for _, em := range st.AtGOV {
+			candidates = append(candidates, em)
+		}
+		if args[1] == "preview" {
+			preview := gov.PreviewObservationBatch(candidates)
+			fmt.Printf("BATCH_ID %s\nCOUNT %d\n", preview.BatchID, preview.Count)
+			for _, id := range preview.IDs {
+				fmt.Println(id)
+			}
+			break
+		}
+		if len(args) < 3 {
+			fail(fmt.Errorf("decide-batch <APPROVE|HOLD|REJECT|RETURN> <batch-id> [reason]"))
+		}
+		reasonText := ""
+		if len(args) > 3 {
+			reasonText = args[3]
+		}
+		updated, receipts, err := gov.DecideBatch(candidates, nil, gov.Decision(args[1]), "HUMAN_FINAL", reasonText, args[2])
+		if err != nil {
+			fail(err)
+		}
+		for i, receipt := range receipts {
+			em := updated[i]
+			decisionEventID, err := s.SaveDecision(receipt)
+			if err != nil {
+				fail(err)
+			}
+			if receipt.Decision == string(gov.Approve) {
+				_, regReceipt, err := reg.Accept(em, decisionEventID)
+				if err != nil {
+					fail(err)
+				}
+				if _, err = s.SaveAccepted(regReceipt); err != nil {
+					fail(err)
+				}
+				fmt.Println(em.IDN, "REG_ACCEPTED")
+			} else {
+				fmt.Println(em.IDN, receipt.Decision)
+			}
+		}
+		renderField(s, *output)
+		fmt.Println("BATCH", args[2], receipts[0].Decision, "count="+fmt.Sprint(len(receipts)))
 	case "resume":
 		if len(args) < 2 {
 			fail(fmt.Errorf("resume <held-id> [reason]"))
@@ -656,6 +705,8 @@ Commands:
   once                         process and clear the dropzone once
   run                          run the local living FIELD event loop; no server
   decide <id> <decision> [why] HUMAN_FINAL decision; approval is then REG-accepted
+  decide-batch preview        list low-risk observation-only provider_population IDs waiting at GOV
+  decide-batch <decision> <batch-id> [why] one HUMAN_FINAL decision for that exact previewed batch
   resume <held-id> [why]       HUMAN_FINAL resume of a held EmergION back to GOV
   status                       CPU and FIELD metrics
   symbolic <id>                print native symbolic EmergION representation
