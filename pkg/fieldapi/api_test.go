@@ -704,7 +704,7 @@ func TestGovernedCycleCirculatesAndExecutesExistingSafeWork(t *testing.T) {
 
 	if signalNext.REL["kin_emergion"] != circulatedID {
 		t.Fatalf(
-			"T_n+1 execution parent = %q want governed T_n SAW %q",
+			"T_n+1 execution kin lineage = %q want governed T_n SAW %q",
 			signalNext.REL["kin_emergion"],
 			circulatedID,
 		)
@@ -920,7 +920,7 @@ func TestRunDrivesSuccessiveGovernedCyclesWithoutManualInvocation(t *testing.T) 
 
 	if firstSignal.REL["kin_emergion"] != safeWork.IDN {
 		t.Fatalf(
-			"first unattended execution parent = %q want %q",
+			"first unattended execution kin lineage = %q want %q",
 			firstSignal.REL["kin_emergion"],
 			safeWork.IDN,
 		)
@@ -1705,11 +1705,11 @@ func TestGovernedCyclePendingReorderAllowsIndependentSafeWork(t *testing.T) {
 	if duplicate { t.Fatal("selection unexpectedly duplicate") }
 	accept(selection, "accept initial realization selection")
 
-	captureResult := func(parent string, succeeded bool) {
+	captureResult := func(kin string, succeeded bool) {
 		request := adapters.ExecutionRequest{
-			EmergIONID: parent,
-			SourceHash: parent + "-source",
-			AuthorizationID: "EV-Q-" + parent,
+			EmergIONID: kin,
+			SourceHash: kin + "-source",
+			AuthorizationID: "EV-Q-" + kin,
 			Authority: "HUMAN_FINAL",
 			Adapter: "LOCAL_GEMMA",
 			Action: "ANALYZE",
@@ -2058,7 +2058,7 @@ func TestRunExecutesTwoDistinctSafeWorksAcrossProductiveGovernedCycles(t *testin
 		t.Fatal("Run did not stop after context cancellation")
 	}
 
-	parents := map[string]bool{}
+	kinLineages := map[string]bool{}
 	for _, cycle := range productive {
 		signal := cycle.signal
 		if signal.IDN == "" || signal.STA != core.StateAtGOV {
@@ -2067,14 +2067,14 @@ func TestRunExecutesTwoDistinctSafeWorksAcrossProductiveGovernedCycles(t *testin
 		if !signal.VAL.Recoil || !signal.VAL.WVC {
 			t.Fatal("productive execution signal bypassed RECOIL/WVC")
 		}
-		parent := signal.REL["kin_emergion"]
-		if parent != safeWork.IDN && parent != secondWork.IDN {
-			t.Fatalf("unexpected execution parent %q", parent)
+		kin := signal.REL["kin_emergion"]
+		if kin != safeWork.IDN && kin != secondWork.IDN {
+			t.Fatalf("unexpected execution kin lineage %q", kin)
 		}
-		if parents[parent] {
-			t.Fatalf("safe work %q executed twice rather than two distinct works", parent)
+		if kinLineages[kin] {
+			t.Fatalf("safe work %q executed twice rather than two distinct works", kin)
 		}
-		parents[parent] = true
+		kinLineages[kin] = true
 	}
 	state, err := rt.state()
 	if err != nil {

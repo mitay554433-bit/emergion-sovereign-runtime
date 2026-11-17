@@ -143,7 +143,7 @@ func TestFailedExecutionRetainsLineage(t *testing.T) {
 
 func TestExecutionLineageCarriesTravellingEmergIONIdentity(t *testing.T) {
 	request := ExecutionRequest{
-		EmergIONID:      "E-PARENT",
+		EmergIONID:      "E-KIN",
 		SourceHash:      "SOURCE-HASH-PROOF",
 		AuthorizationID: "EV-Q-PROOF",
 		Authority:       "HUMAN_FINAL",

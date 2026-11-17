@@ -7,7 +7,7 @@ import (
 )
 
 func acceptedExecutionResultFixture(
-	id, parent, adapter, action string,
+	id, kin, adapter, action string,
 	succeeded bool,
 ) core.EmergION {
 	fact := "execution_failed"
@@ -17,7 +17,7 @@ func acceptedExecutionResultFixture(
 		STA: core.StateAccepted,
 		REL: map[string]string{
 			"source_kind": "EXECUTION_RESULT",
-			"kin_emergion": parent,
+			"kin_emergion": kin,
 			"adapter": adapter,
 			"action": action,
 		},

@@ -149,7 +149,7 @@ The heuristic reasoner remains an explicit diagnostic/test fallback; it is not t
 
 Action capability is derived from the accepted EmergION's declared capabilities and metadata facets through the existing `DeriveActionCandidates` catalog.
 
-Current governed capability families include:
+Current governed capability lineages include:
 
 ```text
 PROGRAM_FORGE

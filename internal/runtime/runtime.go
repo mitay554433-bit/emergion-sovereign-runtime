@@ -1003,7 +1003,10 @@ func (r Runtime) validateLineage(analysis *reason.Result) error {
 		for _, key := range []string{
 			"kin_emergion",
 			"authorization_event",
-			"parent",
+			"parent", // non-canon terms stay denied: canon is KIN / LINEAGE
+			"child",
+			"father",
+			"family",
 			"origin",
 			"predecessor",
 			"ancestor",
@@ -1769,7 +1772,7 @@ func (f fixedReasoner) Version(context.Context) string { return f.version }
 
 func executionAlreadyObserved(
 	st core.State,
-	parentEmergION string,
+	kinEmergION string,
 	adapter string,
 	action string,
 ) bool {
@@ -1787,7 +1790,7 @@ func executionAlreadyObserved(
 			if em.REL["source_kind"] != "EXECUTION_RESULT" {
 				continue
 			}
-			if em.REL["kin_emergion"] != parentEmergION {
+			if em.REL["kin_emergion"] != kinEmergION {
 				continue
 			}
 			if em.REL["adapter"] != adapter {

@@ -128,7 +128,7 @@ and binds execution results back to the original request before governed recaptu
 
 ## 6. Capability catalog
 
-The existing action catalog derives capabilities from accepted EmergION capability declarations and metadata facets. Current families include:
+The existing action catalog derives capabilities from accepted EmergION capability declarations and metadata facets. Current lineages include:
 
 ```text
 PROGRAM_FORGE

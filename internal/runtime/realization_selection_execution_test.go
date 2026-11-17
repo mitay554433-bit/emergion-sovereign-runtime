@@ -133,7 +133,7 @@ func TestSelectedRealizationQExecuteObservesConcurrently(t *testing.T) {
 		t.Fatalf("selected realization execution failed: %#v", result)
 	}
 	if signal.REL["kin_emergion"] != a.IDN {
-		t.Fatalf("execution result parent = %q want %q", signal.REL["kin_emergion"], a.IDN)
+		t.Fatalf("execution result kin lineage = %q want %q", signal.REL["kin_emergion"], a.IDN)
 	}
 	if signal.REL["authorization_event"] != q {
 		t.Fatalf("execution result Q = %q want %q", signal.REL["authorization_event"], q)
