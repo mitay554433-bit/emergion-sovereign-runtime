@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"context"
+	"emergion-sovereign-runtime/internal/gemmalive"
 	"path/filepath"
 	"testing"
 
@@ -78,7 +79,7 @@ func TestLocalGemmaExecutorRequiresPreservedEvidence(t *testing.T) {
 
 	executor := LocalGemmaExecutor{
 		Store: s,
-		Gemma: reason.GemmaFromEnv(),
+		Gemma: reason.GemmaCLI{Binary: gemmalive.AbsentBinary, Model: gemmalive.AbsentModel},
 	}
 
 	result, err := executor.Execute(context.Background(), ExecutionRequest{
@@ -104,7 +105,7 @@ func TestLocalGemmaExecutorDraftReachesPreservedEvidenceBoundary(t *testing.T) {
 
 	executor := LocalGemmaExecutor{
 		Store: s,
-		Gemma: reason.GemmaFromEnv(),
+		Gemma: reason.GemmaCLI{Binary: gemmalive.AbsentBinary, Model: gemmalive.AbsentModel},
 	}
 
 	result, err := executor.Execute(context.Background(), ExecutionRequest{

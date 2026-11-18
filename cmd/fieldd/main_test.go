@@ -1,6 +1,7 @@
 package main
 
 import (
+	"emergion-sovereign-runtime/internal/gemmalive"
 "context"
 "encoding/json"
 "os"
@@ -18,7 +19,7 @@ tmpDir := t.TempDir()
 statePath := filepath.Join(tmpDir, "state")
 sockPath := filepath.Join(tmpDir, "test.sock")
 
-rt, err := fieldapi.Open(statePath, reason.GemmaFromEnv())
+rt, err := fieldapi.Open(statePath, reason.GemmaCLI{Binary: gemmalive.AbsentBinary, Model: gemmalive.AbsentModel})
 if err != nil {
 t.Fatalf("failed to open runtime: %v", err)
 }
