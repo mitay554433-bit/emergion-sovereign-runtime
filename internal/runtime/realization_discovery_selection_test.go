@@ -16,8 +16,12 @@ func acceptedDiscoveryIdentity(t *testing.T, r Runtime, member core.EmergION, th
 	identity, duplicate, err := r.CaptureRealizationIdentity(
 		context.Background(), member.IDN, thing,
 	)
-	if err != nil { t.Fatal(err) }
-	if duplicate { t.Fatal("identity unexpectedly duplicate") }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate {
+		t.Fatal("identity unexpectedly duplicate")
+	}
 	acceptRealizationIdentityFixture(t, r.Store, identity)
 }
 
@@ -30,12 +34,12 @@ func addAcceptedDiscoveryOutcome(
 	t.Helper()
 	request := adapters.ExecutionRequest{
 		EmergIONID: kinID,
-		Adapter: "LOCAL_GEMMA",
-		Action: "ANALYZE",
+		Adapter:    "LOCAL_GEMMA",
+		Action:     "ANALYZE",
 	}
 	result := adapters.ExecutionResult{
-		Adapter: "LOCAL_GEMMA",
-		Action: "ANALYZE",
+		Adapter:   "LOCAL_GEMMA",
+		Action:    "ANALYZE",
 		Succeeded: succeeded,
 	}
 	em, duplicate, err := r.CaptureExecutionResult(
@@ -43,14 +47,20 @@ func addAcceptedDiscoveryOutcome(
 		request,
 		result,
 	)
-	if err != nil { t.Fatal(err) }
-	if duplicate { t.Fatal("execution result unexpectedly duplicate") }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate {
+		t.Fatal("execution result unexpectedly duplicate")
+	}
 	acceptRealizationIdentityFixture(t, r.Store, em)
 }
 
 func TestCaptureNextDiscoveredRealizationSelectionAdmitsUniqueStrongestAtGOV(t *testing.T) {
 	s, err := store.Open(filepath.Join(t.TempDir(), "state"))
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	r := Runtime{Store: s}
 	a := captureAcceptedIdentityMember(t, r, "knife-A")
 	b := captureAcceptedIdentityMember(t, r, "knife-B")
@@ -60,8 +70,12 @@ func TestCaptureNextDiscoveredRealizationSelectionAdmitsUniqueStrongestAtGOV(t *
 	addAcceptedDiscoveryOutcome(t, r, b.IDN, true)
 
 	selection, proposed, err := r.CaptureNextDiscoveredRealizationSelection(context.Background())
-	if err != nil { t.Fatal(err) }
-	if !proposed { t.Fatal("unique strongest did not produce governed selection") }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !proposed {
+		t.Fatal("unique strongest did not produce governed selection")
+	}
 	if selection.STA != core.StateAtGOV {
 		t.Fatalf("selection state = %q want AtGOV", selection.STA)
 	}
@@ -72,9 +86,13 @@ func TestCaptureNextDiscoveredRealizationSelectionAdmitsUniqueStrongestAtGOV(t *
 	}
 
 	events, err := s.Events()
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	st, err := field.Rebuild(events)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, ok := st.Accepted[selection.IDN]; ok {
 		t.Fatal("discovered selection bypassed HUMAN_FINAL/REG")
 	}
@@ -85,7 +103,9 @@ func TestCaptureNextDiscoveredRealizationSelectionAdmitsUniqueStrongestAtGOV(t *
 
 func TestCaptureNextDiscoveredRealizationSelectionSkipsUnresolvedPopulation(t *testing.T) {
 	s, err := store.Open(filepath.Join(t.TempDir(), "state"))
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	r := Runtime{Store: s}
 	a := captureAcceptedIdentityMember(t, r, "knife-A")
 	b := captureAcceptedIdentityMember(t, r, "knife-B")
@@ -105,7 +125,9 @@ func TestCaptureNextDiscoveredRealizationSelectionSkipsUnresolvedPopulation(t *t
 
 func TestCaptureNextDiscoveredRealizationSelectionKeepsDuplicatePendingAtGOV(t *testing.T) {
 	s, err := store.Open(filepath.Join(t.TempDir(), "state"))
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	r := Runtime{Store: s}
 	a := captureAcceptedIdentityMember(t, r, "knife-A")
 	b := captureAcceptedIdentityMember(t, r, "knife-B")
@@ -115,10 +137,14 @@ func TestCaptureNextDiscoveredRealizationSelectionKeepsDuplicatePendingAtGOV(t *
 	addAcceptedDiscoveryOutcome(t, r, b.IDN, true)
 
 	first, proposed, err := r.CaptureNextDiscoveredRealizationSelection(context.Background())
-	if err != nil || !proposed { t.Fatalf("first selection proposed=%t err=%v", proposed, err) }
+	if err != nil || !proposed {
+		t.Fatalf("first selection proposed=%t err=%v", proposed, err)
+	}
 
 	second, proposed, err := r.CaptureNextDiscoveredRealizationSelection(context.Background())
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !proposed || second.IDN != first.IDN || second.STA != core.StateAtGOV {
 		t.Fatalf("pending duplicate = %#v proposed=%t", second, proposed)
 	}

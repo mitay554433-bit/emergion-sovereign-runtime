@@ -55,19 +55,19 @@ func (r Runtime) CaptureRealizationIdentity(
 
 	identityRuntime := r
 	identityRuntime.Reasoner = fixedReasoner{
-		name: "realization-identity",
+		name:    "realization-identity",
 		version: "v1",
 		result: reason.Result{
 			Summary: "evidence-bound realization identity assertion",
 			Relationships: map[string]string{
-				"source_kind": realizationIdentitySourceKind,
-				"realization": realizationID,
-				"realization_of": targetThing,
+				"source_kind":             realizationIdentitySourceKind,
+				"realization":             realizationID,
+				"realization_of":          targetThing,
 				"realization_source_hash": realization.MEM.SourceHash,
 			},
 			Capabilities: []string{"OBS", "RLT"},
-			Facts: []string{"realization_identity_asserted"},
-			Risk: "L",
+			Facts:        []string{"realization_identity_asserted"},
+			Risk:         "L",
 		},
 	}
 
@@ -127,7 +127,7 @@ func DiscoverRealizationPopulations(st core.State) []RealizationPopulation {
 		sort.Strings(members)
 		out = append(out, RealizationPopulation{
 			TargetThing: thing,
-			Members: members,
+			Members:     members,
 		})
 	}
 	return out
