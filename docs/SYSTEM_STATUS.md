@@ -331,3 +331,57 @@ COSL preserves lineage.
 FIELD reconstructs current state.
 Projections describe state; they do not become state authority.
 ```
+
+
+## 19. 2026-11-14 repository reconciliation (GitHub inspection)
+
+This section records a **repository-source inspection**, not a live Termux execution or a new governance decision. It supplements rather than overwrites the dated operational evidence above.
+
+- Inspected on the connected GitHub default branch: `internal/reason/gemma_cli.go`, `internal/reason/gemma_cli_test.go`, `pkg/fieldapi/api_test.go`, `README.md`, `docs/ARCHITECTURE.md`, and `REPOSITORY_MANIFEST.json`.
+- `GemmaFromEnv()` reads `GEMMA_THREADS` (fallback 4), `GEMMA_CONTEXT` (4096), `GEMMA_MAX_TOKENS` (256), and `GEMMA_TIMEOUT_SECONDS` (360; raised from 180 in branch `gemma-json-digest-20261118`). The README example was reconciled to the 256-token implementation fallback in commit `2caed9376c183270616407abefe0a740cd16b792`; these are defaults, not a claim about live Termux environment values.
+- Both `TestGovernedCycleCirculatesAndExecutesExistingSafeWork` and `TestGemmaCLIAnalyzeInstalledRuntime` construct a `GemmaCLI` with context 2048, maximum tokens 80, and timeout 180 seconds, rather than calling `GemmaFromEnv()`. Consequently environment overrides do not alter these test instances.
+- `gemmaArgs` already appends `--simple-io`, `--single-turn`, and `--no-display-prompt` as execution-boundary arguments. Whether the installed Android binary obeys them and exits successfully is not established by this source inspection.
+- `Analyze` currently caps the source content portion at 1000 bytes after context budgeting. This is an existing bounded-input policy, not proof of a defect; changing it requires evidence of an affected use case.
+- The checked-in manifest still reports `generated_at=2026-08-05T17:17:33Z` and historical hashes/test claims. It must not be represented as a current manifest. Regeneration must use the existing manifest workflow and current verified source tree; no hand-edited hashes or invented PASS results.
+- Recent Termux diagnostic output previously supplied by the operator contains `[GEMMA_DIAG]` instrumentation not present in the inspected GitHub `gemma_cli.go`. Treat the phone worktree and GitHub default branch as potentially divergent until their actual revisions are reconciled. Do not overwrite local changes from the remote copy.
+
+**Verification boundary:** No Go tests, local Gemma inference, daemon operation, COSL verification, or manifest regeneration were executed during this GitHub inspection. No runtime, registry, governance, or execution state was modified. The next engineering change must be based on the exact current target revision and focused test evidence.
+
+
+## 20. 2026-11-14 operator-observed live Gemma inference
+
+The operator supplied Termux output from the existing governed-cycle integration run. This is **operator-observed runtime evidence**, not a Go test PASS or a GitHub CI result.
+
+- First `CirculateSAWs` completed in `2.802604ms`.
+- First local Gemma attempt reported `prompt_bytes=2308`, `source_bytes=33`, `governed_bytes=0`, `context=4096`, `max_tokens=1024`, `threads=4`.
+- The installed `gemma-2-2b-it.Q4_K_M.gguf` model generated a complete structured response: `S|governed cycle composition source`, `K|L`, `F|governed cycle composition source`, `Z`.
+- The CLI printed `Exiting...`; the diagnostic reported `attempt=1 elapsed=4m53.290561451s run_error=<nil>`. This proves the first observed inference process exited successfully, not that the entire test or governance cycle passed.
+- A second `CirculateSAWs` completed in `843.698µs`. A second inference started with `prompt_bytes=2769`, `source_bytes=494`, `governed_bytes=0`, `context=4096`, `max_tokens=1024`, `threads=4`. Its completion and the overall test result were not present in the supplied output.
+- The CLI displayed `Prompt: 3.1 t/s | Generation: 0.2 t/s` for the first invocation. This is a reported performance observation; no root cause or recommended parameter change is established by it alone.
+- These live test values differ from the hardcoded limits still visible on the connected GitHub default branch. The local Termux test tree therefore contains at least a different test configuration. Preserve local changes; do not replace them from the remote branch without reconciliation.
+
+**Next verification boundary:** Obtain the terminal outcome of the same governed-cycle test, including the second inference and all assertions. No additional model-configuration changes are justified by the first successful exit alone. This section does not assert a successful production daemon cycle, REG acceptance, or full-system completion.
+
+
+## 21. 2026-11-14 governed-cycle integration test PASS (operator Termux evidence)
+
+The operator supplied the completed output of the existing Termux test invocation:
+
+```sh
+go test ./pkg/fieldapi -run '^TestGovernedCycleCirculatesAndExecutesExistingSafeWork$' -count=1 -v -timeout 15m
+```
+
+**Observed terminal result:**
+
+```text
+--- PASS: TestGovernedCycleCirculatesAndExecutesExistingSafeWork (455.44s)
+PASS
+ok      emergion-sovereign-runtime/pkg/fieldapi     455.454s
+```
+
+- The operator first used `sed -i` on the existing local `pkg/fieldapi/api_test.go` to change test-literal `Context: 2048` to `4096`, `MaxTokens: 80` to `1024`, and `Timeout: 180 * time.Second` to `600 * time.Second`. This is **operator-reported local test configuration**, not a committed source change in this repository inspection.
+- First Gemma attempt: `prompt_bytes=2308`, `source_bytes=33`, `context=4096`, `max_tokens=1024`, `threads=4`; generated `S|governed cycle composition source`, `K|L`, `F|governed cycle composition source`, `Z`; `elapsed=4m53.290561451s`, `run_error=<nil>`.
+- Second Gemma attempt: `prompt_bytes=2769`, `source_bytes=494`, same context/max tokens/threads; generated `S|E-GOVERNED-CYCLE-COMPOSITION+E-GOVERNED-CYCLE-TARGET`, `K|L`, `F|E-GOVERNED-CYCLE-COMPOSITION+E-GOVERNED-CYCLE-TARGET`, `C|ANALYZE`, `Z`; `elapsed=2m42.081435615s`, `run_error=<nil>`.
+- The completed test passed its circulation and safe-work assertions after both inference invocations. This **supersedes the pending second-inference/test-outcome status in section 20**, without changing its historical observation.
+
+**Verification boundary:** This is a passing *focused integration test*, not `go test ./...`, a production daemon acceptance test, a regenerated manifest, or evidence of an externally authorized action. The test used its temporary fixture state. The current local Termux changes still need exact revision reconciliation before any GitHub code synchronization. No COSL/REG/HUMAN_FINAL production authority was changed by this documentation update.
