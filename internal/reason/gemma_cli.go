@@ -27,11 +27,16 @@ type GemmaCLI struct {
 	ExtraArgs []string
 }
 
+// defaultGemmaTimeoutSeconds bounds one Gemma run when GEMMA_TIMEOUT_SECONDS
+// is unset. On-device wave-file captures take about 2m10s-2m15s, so 360s
+// leaves headroom where the former 180s limit was hit.
+const defaultGemmaTimeoutSeconds = 360
+
 func GemmaFromEnv() GemmaCLI {
 	threads := envInt("GEMMA_THREADS", 4)
 	ctx := envInt("GEMMA_CONTEXT", 4096)
 	max := envInt("GEMMA_MAX_TOKENS", 256)
-	timeout := time.Duration(envInt("GEMMA_TIMEOUT_SECONDS", 180)) * time.Second
+	timeout := time.Duration(envInt("GEMMA_TIMEOUT_SECONDS", defaultGemmaTimeoutSeconds)) * time.Second
 	extra := strings.Fields(os.Getenv("GEMMA_EXTRA_ARGS"))
 	return GemmaCLI{
 		Binary:    discoverBinary(os.Getenv("GEMMA_BIN")),
@@ -55,53 +60,6 @@ func truncateUTF8(s string, limit int) string {
 		limit--
 	}
 	return s[:limit]
-}
-
-// Prompt budgeting.
-//
-// llama.cpp counts tokens, not bytes. Dense text in the governed state (hex
-// hashes, IDs, pipes, JSON) and non-ASCII text can tokenize at well under
-// 3 bytes per token, so a bytes = tokens*3 budget can overflow the context.
-// The default here is a conservative 2 bytes/token, overridable with
-// GEMMA_BYTES_PER_TOKEN once measured with llama-tokenize for the model.
-const (
-	defaultBytesPerToken  = 2
-	chatTemplateReserve   = 128 // tokens for the model's chat wrapper/BOS
-	minInputTokens        = 256
-	maxContentBytes       = 1000
-	governedStateFraction = 4 // governed state gets at most 1/4 of input bytes
-)
-
-// analyzeBudget returns byte limits for governed state and content.
-// templateBytes is the measured size of the fixed prompt template.
-func analyzeBudget(contextTokens, maxTokens, templateBytes, bytesPerToken int) (governedLimit, contentLimit int, err error) {
-	if bytesPerToken < 1 {
-		bytesPerToken = 1
-	}
-	templateTokens := (templateBytes + bytesPerToken - 1) / bytesPerToken
-	inputTokens := contextTokens - maxTokens - templateTokens - chatTemplateReserve
-	if inputTokens < minInputTokens {
-		return 0, 0, fmt.Errorf("Gemma context too small for bounded analysis (ctx=%d, n=%d, template~%d tokens)", contextTokens, maxTokens, templateTokens)
-	}
-	inputBytes := inputTokens * bytesPerToken
-	governedLimit = inputBytes / governedStateFraction
-	contentLimit = min(maxContentBytes, inputBytes-governedLimit)
-	if contentLimit < 1 {
-		return 0, 0, fmt.Errorf("Gemma context exhausted by governed state")
-	}
-	return governedLimit, contentLimit, nil
-}
-
-// truncateAtLine cuts s to at most limit bytes, preferring the last complete
-// line so governed-state records are not split mid-record.
-func truncateAtLine(s string, limit int) string {
-	cut := truncateUTF8(s, limit)
-	if len(cut) < len(s) {
-		if i := strings.LastIndexByte(cut, '\n'); i > 0 {
-			return cut[:i]
-		}
-	}
-	return cut
 }
 
 func envInt(name string, fallback int) int {
@@ -236,7 +194,7 @@ func (g GemmaCLI) Validate() error {
 	return nil
 }
 
-const mxpdGrammar = `root ::= summary risk fact (difference requirement?)? relationship? capability? facet? end
+const mxpdGrammar = `root ::= summary risk fact (difference requirement?)? relationship? capability facet? end
 summary ::= "S|" text "\n"
 risk ::= "K|" ("L" | "M" | "H") "\n"
 fact ::= "F|" text "\n"
@@ -255,22 +213,7 @@ label-next ::= [^:=,|\r\n]
 text-tail ::= [^|\r\n]*
 `
 
-const mxpdOrdinaryGrammarRoot = `root ::= summary risk fact relationship? capability? facet? end`
-
-func gemmaGrammarForSource(content string) string {
-	if strings.HasPrefix(strings.TrimSpace(content), "TARGET_COMPARISON/1\n") {
-		return mxpdGrammar
-	}
-	return strings.Replace(mxpdGrammar,
-		`root ::= summary risk fact (difference requirement?)? relationship? capability? facet? end`,
-		mxpdOrdinaryGrammarRoot, 1)
-}
-
 func gemmaArgs(g GemmaCLI, prompt string) []string {
-	return gemmaArgsWithGrammar(g, prompt, mxpdGrammar)
-}
-
-func gemmaArgsWithGrammar(g GemmaCLI, prompt, grammar string) []string {
 	args := []string{
 		"-m", g.Model,
 	}
@@ -302,7 +245,7 @@ func gemmaArgsWithGrammar(g GemmaCLI, prompt, grammar string) []string {
 
 	args = append(args,
 		"--color", "off",
-		"--grammar", grammar,
+		"--grammar", mxpdGrammar,
 		"--simple-io",
 		"--single-turn",
 		"--no-display-prompt",
@@ -328,6 +271,8 @@ func normalizeLlamaCLIAnalyzeCandidate(prompt, candidate string) string {
 }
 
 func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
+	fmt.Fprintln(os.Stderr, "ANALYZE_START")
+	defer fmt.Fprintln(os.Stderr, "ANALYZE_END")
 	if err := g.Validate(); err != nil {
 		return Result{}, err
 	}
@@ -336,45 +281,54 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 	}
 	content := string(in.Content)
 	governedState := strings.TrimSpace(in.GovernedState)
+	// Prompt text only: for JSON-digest sources, earlier records' numbers are
+	// masked so Gemma cannot copy them into S or F. in.GovernedState itself,
+	// and everything the runtime stores, compares, or governs, is unchanged.
+	// TARGET_COMPARISON/1 and non-JSON sources never get a digest.
+	if sourceDigest(content) != "" {
+		governedState = maskStandaloneNumbers(governedState)
+	}
 
-	governedLimit, contentLimit, err := analyzeBudget(
-		g.Context, g.MaxTokens,
-		len(buildPrompt(in.Name, "", "")),
-		envInt("GEMMA_BYTES_PER_TOKEN", defaultBytesPerToken),
-	)
-	if err != nil {
-		return Result{}, err
+	inputTokens := g.Context - g.MaxTokens - 1024
+	if inputTokens < 256 {
+		return Result{}, fmt.Errorf("Gemma context too small for bounded analysis")
 	}
+
+	inputBytes := inputTokens * 3
+	governedLimit := inputBytes / 4
 	if len(governedState) > governedLimit {
-		governedState = truncateAtLine(governedState, governedLimit)
+		governedState = truncateUTF8(governedState, governedLimit)
 	}
+
+	contentLimit := inputBytes - len(governedState)
+	if contentLimit > 1000 {
+		contentLimit = 1000
+	}
+	if contentLimit < 1 {
+		return Result{}, fmt.Errorf("Gemma context exhausted by governed state")
+	}
+	// The digest only shapes the prompt text. in.Content (the evidence bytes
+	// that are hashed and stored) is never modified.
+	digest := sourceDigest(content)
+	content = withSourceDigest(content)
 	if len(content) > contentLimit {
 		content = truncateUTF8(content, contentLimit)
 	}
-	prompt := buildPrompt(in.Name, content, governedState)
-	fmt.Fprintf(os.Stderr, "[GEMMA_DIAG] prompt_bytes=%d source_bytes=%d governed_bytes=%d context=%d max_tokens=%d threads=%d\n", len(prompt), len(content), len(governedState), g.Context, g.MaxTokens, g.Threads)
-
-	// Both inference attempts share one bounded reasoning deadline. A semantic
-	// retry must not double the time UNIFUSION waits for this component.
-	boundedCtx, boundedCancel := context.WithTimeout(ctx, g.Timeout)
-	defer boundedCancel()
+	prompt := withDigestFactLine(buildPrompt(in.Name, content, governedState), digest)
 
 	for attempt := 0; attempt < 2; attempt++ {
-		attemptStarted := time.Now()
-		fmt.Fprintf(os.Stderr, "[GEMMA_DIAG] attempt=%d start\n", attempt+1)
-		args := gemmaArgsWithGrammar(g, prompt, gemmaGrammarForSource(content))
+		args := gemmaArgs(g, prompt)
 
-		cmd := exec.CommandContext(boundedCtx, g.Binary, args...)
+		cctx, cancel := context.WithTimeout(ctx, g.Timeout)
+		cmd := exec.CommandContext(cctx, g.Binary, args...)
 
 		var stdout, stderr bytes.Buffer
-		cmd.Stdout = io.MultiWriter(&stdout, os.Stderr)
-		cmd.Stderr = io.MultiWriter(&stderr, os.Stderr)
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
 
 		runErr := cmd.Run()
-		fmt.Fprintf(os.Stderr,
-			"[GEMMA_DIAG] attempt=%d elapsed=%s run_error=%v\n",
-			attempt+1, time.Since(attemptStarted), runErr)
-		ctxErr := boundedCtx.Err()
+		ctxErr := cctx.Err()
+		cancel()
 
 		if runErr != nil {
 			if errors.Is(ctxErr, context.DeadlineExceeded) {
@@ -394,6 +348,7 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 
 		var parseErr error
 		var validationErr error
+		badNumber := ""
 
 		for _, candidate := range candidates {
 			if filepath.Base(g.Binary) == "llama-cli" {
@@ -407,36 +362,301 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 
 			if err := rejectPromptPlaceholders(res, content); err != nil {
 				validationErr = err
+				if n, ok := ungroundedNumber(content, append([]string{res.Summary}, res.Facts...)); !ok {
+					badNumber = n
+				}
 				break
 			}
 
-			return res, nil
+			return withDigestFacts(res, digest), nil
 		}
 
 		if validationErr != nil {
-			fmt.Fprintf(os.Stderr,
-				"[GEMMA_DIAG] attempt=%d semantic_rejection elapsed=%s\n",
-				attempt+1, time.Since(attemptStarted))
 			if attempt == 0 {
-				prompt = buildPrompt(in.Name, content, governedState) +
+				prompt = withDigestFactLine(buildPrompt(in.Name, content, governedState), digest) +
 					"\n\nRETRY:\n" +
 					"Regenerate from SOURCE only. " +
 					"Do not describe validation, rejection, retry, prompt text, or GOVERNED_STATE. " +
 					"Return only source-supported S, F, and C values. Outside TARGET_COMPARISON/1, never emit D or R. For TARGET_COMPARISON/1, D may be emitted only when grounded by TARGET_STATE and REALITY, and R only when a grounded D is also emitted."
+				if badNumber != "" {
+					prompt += " Previous answer used " + badNumber + ", which is not in SOURCE."
+				}
 				continue
 			}
 			return Result{}, validationErr
 		}
 
+		out := stdout.String()
+		fmt.Fprintf(os.Stderr,
+			"GEMMA_DIAG invalid_output attempt=%d prompt_bytes=%d content_bytes=%d stdout_bytes=%d stderr_bytes=%d max_tokens=%d has_S=%t has_Z=%t\n",
+			attempt+1, len(prompt), len(content), len(out), stderr.Len(), g.MaxTokens,
+			strings.Contains(out, "S|"), strings.Contains(out, "\nZ"),
+		)
+		hint := ""
+		if strings.Contains(out, "S|") && !strings.Contains(out, "\nZ") {
+			hint = fmt.Sprintf(" (output stopped before Z; GEMMA_MAX_TOKENS=%d may be too low)", g.MaxTokens)
+		}
 		return Result{}, fmt.Errorf(
-			"Gemma output invalid: %w; stdout=%s; stderr=%s",
+			"Gemma output invalid: %w%s; stdout_tail=%s; stderr_tail=%s",
 			parseErr,
-			trim(stdout.String(), 500),
-			trim(stderr.String(), 500),
+			hint,
+			gemmaOutputTail(out, 800),
+			gemmaOutputTail(stderr.String(), 300),
 		)
 	}
 
 	return Result{}, fmt.Errorf("Gemma semantic retry exhausted")
+}
+
+const (
+	sourceDigestValueLimit = 80
+	sourceDigestLimit      = 400
+)
+
+// sourceDigest returns one plain-English "Source summary:" sentence listing
+// the top-level scalar values of a JSON object source: numbers and booleans
+// first, then short strings, each group in SOURCE key order. Arrays, objects
+// and identifier-like strings are skipped. Keys are shown with underscores
+// as spaces; values are copied from SOURCE as written (numbers keep their
+// literal form), so anything Gemma restates is grounded in SOURCE. Entries
+// that do not fit whole are dropped, never cut. Non-JSON sources and
+// TARGET_COMPARISON/1 sources get no digest.
+func sourceDigest(content string) string {
+	trimmed := strings.TrimSpace(content)
+	if strings.HasPrefix(trimmed, "TARGET_COMPARISON/1") || !strings.HasPrefix(trimmed, "{") {
+		return ""
+	}
+	dec := json.NewDecoder(strings.NewReader(trimmed))
+	dec.UseNumber()
+	if tok, err := dec.Token(); err != nil || tok != json.Delim('{') {
+		return ""
+	}
+	var scalars, texts []string
+	seen := map[string]bool{}
+	for dec.More() {
+		tok, err := dec.Token()
+		if err != nil {
+			return ""
+		}
+		key, _ := tok.(string)
+		var val any
+		if err := dec.Decode(&val); err != nil {
+			return ""
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		label := strings.Join(strings.Fields(strings.ReplaceAll(key, "_", " ")), " ")
+		if label == "" || len(label) > sourceDigestValueLimit || strings.ContainsAny(label, "|;") {
+			continue
+		}
+		switch v := val.(type) {
+		case json.Number:
+			scalars = append(scalars, label+" "+v.String())
+		case bool:
+			scalars = append(scalars, label+" "+strconv.FormatBool(v))
+		case string:
+			v = strings.Join(strings.Fields(v), " ")
+			if v == "" || len(v) > sourceDigestValueLimit || strings.ContainsAny(v, "|;") || digestSkipsString(key, v) {
+				continue
+			}
+			texts = append(texts, label+" "+v)
+		}
+	}
+	if _, err := dec.Token(); err != nil { // closing brace
+		return ""
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return ""
+	}
+
+	const prefix = "Source summary: "
+	var b strings.Builder
+	for _, entry := range append(scalars, texts...) {
+		sep := ""
+		if b.Len() > 0 {
+			sep = "; "
+		}
+		if len(prefix)+b.Len()+len(sep)+len(entry)+1 > sourceDigestLimit {
+			continue
+		}
+		b.WriteString(sep)
+		b.WriteString(entry)
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	return prefix + strings.TrimRight(b.String(), ".") + "."
+}
+
+// digestSkipsString reports whether a top-level string value is
+// identifier-like and should stay out of the source digest.
+func digestSkipsString(key, value string) bool {
+	k := strings.ToLower(key)
+	switch k {
+	case "id", "ts", "source", "path", "timestamp", "time", "created", "updated":
+		return true
+	}
+	for _, suffix := range []string{"_id", "_hash", "_path", "_ts", "_at", "_time", "_sha", "_sha256"} {
+		if strings.HasSuffix(k, suffix) {
+			return true
+		}
+	}
+	if strings.Contains(value, "/") || strings.Contains(value, "\\") {
+		return true
+	}
+	run := 0
+	for i := 0; i < len(value); i++ {
+		c := value[i]
+		if (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') {
+			run++
+			if run >= 16 {
+				return true
+			}
+		} else {
+			run = 0
+		}
+	}
+	return false
+}
+
+// digestFactLine is added to the prompt only for JSON-digest sources.
+const digestFactLine = "F restates every value in Source summary, e.g. \"frames sampled 1; wave states 1\".\n"
+
+func withDigestFactLine(prompt, digest string) string {
+	if digest == "" {
+		return prompt
+	}
+	return strings.Replace(prompt, "Z = final terminator.\n", digestFactLine+"Z = final terminator.\n", 1)
+}
+
+// digestNumericEntries returns the "label value" entries of a source digest
+// whose value is a single number, e.g. "wave states 1".
+func digestNumericEntries(digest string) []string {
+	var out []string
+	for _, entry := range digestEntries(digest) {
+		i := strings.LastIndex(entry, " ")
+		if i <= 0 {
+			continue
+		}
+		value := entry[i+1:]
+		if toks := numberTokens(value); len(toks) == 1 && toks[0] == value {
+			out = append(out, entry)
+		}
+	}
+	return out
+}
+
+// factsCoverDigestEntry reports whether some fact states entry's number
+// (equal values match, 1 and 1.0) together with every word of its label
+// (a trailing "s" is optional, so "1 frame sampled" covers "frames sampled 1").
+func factsCoverDigestEntry(entry string, facts []string) bool {
+	i := strings.LastIndex(entry, " ")
+	label, value := strings.ToLower(entry[:i]), entry[i+1:]
+	for _, fact := range facts {
+		lower := strings.ToLower(fact)
+		if _, ok := ungroundedNumber(fact, []string{value}); !ok {
+			continue
+		}
+		all := true
+		for _, word := range strings.Fields(label) {
+			if !strings.Contains(lower, strings.TrimSuffix(word, "s")) {
+				all = false
+				break
+			}
+		}
+		if all {
+			return true
+		}
+	}
+	return false
+}
+
+// digestEntries returns every "label value" entry of a source digest.
+func digestEntries(digest string) []string {
+	body := strings.TrimPrefix(digest, "Source summary: ")
+	if body == digest {
+		return nil
+	}
+	return strings.Split(strings.TrimSuffix(body, "."), "; ")
+}
+
+// splitDigestListFacts handles a fact that copies the Source summary as one
+// list ("frames sampled 1; wave states 1; ..."). Such a fact is split on ';'.
+// Parts that exactly match a digest entry become that entry, verbatim. Parts
+// that are only the start of a digest entry (cut off) and empty parts are
+// dropped. Other parts are kept as written. Results are deduplicated.
+func splitDigestListFacts(facts []string, digest string) []string {
+	entries := digestEntries(digest)
+	var out []string
+	seen := map[string]bool{}
+	add := func(f string) {
+		if f != "" && !seen[f] {
+			seen[f] = true
+			out = append(out, f)
+		}
+	}
+	for _, fact := range facts {
+		trimmed := strings.TrimSpace(fact)
+		if !strings.Contains(trimmed, ";") && !strings.HasPrefix(trimmed, "Source summary") {
+			add(trimmed)
+			continue
+		}
+		trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, "Source summary:"))
+		trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, "Source summary"))
+	parts:
+		for _, part := range strings.Split(trimmed, ";") {
+			part = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(part), "."))
+			if part == "" {
+				continue
+			}
+			for _, entry := range entries {
+				if part == entry {
+					add(entry)
+					continue parts
+				}
+			}
+			for _, entry := range entries {
+				if strings.HasPrefix(entry, part) {
+					continue parts // cut-off entry
+				}
+			}
+			add(part)
+		}
+	}
+	return out
+}
+
+// withDigestFacts appends, as its own fact, each numeric Source summary entry
+// that Gemma's facts do not already state. The appended text is copied
+// verbatim from the digest, so it is grounded in SOURCE. Existing fact
+// limits (24 facts, 96 bytes each) are respected. No digest, no change.
+func withDigestFacts(r Result, digest string) Result {
+	if digest == "" {
+		return r
+	}
+	r.Facts = splitDigestListFacts(r.Facts, digest)
+	for _, entry := range digestNumericEntries(digest) {
+		if len(r.Facts) >= 24 {
+			break
+		}
+		if len(entry) > 96 || factsCoverDigestEntry(entry, r.Facts) {
+			continue
+		}
+		r.Facts = append(r.Facts, entry)
+	}
+	return r
+}
+
+// withSourceDigest prepends the SOURCE_DIGEST line and a blank line to a JSON
+// object source so its counts survive prompt truncation.
+func withSourceDigest(content string) string {
+	digest := sourceDigest(content)
+	if digest == "" {
+		return content
+	}
+	return digest + "\n\n" + content
 }
 
 func sourceSupportsFact(source, fact string) bool {
@@ -531,6 +751,97 @@ func sourceSupportsDifference(source, difference string) bool {
 	return sourceSupportsFact(target+"\n"+reality, difference)
 }
 
+// numberTokens returns the maximal numeric runs in s (integers or decimals
+// such as 14, 0.42857, 1.0). A run never starts or ends inside another run of
+// digits, so "14" is not found inside "2014" or "0.142".
+func numberTokens(s string) []string {
+	var out []string
+	for i := 0; i < len(s); {
+		if s[i] < '0' || s[i] > '9' {
+			i++
+			continue
+		}
+		j := i
+		for j < len(s) && s[j] >= '0' && s[j] <= '9' {
+			j++
+		}
+		if j+1 < len(s) && s[j] == '.' && s[j+1] >= '0' && s[j+1] <= '9' {
+			j++
+			for j < len(s) && s[j] >= '0' && s[j] <= '9' {
+				j++
+			}
+		}
+		out = append(out, s[i:j])
+		i = j
+	}
+	return out
+}
+
+// maskStandaloneNumbers replaces each number that stands alone (not touching
+// a letter or digit, e.g. "14 frames", "ratio 0.42857") with "#". Digits
+// inside identifiers such as E-9AE69D1AA444275B are kept.
+func maskStandaloneNumbers(s string) string {
+	isAlnum := func(c byte) bool {
+		return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); {
+		if s[i] < '0' || s[i] > '9' || (i > 0 && isAlnum(s[i-1])) {
+			b.WriteByte(s[i])
+			i++
+			continue
+		}
+		j := i
+		for j < len(s) && s[j] >= '0' && s[j] <= '9' {
+			j++
+		}
+		if j+1 < len(s) && s[j] == '.' && s[j+1] >= '0' && s[j+1] <= '9' {
+			j++
+			for j < len(s) && s[j] >= '0' && s[j] <= '9' {
+				j++
+			}
+		}
+		if j < len(s) && isAlnum(s[j]) {
+			// Part of an identifier: copy the run and any letters/digits
+			// that follow it unchanged.
+			for j < len(s) && isAlnum(s[j]) {
+				j++
+			}
+			b.WriteString(s[i:j])
+		} else {
+			b.WriteByte('#')
+		}
+		i = j
+	}
+	return b.String()
+}
+
+// ungroundedNumber reports the first number in values that does not appear
+// as a number in source. Only the SOURCE text is consulted, never
+// GOVERNED_STATE. Equal numeric values match (1 and 1.0).
+func ungroundedNumber(source string, values []string) (string, bool) {
+	exact := map[string]bool{}
+	numeric := map[float64]bool{}
+	for _, tok := range numberTokens(source) {
+		exact[tok] = true
+		if f, err := strconv.ParseFloat(tok, 64); err == nil {
+			numeric[f] = true
+		}
+	}
+	for _, v := range values {
+		for _, tok := range numberTokens(v) {
+			if exact[tok] {
+				continue
+			}
+			if f, err := strconv.ParseFloat(tok, 64); err == nil && numeric[f] {
+				continue
+			}
+			return tok, false
+		}
+	}
+	return "", true
+}
+
 func rejectPromptPlaceholders(r Result, source string) error {
 	if strings.EqualFold(strings.TrimSpace(r.Summary), "one sentence summary") {
 		return fmt.Errorf("Gemma output rejected: prompt placeholder summary")
@@ -552,6 +863,10 @@ func rejectPromptPlaceholders(r Result, source string) error {
 		if !sourceSupportsFact(source, fact) {
 			return fmt.Errorf("Gemma output rejected: fact lacks source support: %q", fact)
 		}
+	}
+
+	if n, ok := ungroundedNumber(source, append([]string{r.Summary}, r.Facts...)); !ok {
+		return fmt.Errorf("Gemma output rejected: number %s not in SOURCE", n)
 	}
 
 	for _, difference := range r.Differences {
@@ -584,6 +899,10 @@ func rejectPromptPlaceholders(r Result, source string) error {
 				return fmt.Errorf("Gemma output rejected: capability duplicates fact")
 			}
 		}
+	}
+
+	if strings.HasPrefix(upperSummary, "SOURCE_NAME") || strings.HasPrefix(upperSummary, "SOURCE:") {
+		return fmt.Errorf("Gemma output rejected: summary restates prompt label")
 	}
 
 	if strings.HasPrefix(strings.TrimSpace(r.Summary), ":") {
@@ -630,21 +949,16 @@ func buildPrompt(name, content, governedState string) string {
 	return `@L:MXPD/2
 @T:OBSERVE
 SOURCE_NAME:` + filepath.Base(name) + `
-SOURCE_NAME is routing metadata, not source evidence.
-Never use SOURCE_NAME or any execution label as a semantic value.
-
-BEGIN_SOURCE
+SOURCE:
 ` + content + `
-END_SOURCE
-
-Only text between BEGIN_SOURCE and END_SOURCE is factual evidence.
-Never copy metadata, prompt instructions, or execution labels into S, F, C, D, R, L, or T.
 
 Observe SOURCE and emit only source-grounded structure.
 
 S = the direct meaning established by SOURCE.
+S states what SOURCE shows in one sentence, not the file name.
+Numbers in S and F must come from SOURCE, never from GOVERNED_STATE.
 K = L, M, or H.
-F = concrete evidence or verified state explicitly established by SOURCE. Copy a short, contiguous factual phrase from SOURCE rather than paraphrasing, changing punctuation, or combining unrelated terms. If no factual phrase is supported, do not invent one.
+F = concrete evidence or verified state explicitly established by SOURCE.
 D = a target-relative Difference only for TARGET_COMPARISON/1.
 Outside TARGET_COMPARISON/1, never emit D.
 For TARGET_COMPARISON/1, compare TARGET_STATE with source-grounded ACCEPTED_FACT values inside REALITY.
@@ -654,16 +968,19 @@ R = one bounded semantic requirement only for TARGET_COMPARISON/1 and only when 
 Outside TARGET_COMPARISON/1, never emit R.
 R must be exactly ESTABLISH_FACT, DERIVE_RELATIONSHIP, or DERIVE_CAPABILITY.
 Do not emit R merely because TARGET_STATE and REALITY differ. Omit R unless SOURCE establishes which bounded requirement is needed.
-C = a reusable capability only when SOURCE explicitly establishes one.
+C = the single capability SOURCE most directly supports.
 T = an operational facet only when SOURCE explicitly establishes one.
 Z = final terminator.
 
-All semantic values must be directly supported by SOURCE.
-Never invent facts, capabilities, relationships, authority, state, or intent.
-A test, description, filename, or code alone does not establish a capability.
-Preserve uncertainty; absence of evidence is not evidence of absence.
-Keep distinct observations separate.
-Omit unsupported optional fields; never emit null, none, unknown, N/A, or placeholders.
+Every semantic value MUST be grounded directly in SOURCE.
+Do not invent facts, capabilities, relationships, authority, state, or intent.
+Do not infer a capability merely because SOURCE contains a test, description, filename, or code.
+Do not treat absence of evidence as evidence of absence.
+Preserve uncertainty rather than filling missing structure.
+Do not collapse multiple distinct source-supported observations into one invented claim.
+If a field is not established by SOURCE, omit it where the grammar permits omission.
+Never emit null, none, unknown, N/A, or placeholder text as a semantic field value.
+For optional D, R, L, or T fields, omission means SOURCE did not establish that field.
 The runtime, not Gemma, determines governance, admission, verification, canonical state, and lineage.
 
 GOVERNED_STATE is comparison context only:
@@ -993,92 +1310,33 @@ func clean(in []string, max int) []string {
 	}
 	return out
 }
+
+// gemmaOutputTail drops llama loader banner lines and keeps the last n bytes
+// of s, so an error shows what Gemma generated rather than the banner.
+func gemmaOutputTail(s string, n int) string {
+	var kept []string
+	for _, line := range strings.Split(s, "\n") {
+		t := strings.TrimSpace(line)
+		if t == "Loading model..." || strings.ContainsAny(t, "\u2584\u2588\u2580") {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	s = strings.TrimSpace(strings.Join(kept, "\n"))
+	if len(s) <= n {
+		return s
+	}
+	start := len(s) - n
+	for start < len(s) && !utf8.RuneStart(s[start]) {
+		start++
+	}
+	return "..." + s[start:]
+}
+
 func trim(s string, n int) string {
 	s = strings.TrimSpace(s)
 	if len(s) > n {
 		return truncateUTF8(s, n)
 	}
 	return s
-}
-
-// PredictARCGrid performs benchmark-only inference without registry admission.
-func (g GemmaCLI) PredictARCGrid(ctx context.Context, prompt string) ([][]int, error) {
-	if err := g.Validate(); err != nil {
-		return nil, err
-	}
-	if strings.TrimSpace(prompt) == "" {
-		return nil, fmt.Errorf("empty ARC prompt")
-	}
-	args := programPatchArgs(g, prompt, g.MaxTokens)
-	if filepath.Base(g.Binary) == "llama-cli" {
-		filtered := make([]string, 0, len(args)+1)
-		for _, arg := range args {
-			if arg != "--log-disable" {
-				filtered = append(filtered, arg)
-			}
-		}
-		args = append(filtered, "--perf", "--show-timings")
-	}
-	outputFile, err := os.CreateTemp("", "unifusion-arc-*.txt")
-	if err != nil {
-		return nil, err
-	}
-	outputPath := outputFile.Name()
-	if err := outputFile.Close(); err != nil {
-		os.Remove(outputPath)
-		return nil, err
-	}
-	defer os.Remove(outputPath)
-	if filepath.Base(g.Binary) != "llama-completion" {
-		args = append(args, "--output-file", outputPath)
-	}
-	boundedCtx, cancel := context.WithTimeout(ctx, g.Timeout)
-	defer cancel()
-	cmd := exec.CommandContext(boundedCtx, g.Binary, args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	started := time.Now()
-	if err := cmd.Run(); err != nil {
-		partial, _ := os.ReadFile(outputPath)
-		return nil, fmt.Errorf("ARC inference failed: %w: elapsed=%s stdout_tail=%q stderr=%q partial_output=%q", err, time.Since(started), trim(stdout.String()[max(0, stdout.Len()-500):], 500), trim(stderr.String(), 4000), string(partial[max(0, len(partial)-500):]))
-	}
-	fileOutput, err := os.ReadFile(outputPath)
-	if err != nil {
-		return nil, err
-	}
-	output := strings.TrimSpace(string(fileOutput))
-	if filepath.Base(g.Binary) == "llama-cli" {
-		if i := strings.LastIndex(output, string([]byte{10})+"Assistant:"+string([]byte{10})); i >= 0 {
-			output = strings.TrimSpace(output[i+len("Assistant:")+2:])
-		}
-	}
-	if strings.HasPrefix(output, "```") {
-		if i := strings.IndexByte(output, 10); i >= 0 {
-			output = strings.TrimSpace(output[i+1:])
-			output = strings.TrimSpace(strings.TrimSuffix(output, "```"))
-		}
-	}
-	var grid [][]int
-	if err := json.Unmarshal([]byte(output), &grid); err != nil {
-		return nil, fmt.Errorf("invalid ARC grid JSON: %w: output=%q", err, trim(output, 500))
-	}
-	if len(grid) == 0 || len(grid) > 30 {
-		return nil, fmt.Errorf("invalid ARC grid height")
-	}
-	width := len(grid[0])
-	if width == 0 || width > 30 {
-		return nil, fmt.Errorf("invalid ARC grid width")
-	}
-	for _, row := range grid {
-		if len(row) != width {
-			return nil, fmt.Errorf("ARC grid must be rectangular")
-		}
-		for _, cell := range row {
-			if cell < 0 || cell > 9 {
-				return nil, fmt.Errorf("ARC grid color outside 0-9")
-			}
-		}
-	}
-	return grid, nil
 }

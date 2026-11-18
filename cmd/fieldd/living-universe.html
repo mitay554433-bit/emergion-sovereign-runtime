@@ -27,7 +27,7 @@ function rebuild(){const a=anchors(),byID=new Map(),links=new Set();nodes=a.slic
  for(const [key,kind] of groups){const records=field&&field[key];if(!records||typeof records!=='object')continue;
  for(const [id,em] of Object.entries(records)){if(!em||typeof em!=='object')continue;const meta=em.e&&em.e.m||{},fs=Array.isArray(meta.f)?meta.f:[],fi=fs.map(facetIndex).filter(i=>i>=0);const home=fi.length?fi[0]:hash(id)%12;const root=a[home];const radius=45+220*Math.sqrt(rnd(id+'radius'));const theta=rnd(id+'angle')*Math.PI*2;const n={id,label:meta.h||id,kind,em,meta,facets:fi,x:root.x+Math.cos(theta)*radius,y:root.y+Math.sin(theta)*radius,depth:.35+.65*rnd(id+'depth'),r:kind==='accepted'?4.3:3.5};nodes.push(n);byID.set(id,n)} }
  for(const n of nodes){if(n.kind==='facet')continue;for(const fi of n.facets){edges.push({a:n,b:a[fi],kind:'facet'})}}
- for(const n of nodes){if(!n.em)continue;const r=n.em.r||{};for(const key of ['parent_emergion','transition_emergion','origin','COMPOSITION_KIN','kin_emergion']){const v=r[key];if(typeof v==='string')addEdge(n.id,v,key==='parent_emergion'?'kin_emergion':key)}
+ for(const n of nodes){if(!n.em)continue;const r=n.em.r||{};for(const key of ['parent_emergion','transition_emergion','origin','COMPOSITION_KIN','kin_emergion']){const v=r[key];if(typeof v==='string')addEdge(n.id,v,key)}
  const providers=r.capability_providers;if(typeof providers==='string')for(const match of providers.matchAll(/E-[A-Fa-f0-9]+/g))addEdge(n.id,match[0],'capability_provider');
  const graph=n.meta.e;if(Array.isArray(graph))for(const e of graph){if(e&&typeof e==='object')addEdge(e.f,e.t,e.k||'build_edge')}
  }
