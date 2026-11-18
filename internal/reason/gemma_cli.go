@@ -3,8 +3,10 @@ package reason
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,11 +27,16 @@ type GemmaCLI struct {
 	ExtraArgs []string
 }
 
+// defaultGemmaTimeoutSeconds bounds one Gemma run when GEMMA_TIMEOUT_SECONDS
+// is unset. On-device wave-file captures take about 2m10s-2m15s, so 360s
+// leaves headroom where the former 180s limit was hit.
+const defaultGemmaTimeoutSeconds = 360
+
 func GemmaFromEnv() GemmaCLI {
 	threads := envInt("GEMMA_THREADS", 4)
 	ctx := envInt("GEMMA_CONTEXT", 4096)
 	max := envInt("GEMMA_MAX_TOKENS", 256)
-	timeout := time.Duration(envInt("GEMMA_TIMEOUT_SECONDS", 180)) * time.Second
+	timeout := time.Duration(envInt("GEMMA_TIMEOUT_SECONDS", defaultGemmaTimeoutSeconds)) * time.Second
 	extra := strings.Fields(os.Getenv("GEMMA_EXTRA_ARGS"))
 	return GemmaCLI{
 		Binary:    discoverBinary(os.Getenv("GEMMA_BIN")),
@@ -293,6 +300,9 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 	if contentLimit < 1 {
 		return Result{}, fmt.Errorf("Gemma context exhausted by governed state")
 	}
+	// The digest only shapes the prompt text. in.Content (the evidence bytes
+	// that are hashed and stored) is never modified.
+	content = withSourceDigest(content)
 	if len(content) > contentLimit {
 		content = truncateUTF8(content, contentLimit)
 	}
@@ -370,6 +380,81 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 	}
 
 	return Result{}, fmt.Errorf("Gemma semantic retry exhausted")
+}
+
+const (
+	sourceDigestValueLimit = 80
+	sourceDigestLimit      = 400
+)
+
+// sourceDigest returns one SOURCE_DIGEST line listing the top-level scalar
+// values of a JSON object source, sorted by key. Arrays and objects are
+// skipped. Values are copied from SOURCE as written (numbers keep their
+// literal form), so anything Gemma echoes from the digest is grounded in
+// SOURCE. Non-JSON sources and TARGET_COMPARISON/1 sources get no digest.
+func sourceDigest(content string) string {
+	trimmed := strings.TrimSpace(content)
+	if strings.HasPrefix(trimmed, "TARGET_COMPARISON/1") || !strings.HasPrefix(trimmed, "{") {
+		return ""
+	}
+	dec := json.NewDecoder(strings.NewReader(trimmed))
+	dec.UseNumber()
+	var obj map[string]any
+	if err := dec.Decode(&obj); err != nil {
+		return ""
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return ""
+	}
+
+	keys := make([]string, 0, len(obj))
+	for k := range obj {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	const prefix = "SOURCE_DIGEST: "
+	var b strings.Builder
+	for _, k := range keys {
+		var v string
+		switch val := obj[k].(type) {
+		case string:
+			v = val
+		case json.Number:
+			v = val.String()
+		case bool:
+			v = strconv.FormatBool(val)
+		default:
+			continue
+		}
+		v = strings.Join(strings.Fields(v), " ")
+		v = truncateUTF8(v, sourceDigestValueLimit)
+		k = truncateUTF8(strings.Join(strings.Fields(k), " "), sourceDigestValueLimit)
+		entry := k + "=" + v
+		sep := ""
+		if b.Len() > 0 {
+			sep = "; "
+		}
+		if len(prefix)+b.Len()+len(sep)+len(entry) > sourceDigestLimit {
+			break
+		}
+		b.WriteString(sep)
+		b.WriteString(entry)
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	return prefix + b.String()
+}
+
+// withSourceDigest prepends the SOURCE_DIGEST line and a blank line to a JSON
+// object source so its counts survive prompt truncation.
+func withSourceDigest(content string) string {
+	digest := sourceDigest(content)
+	if digest == "" {
+		return content
+	}
+	return digest + "\n\n" + content
 }
 
 func sourceSupportsFact(source, fact string) bool {
@@ -580,7 +665,7 @@ R = one bounded semantic requirement only for TARGET_COMPARISON/1 and only when 
 Outside TARGET_COMPARISON/1, never emit R.
 R must be exactly ESTABLISH_FACT, DERIVE_RELATIONSHIP, or DERIVE_CAPABILITY.
 Do not emit R merely because TARGET_STATE and REALITY differ. Omit R unless SOURCE establishes which bounded requirement is needed.
-C = a reusable capability only when SOURCE explicitly establishes one.
+C = the single capability SOURCE most directly supports.
 T = an operational facet only when SOURCE explicitly establishes one.
 Z = final terminator.
 
@@ -592,7 +677,7 @@ Preserve uncertainty rather than filling missing structure.
 Do not collapse multiple distinct source-supported observations into one invented claim.
 If a field is not established by SOURCE, omit it where the grammar permits omission.
 Never emit null, none, unknown, N/A, or placeholder text as a semantic field value.
-For optional D, R, C, L, or T fields, omission means SOURCE did not establish that field.
+For optional D, R, L, or T fields, omission means SOURCE did not establish that field.
 The runtime, not Gemma, determines governance, admission, verification, canonical state, and lineage.
 
 GOVERNED_STATE is comparison context only:
