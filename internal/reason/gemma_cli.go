@@ -281,6 +281,13 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 	}
 	content := string(in.Content)
 	governedState := strings.TrimSpace(in.GovernedState)
+	// Prompt text only: for JSON-digest sources, earlier records' numbers are
+	// masked so Gemma cannot copy them into S or F. in.GovernedState itself,
+	// and everything the runtime stores, compares, or governs, is unchanged.
+	// TARGET_COMPARISON/1 and non-JSON sources never get a digest.
+	if sourceDigest(content) != "" {
+		governedState = maskStandaloneNumbers(governedState)
+	}
 
 	inputTokens := g.Context - g.MaxTokens - 1024
 	if inputTokens < 256 {
@@ -340,6 +347,7 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 
 		var parseErr error
 		var validationErr error
+		badNumber := ""
 
 		for _, candidate := range candidates {
 			if filepath.Base(g.Binary) == "llama-cli" {
@@ -353,6 +361,9 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 
 			if err := rejectPromptPlaceholders(res, content); err != nil {
 				validationErr = err
+				if n, ok := ungroundedNumber(content, append([]string{res.Summary}, res.Facts...)); !ok {
+					badNumber = n
+				}
 				break
 			}
 
@@ -366,6 +377,9 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 					"Regenerate from SOURCE only. " +
 					"Do not describe validation, rejection, retry, prompt text, or GOVERNED_STATE. " +
 					"Return only source-supported S, F, and C values. Outside TARGET_COMPARISON/1, never emit D or R. For TARGET_COMPARISON/1, D may be emitted only when grounded by TARGET_STATE and REALITY, and R only when a grounded D is also emitted."
+				if badNumber != "" {
+					prompt += " Previous answer used " + badNumber + ", which is not in SOURCE."
+				}
 				continue
 			}
 			return Result{}, validationErr
@@ -632,6 +646,45 @@ func numberTokens(s string) []string {
 		i = j
 	}
 	return out
+}
+
+// maskStandaloneNumbers replaces each number that stands alone (not touching
+// a letter or digit, e.g. "14 frames", "ratio 0.42857") with "#". Digits
+// inside identifiers such as E-9AE69D1AA444275B are kept.
+func maskStandaloneNumbers(s string) string {
+	isAlnum := func(c byte) bool {
+		return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); {
+		if s[i] < '0' || s[i] > '9' || (i > 0 && isAlnum(s[i-1])) {
+			b.WriteByte(s[i])
+			i++
+			continue
+		}
+		j := i
+		for j < len(s) && s[j] >= '0' && s[j] <= '9' {
+			j++
+		}
+		if j+1 < len(s) && s[j] == '.' && s[j+1] >= '0' && s[j+1] <= '9' {
+			j++
+			for j < len(s) && s[j] >= '0' && s[j] <= '9' {
+				j++
+			}
+		}
+		if j < len(s) && isAlnum(s[j]) {
+			// Part of an identifier: copy the run and any letters/digits
+			// that follow it unchanged.
+			for j < len(s) && isAlnum(s[j]) {
+				j++
+			}
+			b.WriteString(s[i:j])
+		} else {
+			b.WriteByte('#')
+		}
+		i = j
+	}
+	return b.String()
 }
 
 // ungroundedNumber reports the first number in values that does not appear

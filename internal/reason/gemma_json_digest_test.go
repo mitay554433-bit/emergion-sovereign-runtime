@@ -380,3 +380,124 @@ func TestBuildPromptKeepsNumbersInSource(t *testing.T) {
 		t.Fatal("prompt missing numeric grounding line")
 	}
 }
+
+func TestMaskStandaloneNumbers(t *testing.T) {
+	got := maskStandaloneNumbers("E-9AE69D1AA444275B ACCEPTED_FACT: 14 frames sampled, 6 compressed states (ratio 0.42857) 2a9")
+	want := "E-9AE69D1AA444275B ACCEPTED_FACT: # frames sampled, # compressed states (ratio #) 2a9"
+	if got != want {
+		t.Fatalf("masked = %q want %q", got, want)
+	}
+}
+
+func analyzeWithPromptCapture(t *testing.T, name, source, governed string) string {
+	t.Helper()
+	root := t.TempDir()
+	model := filepath.Join(root, "model.gguf")
+	if err := os.WriteFile(model, []byte("test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	promptFile := filepath.Join(root, "prompt.txt")
+	binary := filepath.Join(root, "llama-completion")
+	script := `#!/bin/sh
+while [ "$#" -gt 0 ]; do
+case "$1" in
+-sys)
+shift
+printf '%s' "$1" > "` + promptFile + `"
+;;
+esac
+shift
+done
+cat <<'OUT'
+S|Observed source record
+K|L
+F|observed source record
+C|OBS
+Z
+OUT
+`
+	if err := os.WriteFile(binary, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	g := GemmaCLI{Binary: binary, Model: model, Context: 2048, MaxTokens: 80, Threads: 1, Timeout: 5 * time.Second}
+	_, _ = g.Analyze(context.Background(), Input{Name: name, Content: []byte(source), GovernedState: governed})
+	prompt, err := os.ReadFile(promptFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := string(prompt)
+	i := strings.Index(p, "GOVERNED_STATE is comparison context only:\n")
+	if i < 0 {
+		t.Fatalf("prompt missing GOVERNED_STATE:\n%s", p)
+	}
+	return p[i:]
+}
+
+const governedWithWaveNumbers = "E-9AE69D1AA444275B ACCEPTED_FACT: 14 frames sampled, 14 wave states, 6 compressed states (ratio 0.42857)"
+
+func TestJSONDigestSourceMasksGovernedNumbersInPromptOnly(t *testing.T) {
+	gov := analyzeWithPromptCapture(t, "w.json", oneFrameWaveSourceForTest(), governedWithWaveNumbers)
+	for _, n := range []string{"14", "0.42857", " 6 "} {
+		if strings.Contains(gov, n) {
+			t.Fatalf("prompt GOVERNED_STATE still has %q:\n%s", n, gov)
+		}
+	}
+	if !strings.Contains(gov, "E-9AE69D1AA444275B ACCEPTED_FACT: # frames sampled") {
+		t.Fatalf("prompt GOVERNED_STATE = %s", gov)
+	}
+}
+
+func TestPlainTextSourceKeepsGovernedNumbers(t *testing.T) {
+	gov := analyzeWithPromptCapture(t, "note.txt", "observed source record with 14 frames", governedWithWaveNumbers)
+	if !strings.Contains(gov, governedWithWaveNumbers) {
+		t.Fatalf("plain-text prompt GOVERNED_STATE changed:\n%s", gov)
+	}
+}
+
+func TestTargetComparisonKeepsGovernedNumbers(t *testing.T) {
+	source := "TARGET_COMPARISON/1\nTARGET_STATE:\n{\"frames_sampled\": 14}\nREALITY:\nobserved source record\nZ\n"
+	gov := analyzeWithPromptCapture(t, "cmp.txt", source, governedWithWaveNumbers)
+	if !strings.Contains(gov, governedWithWaveNumbers) {
+		t.Fatalf("TARGET_COMPARISON prompt GOVERNED_STATE changed:\n%s", gov)
+	}
+}
+
+func TestRetryPromptNamesRejectedNumber(t *testing.T) {
+	root := t.TempDir()
+	model := filepath.Join(root, "model.gguf")
+	if err := os.WriteFile(model, []byte("test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	promptFile := filepath.Join(root, "prompt.txt")
+	binary := filepath.Join(root, "llama-completion")
+	script := `#!/bin/sh
+while [ "$#" -gt 0 ]; do
+case "$1" in
+-sys)
+shift
+printf '%s' "$1" > "` + promptFile + `"
+;;
+esac
+shift
+done
+cat <<'OUT'
+S|The source shows 14 frames sampled
+K|L
+F|14 frames sampled
+C|VLD
+Z
+OUT
+`
+	if err := os.WriteFile(binary, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	g := GemmaCLI{Binary: binary, Model: model, Context: 2048, MaxTokens: 80, Threads: 1, Timeout: 5 * time.Second}
+	_, err := g.Analyze(context.Background(), Input{Name: "w.json", Content: []byte(oneFrameWaveSourceForTest()), GovernedState: governedWithWaveNumbers})
+	if err == nil || !strings.Contains(err.Error(), "number 14 not in SOURCE") {
+		t.Fatalf("err = %v", err)
+	}
+	prompt, _ := os.ReadFile(promptFile)
+	if !strings.Contains(string(prompt), "Previous answer used 14, which is not in SOURCE.") {
+		t.Fatalf("retry prompt missing rejected number:\n%s", prompt)
+	}
+}
