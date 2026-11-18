@@ -201,7 +201,7 @@ OUT
 	if !bytes.Equal(evidence, original) {
 		t.Fatal("evidence bytes changed")
 	}
-	if len(result.Facts) != 1 || !strings.Contains(result.Facts[0], "14 frames sampled") {
+	if len(result.Facts) != 2 || !strings.Contains(result.Facts[0], "14 frames sampled") || result.Facts[1] != "compression ratio 0.42857" {
 		t.Fatalf("facts = %#v", result.Facts)
 	}
 
@@ -370,7 +370,7 @@ fi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res.Facts) != 1 || strings.Contains(res.Facts[0], "14") {
+	if len(res.Facts) != 2 || strings.Contains(res.Facts[0], "14") || res.Facts[1] != "compression ratio 1.0" {
 		t.Fatalf("facts = %#v", res.Facts)
 	}
 }
@@ -499,5 +499,87 @@ OUT
 	prompt, _ := os.ReadFile(promptFile)
 	if !strings.Contains(string(prompt), "Previous answer used 14, which is not in SOURCE.") {
 		t.Fatalf("retry prompt missing rejected number:\n%s", prompt)
+	}
+}
+
+const oneFrameDigest = "Source summary: frames sampled 1; wave states 1; compressed states 1; compression ratio 1.0; state MAXIOM_REAL_TEMPORAL_WAVE_LOCKED."
+
+func TestDigestNumericEntries(t *testing.T) {
+	got := strings.Join(digestNumericEntries(oneFrameDigest), "|")
+	if got != "frames sampled 1|wave states 1|compressed states 1|compression ratio 1.0" {
+		t.Fatalf("entries = %q", got)
+	}
+	if sourceDigest(oneFrameWaveSourceForTest()) != oneFrameDigest {
+		t.Fatalf("digest = %q", sourceDigest(oneFrameWaveSourceForTest()))
+	}
+}
+
+func TestWithDigestFactsAppendsMissingNumericEntries(t *testing.T) {
+	r := Result{Summary: "The source shows a single frame sampled from a wave field.", Risk: "L", Facts: []string{"1 frame sampled"}}
+	got := withDigestFacts(r, oneFrameDigest).Facts
+	want := []string{"1 frame sampled", "wave states 1", "compressed states 1", "compression ratio 1.0"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("facts = %#v want %#v", got, want)
+	}
+	source := withSourceDigest(oneFrameWaveSourceForTest())
+	if err := rejectPromptPlaceholders(Result{Summary: r.Summary, Risk: "L", Facts: got}, source); err != nil {
+		t.Fatalf("appended facts not grounded: %v", err)
+	}
+}
+
+func TestWithDigestFactsKeepsCompleteFactsUnchanged(t *testing.T) {
+	r := Result{Facts: []string{"frames sampled 1; wave states 1; compressed states 1; compression ratio 1"}}
+	if got := withDigestFacts(r, oneFrameDigest).Facts; len(got) != 1 {
+		t.Fatalf("facts = %#v", got)
+	}
+}
+
+func TestWithDigestFactsRespectsFactLimit(t *testing.T) {
+	var facts []string
+	for i := 0; i < 23; i++ {
+		facts = append(facts, "observed item "+strings.Repeat("a", i+1))
+	}
+	if got := withDigestFacts(Result{Facts: facts}, oneFrameDigest).Facts; len(got) != 24 || got[23] != "frames sampled 1" {
+		t.Fatalf("facts = %#v", got)
+	}
+}
+
+func TestWithDigestFactsNoDigestNoChange(t *testing.T) {
+	r := Result{Facts: []string{"1 frame sampled"}}
+	if got := withDigestFacts(r, "").Facts; len(got) != 1 {
+		t.Fatalf("facts = %#v", got)
+	}
+}
+
+func TestDigestFactLineOnlyForJSONDigestSources(t *testing.T) {
+	gov := "accepted_context_present"
+	plain := buildPrompt("note.txt", "observed source record", gov)
+	if withDigestFactLine(plain, "") != plain {
+		t.Fatal("plain-text prompt changed")
+	}
+	withLine := withDigestFactLine(plain, oneFrameDigest)
+	if !strings.Contains(withLine, digestFactLine+"Z = final terminator.\n") {
+		t.Fatalf("fact line missing:\n%s", withLine)
+	}
+}
+
+func TestAnalyzePlainTextFactsUnchanged(t *testing.T) {
+	root := t.TempDir()
+	model := filepath.Join(root, "model.gguf")
+	if err := os.WriteFile(model, []byte("test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	binary := filepath.Join(root, "llama-completion")
+	script := "#!/bin/sh\nprintf 'S|Observed source record\\nK|L\\nF|observed source record\\nC|OBS\\nZ\\n'\n"
+	if err := os.WriteFile(binary, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	g := GemmaCLI{Binary: binary, Model: model, Context: 2048, MaxTokens: 80, Threads: 1, Timeout: 5 * time.Second}
+	res, err := g.Analyze(context.Background(), Input{Name: "note.txt", Content: []byte("observed source record with frames sampled 1")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Facts) != 1 {
+		t.Fatalf("facts = %#v", res.Facts)
 	}
 }

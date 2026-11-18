@@ -309,11 +309,12 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 	}
 	// The digest only shapes the prompt text. in.Content (the evidence bytes
 	// that are hashed and stored) is never modified.
+	digest := sourceDigest(content)
 	content = withSourceDigest(content)
 	if len(content) > contentLimit {
 		content = truncateUTF8(content, contentLimit)
 	}
-	prompt := buildPrompt(in.Name, content, governedState)
+	prompt := withDigestFactLine(buildPrompt(in.Name, content, governedState), digest)
 
 	for attempt := 0; attempt < 2; attempt++ {
 		args := gemmaArgs(g, prompt)
@@ -367,12 +368,12 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 				break
 			}
 
-			return res, nil
+			return withDigestFacts(res, digest), nil
 		}
 
 		if validationErr != nil {
 			if attempt == 0 {
-				prompt = buildPrompt(in.Name, content, governedState) +
+				prompt = withDigestFactLine(buildPrompt(in.Name, content, governedState), digest) +
 					"\n\nRETRY:\n" +
 					"Regenerate from SOURCE only. " +
 					"Do not describe validation, rejection, retry, prompt text, or GOVERNED_STATE. " +
@@ -518,6 +519,80 @@ func digestSkipsString(key, value string) bool {
 		}
 	}
 	return false
+}
+
+// digestFactLine is added to the prompt only for JSON-digest sources.
+const digestFactLine = "F restates every value in Source summary, e.g. \"frames sampled 1; wave states 1\".\n"
+
+func withDigestFactLine(prompt, digest string) string {
+	if digest == "" {
+		return prompt
+	}
+	return strings.Replace(prompt, "Z = final terminator.\n", digestFactLine+"Z = final terminator.\n", 1)
+}
+
+// digestNumericEntries returns the "label value" entries of a source digest
+// whose value is a single number, e.g. "wave states 1".
+func digestNumericEntries(digest string) []string {
+	body := strings.TrimPrefix(digest, "Source summary: ")
+	if body == digest {
+		return nil
+	}
+	body = strings.TrimSuffix(body, ".")
+	var out []string
+	for _, entry := range strings.Split(body, "; ") {
+		i := strings.LastIndex(entry, " ")
+		if i <= 0 {
+			continue
+		}
+		value := entry[i+1:]
+		if toks := numberTokens(value); len(toks) == 1 && toks[0] == value {
+			out = append(out, entry)
+		}
+	}
+	return out
+}
+
+// factsCoverDigestEntry reports whether some fact states entry's number
+// (equal values match, 1 and 1.0) together with every word of its label
+// (a trailing "s" is optional, so "1 frame sampled" covers "frames sampled 1").
+func factsCoverDigestEntry(entry string, facts []string) bool {
+	i := strings.LastIndex(entry, " ")
+	label, value := strings.ToLower(entry[:i]), entry[i+1:]
+	for _, fact := range facts {
+		lower := strings.ToLower(fact)
+		if _, ok := ungroundedNumber(fact, []string{value}); !ok {
+			continue
+		}
+		all := true
+		for _, word := range strings.Fields(label) {
+			if !strings.Contains(lower, strings.TrimSuffix(word, "s")) {
+				all = false
+				break
+			}
+		}
+		if all {
+			return true
+		}
+	}
+	return false
+}
+
+// withDigestFacts appends, as its own fact, each numeric Source summary entry
+// that Gemma's facts do not already state. The appended text is copied
+// verbatim from the digest, so it is grounded in SOURCE. Existing fact
+// limits (24 facts, 96 bytes each) are respected. No digest, no change.
+func withDigestFacts(r Result, digest string) Result {
+	for _, entry := range digestNumericEntries(digest) {
+		if len(r.Facts) >= 24 {
+			break
+		}
+		if len(entry) > 96 || factsCoverDigestEntry(entry, r.Facts) {
+			continue
+		}
+		r.Facts = append(r.Facts, entry)
+	}
+	return r
 }
 
 // withSourceDigest prepends the SOURCE_DIGEST line and a blank line to a JSON
