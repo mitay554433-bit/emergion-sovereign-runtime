@@ -534,13 +534,8 @@ func withDigestFactLine(prompt, digest string) string {
 // digestNumericEntries returns the "label value" entries of a source digest
 // whose value is a single number, e.g. "wave states 1".
 func digestNumericEntries(digest string) []string {
-	body := strings.TrimPrefix(digest, "Source summary: ")
-	if body == digest {
-		return nil
-	}
-	body = strings.TrimSuffix(body, ".")
 	var out []string
-	for _, entry := range strings.Split(body, "; ") {
+	for _, entry := range digestEntries(digest) {
 		i := strings.LastIndex(entry, " ")
 		if i <= 0 {
 			continue
@@ -578,11 +573,70 @@ func factsCoverDigestEntry(entry string, facts []string) bool {
 	return false
 }
 
+// digestEntries returns every "label value" entry of a source digest.
+func digestEntries(digest string) []string {
+	body := strings.TrimPrefix(digest, "Source summary: ")
+	if body == digest {
+		return nil
+	}
+	return strings.Split(strings.TrimSuffix(body, "."), "; ")
+}
+
+// splitDigestListFacts handles a fact that copies the Source summary as one
+// list ("frames sampled 1; wave states 1; ..."). Such a fact is split on ';'.
+// Parts that exactly match a digest entry become that entry, verbatim. Parts
+// that are only the start of a digest entry (cut off) and empty parts are
+// dropped. Other parts are kept as written. Results are deduplicated.
+func splitDigestListFacts(facts []string, digest string) []string {
+	entries := digestEntries(digest)
+	var out []string
+	seen := map[string]bool{}
+	add := func(f string) {
+		if f != "" && !seen[f] {
+			seen[f] = true
+			out = append(out, f)
+		}
+	}
+	for _, fact := range facts {
+		trimmed := strings.TrimSpace(fact)
+		if !strings.Contains(trimmed, ";") && !strings.HasPrefix(trimmed, "Source summary") {
+			add(trimmed)
+			continue
+		}
+		trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, "Source summary:"))
+		trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, "Source summary"))
+	parts:
+		for _, part := range strings.Split(trimmed, ";") {
+			part = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(part), "."))
+			if part == "" {
+				continue
+			}
+			for _, entry := range entries {
+				if part == entry {
+					add(entry)
+					continue parts
+				}
+			}
+			for _, entry := range entries {
+				if strings.HasPrefix(entry, part) {
+					continue parts // cut-off entry
+				}
+			}
+			add(part)
+		}
+	}
+	return out
+}
+
 // withDigestFacts appends, as its own fact, each numeric Source summary entry
 // that Gemma's facts do not already state. The appended text is copied
 // verbatim from the digest, so it is grounded in SOURCE. Existing fact
 // limits (24 facts, 96 bytes each) are respected. No digest, no change.
 func withDigestFacts(r Result, digest string) Result {
+	if digest == "" {
+		return r
+	}
+	r.Facts = splitDigestListFacts(r.Facts, digest)
 	for _, entry := range digestNumericEntries(digest) {
 		if len(r.Facts) >= 24 {
 			break

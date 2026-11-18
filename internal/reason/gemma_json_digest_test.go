@@ -528,7 +528,7 @@ func TestWithDigestFactsAppendsMissingNumericEntries(t *testing.T) {
 }
 
 func TestWithDigestFactsKeepsCompleteFactsUnchanged(t *testing.T) {
-	r := Result{Facts: []string{"frames sampled 1; wave states 1; compressed states 1; compression ratio 1"}}
+	r := Result{Facts: []string{"1 frame sampled, 1 wave state, 1 compressed state, compression ratio 1"}}
 	if got := withDigestFacts(r, oneFrameDigest).Facts; len(got) != 1 {
 		t.Fatalf("facts = %#v", got)
 	}
@@ -581,5 +581,52 @@ func TestAnalyzePlainTextFactsUnchanged(t *testing.T) {
 	}
 	if len(res.Facts) != 1 {
 		t.Fatalf("facts = %#v", res.Facts)
+	}
+}
+
+func TestWithDigestFactsSplitsCopiedSummaryList(t *testing.T) {
+	source := withSourceDigest(oneFrameWaveSourceForTest())
+	for _, tc := range []struct {
+		fact string
+		want []string
+	}{
+		{ // phone record E-D849885EE72B3510, after the 96-byte cut
+			"frames sampled 1; wave states 1; compressed states 1; compression ratio 1.0; state MAXIOM_REAL_T",
+			[]string{"frames sampled 1", "wave states 1", "compressed states 1", "compression ratio 1.0"},
+		},
+		{ // as Gemma emits it, before any cut
+			"frames sampled 1; wave states 1; compressed states 1; compression ratio 1.0; state MAXIOM_REAL_TEMPORAL_WAVE_LOCKED",
+			[]string{"frames sampled 1", "wave states 1", "compressed states 1", "compression ratio 1.0", "state MAXIOM_REAL_TEMPORAL_WAVE_LOCKED"},
+		},
+		{
+			"Source summary: frames sampled 1; wave states 1.",
+			[]string{"frames sampled 1", "wave states 1", "compressed states 1", "compression ratio 1.0"},
+		},
+		{ // cut-off number is dropped, then the whole entry is appended
+			"frames sampled 1; compression ratio 1",
+			[]string{"frames sampled 1", "wave states 1", "compressed states 1", "compression ratio 1.0"},
+		},
+	} {
+		r := Result{Summary: "The source shows a single frame sampled from a wave field.", Risk: "L", Facts: []string{tc.fact}}
+		got := withDigestFacts(r, oneFrameDigest).Facts
+		if strings.Join(got, "|") != strings.Join(tc.want, "|") {
+			t.Fatalf("fact %q:\nfacts = %#v\nwant  %#v", tc.fact, got, tc.want)
+		}
+		for _, f := range got {
+			if len(f) > 96 {
+				t.Fatalf("fact over 96 bytes: %q", f)
+			}
+		}
+		if err := rejectPromptPlaceholders(Result{Summary: r.Summary, Risk: "L", Facts: got}, source); err != nil {
+			t.Fatalf("split facts not grounded: %v", err)
+		}
+	}
+}
+
+func TestSplitDigestListFactsKeepsOtherFactsAndDedupes(t *testing.T) {
+	got := splitDigestListFacts([]string{"1 frame sampled", "wave states 1; locked wave", "wave states 1"}, oneFrameDigest)
+	want := []string{"1 frame sampled", "wave states 1", "locked wave"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("facts = %#v want %#v", got, want)
 	}
 }
