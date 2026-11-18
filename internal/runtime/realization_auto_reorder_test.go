@@ -18,14 +18,14 @@ func captureAcceptedAutoReorderMember(
 	r := Runtime{
 		Store: s,
 		Reasoner: fixedReasoner{
-			name: "auto-reorder-member",
+			name:    "auto-reorder-member",
 			version: "v1",
 			result: reason.Result{
-				Summary: name + " evidence",
+				Summary:       name + " evidence",
 				Relationships: map[string]string{"target_thing": "KNIFE"},
-				Capabilities: []string{"ANALYZE"},
-				Facts: []string{name + " evidence"},
-				Risk: "L",
+				Capabilities:  []string{"ANALYZE"},
+				Facts:         []string{name + " evidence"},
+				Risk:          "L",
 			},
 		},
 	}
@@ -35,8 +35,12 @@ func captureAcceptedAutoReorderMember(
 		[]byte(name+" evidence"),
 		"auto_reorder_fixture",
 	)
-	if err != nil { t.Fatal(err) }
-	if duplicate { t.Fatalf("%s unexpectedly duplicate", name) }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate {
+		t.Fatalf("%s unexpectedly duplicate", name)
+	}
 	acceptRealizationForSelectionGovernance(t, s, em)
 	return em.IDN
 }
@@ -49,21 +53,23 @@ func captureAcceptedAutoReorderResult(
 ) {
 	t.Helper()
 	request := adapters.ExecutionRequest{
-		EmergIONID: kin,
-		SourceHash: kin + "-source",
+		EmergIONID:      kin,
+		SourceHash:      kin + "-source",
 		AuthorizationID: "EV-Q-" + kin,
-		Authority: "HUMAN_FINAL",
-		Adapter: "LOCAL_GEMMA",
-		Action: "ANALYZE",
+		Authority:       "HUMAN_FINAL",
+		Adapter:         "LOCAL_GEMMA",
+		Action:          "ANALYZE",
 	}
 	request.TransitionEmergIONID = adapters.ExecutionTransitionID(request)
 	result := adapters.BindExecutionResult(
 		request,
 		adapters.ExecutionResult{
 			Succeeded: succeeded,
-			Output: "observed realization execution",
+			Output:    "observed realization execution",
 			Error: func() string {
-				if succeeded { return "" }
+				if succeeded {
+					return ""
+				}
 				return "observed execution failure"
 			}(),
 		},
@@ -73,14 +79,20 @@ func captureAcceptedAutoReorderResult(
 		request,
 		result,
 	)
-	if err != nil { t.Fatal(err) }
-	if duplicate { t.Fatal("execution result unexpectedly duplicate") }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate {
+		t.Fatal("execution result unexpectedly duplicate")
+	}
 	acceptRealizationForSelectionGovernance(t, r.Store, signal)
 }
 
 func TestCaptureNextObservedRealizationReorderUsesCanonicalSelectionEvidence(t *testing.T) {
 	s, err := store.Open(t.TempDir())
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	r := Runtime{Store: s}
 
 	a := captureAcceptedAutoReorderMember(t, s, "knife-a")
@@ -88,12 +100,12 @@ func TestCaptureNextObservedRealizationReorderUsesCanonicalSelectionEvidence(t *
 
 	population := RealizationPopulation{
 		TargetThing: "KNIFE",
-		Members: []string{a, b},
+		Members:     []string{a, b},
 		Comparisons: []RealizationComparison{{
 			TargetThing: "KNIFE",
-			Left: a,
-			Right: b,
-			Result: RealizationLeftPreferred,
+			Left:        a,
+			Right:       b,
+			Result:      RealizationLeftPreferred,
 			Differences: []string{"INITIAL:A>B"},
 		}},
 	}
@@ -101,8 +113,12 @@ func TestCaptureNextObservedRealizationReorderUsesCanonicalSelectionEvidence(t *
 		context.Background(),
 		population,
 	)
-	if err != nil { t.Fatal(err) }
-	if duplicate { t.Fatal("selection unexpectedly duplicate") }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate {
+		t.Fatal("selection unexpectedly duplicate")
+	}
 	acceptRealizationForSelectionGovernance(t, s, selection)
 
 	captureAcceptedAutoReorderResult(t, r, a, false)
@@ -111,8 +127,12 @@ func TestCaptureNextObservedRealizationReorderUsesCanonicalSelectionEvidence(t *
 	reorder, proposed, err := r.CaptureNextObservedRealizationReorder(
 		context.Background(),
 	)
-	if err != nil { t.Fatal(err) }
-	if !proposed { t.Fatal("changed observed order did not produce reorder candidate") }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !proposed {
+		t.Fatal("changed observed order did not produce reorder candidate")
+	}
 	if reorder.REL["source_kind"] != "REALIZATION_REORDER" {
 		t.Fatalf("source_kind = %q", reorder.REL["source_kind"])
 	}
@@ -126,31 +146,39 @@ func TestCaptureNextObservedRealizationReorderUsesCanonicalSelectionEvidence(t *
 
 func TestCaptureNextObservedRealizationReorderWaitsForComparableResults(t *testing.T) {
 	s, err := store.Open(t.TempDir())
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	r := Runtime{Store: s}
 
 	a := captureAcceptedAutoReorderMember(t, s, "knife-a")
 	b := captureAcceptedAutoReorderMember(t, s, "knife-b")
 	population := RealizationPopulation{
 		TargetThing: "KNIFE",
-		Members: []string{a, b},
+		Members:     []string{a, b},
 		Comparisons: []RealizationComparison{{
 			TargetThing: "KNIFE",
-			Left: a,
-			Right: b,
-			Result: RealizationLeftPreferred,
+			Left:        a,
+			Right:       b,
+			Result:      RealizationLeftPreferred,
 			Differences: []string{"INITIAL:A>B"},
 		}},
 	}
 	selection, duplicate, err := r.CaptureRealizationSelection(context.Background(), population)
-	if err != nil { t.Fatal(err) }
-	if duplicate { t.Fatal("selection unexpectedly duplicate") }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate {
+		t.Fatal("selection unexpectedly duplicate")
+	}
 	acceptRealizationForSelectionGovernance(t, s, selection)
 
 	captureAcceptedAutoReorderResult(t, r, a, false)
 
 	_, proposed, err := r.CaptureNextObservedRealizationReorder(context.Background())
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if proposed {
 		t.Fatal("one-sided execution evidence produced false reorder candidate")
 	}
