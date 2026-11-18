@@ -1002,6 +1002,17 @@ func TestGemmaGrammarForSourceRestrictsOrdinaryDifference(t *testing.T) {
 	if strings.Contains(ordinary, "root ::= summary risk fact (difference requirement?)?") {
 		t.Fatal("ordinary source grammar still permits Difference and Requirement")
 	}
+	// Owner choice A: ordinary sources require exactly one capability and
+	// never emit D or R.
+	if !strings.Contains(ordinary, "root ::= summary risk fact relationship? capability facet? end\n") {
+		t.Fatal("ordinary source grammar is not choice A (capability required, no D/R)")
+	}
+	if strings.Contains(ordinary, "capability?") {
+		t.Fatal("ordinary source grammar makes capability optional")
+	}
+	if !strings.Contains(mxpdGrammar, mxpdRoot+"\n") {
+		t.Fatal("mxpdRoot no longer matches mxpdGrammar; the ordinary swap would silently do nothing")
+	}
 	if got := gemmaGrammarForSource("TARGET_COMPARISON/1\nTARGET_STATE:\ndeployed\nREALITY:\nACCEPTED_FACT:observation-only\nZ\n"); got != mxpdGrammar {
 		t.Fatal("structured target comparison lost canonical grammar")
 	}
