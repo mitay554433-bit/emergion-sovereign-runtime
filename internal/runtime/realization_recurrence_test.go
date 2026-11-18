@@ -18,10 +18,10 @@ func recurrenceStateFixture() core.State {
 		IDN: "E-R",
 		STA: core.StateAccepted,
 		REL: map[string]string{
-			"source_kind": "REALIZATION_REORDER",
-			"target_thing": "KNIFE",
+			"source_kind":          "REALIZATION_REORDER",
+			"target_thing":         "KNIFE",
 			"selected_realization": "E-B",
-			"runners_up": "E-A",
+			"runners_up":           "E-A",
 		},
 	}
 	return st
@@ -30,7 +30,9 @@ func recurrenceStateFixture() core.State {
 func TestResolveAcceptedRealizationRecurrenceTargetsSelectedREGRealization(t *testing.T) {
 	st := recurrenceStateFixture()
 	got, err := ResolveAcceptedRealizationRecurrence(st, "E-R", true)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if got.SelectionEmergION != "E-R" {
 		t.Fatalf("reorder = %q", got.SelectionEmergION)
 	}
@@ -62,7 +64,6 @@ func TestResolveAcceptedRealizationRecurrenceTargetsSelectedREGRealization(t *te
 	}
 }
 
-
 func TestResolveAcceptedRealizationRecurrenceAcceptsInitialSelection(t *testing.T) {
 	st := core.EmptyState()
 	st.Accepted["E-A"] = core.EmergION{
@@ -72,14 +73,16 @@ func TestResolveAcceptedRealizationRecurrenceAcceptsInitialSelection(t *testing.
 	st.Accepted["E-S"] = core.EmergION{
 		IDN: "E-S",
 		REL: map[string]string{
-			"source_kind": "REALIZATION_SELECTION",
-			"target_thing": "KNIFE",
+			"source_kind":          "REALIZATION_SELECTION",
+			"target_thing":         "KNIFE",
 			"selected_realization": "E-A",
 		},
 	}
 
 	got, err := ResolveAcceptedRealizationRecurrence(st, "E-S", true)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if got.SelectionEmergION != "E-S" {
 		t.Fatalf("selection EmergION = %q want E-S", got.SelectionEmergION)
 	}
@@ -116,7 +119,9 @@ func TestResolveAcceptedRealizationRecurrenceCreatesNoAuthorization(t *testing.T
 	st := recurrenceStateFixture()
 	before := len(st.ActionAuthorizations)
 	got, err := ResolveAcceptedRealizationRecurrence(st, "E-R", true)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(st.ActionAuthorizations) != before {
 		t.Fatal("recurrence resolution created authorization")
 	}

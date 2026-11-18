@@ -42,9 +42,9 @@ func populationFromRealizationEvidence(
 		}
 		comparison := RealizationComparison{
 			TargetThing: target,
-			Left: strings.TrimSpace(parts[0]),
-			Right: strings.TrimSpace(parts[1]),
-			Result: RealizationComparisonResult(strings.TrimSpace(parts[2])),
+			Left:        strings.TrimSpace(parts[0]),
+			Right:       strings.TrimSpace(parts[1]),
+			Result:      RealizationComparisonResult(strings.TrimSpace(parts[2])),
 		}
 		population.Comparisons = append(population.Comparisons, comparison)
 		members[comparison.Left] = true

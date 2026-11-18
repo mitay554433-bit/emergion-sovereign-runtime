@@ -10,10 +10,10 @@ import (
 )
 
 type RealizationRecurrence struct {
-	SelectionEmergION  string
-	TargetThing        string
+	SelectionEmergION   string
+	TargetThing         string
 	SelectedRealization string
-	Actions            []adapters.ActionCandidate
+	Actions             []adapters.ActionCandidate
 }
 
 // ResolveAcceptedRealizationRecurrence binds a REG-accepted realization selection\n// or reorder to the realization it selected. The selected realization must\n// independently remain REG-accepted. This function derives no Q and executes nothing.
