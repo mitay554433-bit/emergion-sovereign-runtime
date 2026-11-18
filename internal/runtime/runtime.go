@@ -122,7 +122,11 @@ func coverage(em *core.EmergION, governedState string) error {
 	if strings.TrimSpace(em.MEM.Summary) == "" {
 		bridgegaps = append(bridgegaps, "BRIDGEGAP:summary")
 	}
-	if len(em.VAL.Facts) == 0 {
+	// With governed state present, the runtime used to append the
+	// "living_state_projected" label to Facts before this check, so the facts
+	// gap could not fire there. The label is gone (Facts hold only
+	// source-grounded entries); this keeps admission outcomes unchanged.
+	if len(em.VAL.Facts) == 0 && strings.TrimSpace(governedState) == "" {
 		bridgegaps = append(bridgegaps, "BRIDGEGAP:facts")
 	}
 	if len(em.CAP) == 0 {
@@ -135,16 +139,6 @@ func coverage(em *core.EmergION, governedState string) error {
 	if strings.TrimSpace(governedState) != "" {
 		if em.REL["governed_state"] == "" {
 			bridgegaps = append(bridgegaps, "BRIDGEGAP:living_state_relationship")
-		}
-		projected := false
-		for _, fact := range em.VAL.Facts {
-			if fact == "living_state_projected" {
-				projected = true
-				break
-			}
-		}
-		if !projected {
-			bridgegaps = append(bridgegaps, "BRIDGEGAP:living_state_projection")
 		}
 	}
 
@@ -1165,7 +1159,6 @@ func (r Runtime) recapture(
 	}
 	if strings.TrimSpace(governedState) != "" {
 		em.REL["governed_state"] = "accepted_context_present"
-		em.VAL.Facts = append(em.VAL.Facts, "living_state_projected")
 	}
 
 	if err := coverage(&em, governedState); err != nil {
@@ -1576,7 +1569,6 @@ func (r Runtime) admitAnalyzedCandidate(
 
 	if strings.TrimSpace(governedState) != "" {
 		em.REL["governed_state"] = "accepted_context_present"
-		em.VAL.Facts = append(em.VAL.Facts, "living_state_projected")
 	}
 
 	if coverageErr := coverage(&em, governedState); coverageErr != nil {
