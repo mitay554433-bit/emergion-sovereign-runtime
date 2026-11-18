@@ -427,12 +427,17 @@ func TestMXPDGrammarOwnsKnownBadLeadingLexicalForms(t *testing.T) {
 	}
 }
 
-func TestMXPDGrammarMakesCapabilityOptionalAndCanonical(t *testing.T) {
+// The capability line is required (owner decision, PR #39): coverage needs a
+// CAP, so the grammar must make Gemma emit exactly one canonical token.
+func TestMXPDGrammarRequiresCanonicalCapability(t *testing.T) {
 	if !strings.Contains(
 		mxpdGrammar,
-		`root ::= summary risk fact (difference requirement?)? relationship? capability? facet? end`,
+		`root ::= summary risk fact (difference requirement?)? relationship? capability facet? end`,
 	) {
-		t.Fatal("MXPD grammar still requires a capability")
+		t.Fatal("MXPD grammar does not require exactly one capability")
+	}
+	if strings.Contains(mxpdGrammar, "capability? facet?") {
+		t.Fatal("MXPD grammar makes capability optional")
 	}
 
 	if !strings.Contains(
@@ -473,7 +478,7 @@ func TestMXPDGrammarMakesCapabilityOptionalAndCanonical(t *testing.T) {
 func TestMXPDGrammarAllowsGovernedCompositionRelationship(t *testing.T) {
 	if !strings.Contains(
 		mxpdGrammar,
-		`root ::= summary risk fact (difference requirement?)? relationship? capability? facet? end`,
+		`root ::= summary risk fact (difference requirement?)? relationship? capability facet? end`,
 	) {
 		t.Fatal("MXPD grammar does not permit an optional governed relationship")
 	}
