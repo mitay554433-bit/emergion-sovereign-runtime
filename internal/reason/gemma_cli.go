@@ -187,7 +187,7 @@ func (g GemmaCLI) Validate() error {
 	return nil
 }
 
-const mxpdGrammar = `root ::= summary risk fact (difference requirement?)? relationship? capability? facet? end
+const mxpdGrammar = `root ::= summary risk fact (difference requirement?)? relationship? capability facet? end
 summary ::= "S|" text "\n"
 risk ::= "K|" ("L" | "M" | "H") "\n"
 fact ::= "F|" text "\n"
