@@ -371,11 +371,22 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 			return Result{}, validationErr
 		}
 
+		out := stdout.String()
+		fmt.Fprintf(os.Stderr,
+			"GEMMA_DIAG invalid_output attempt=%d prompt_bytes=%d content_bytes=%d stdout_bytes=%d stderr_bytes=%d max_tokens=%d has_S=%t has_Z=%t\n",
+			attempt+1, len(prompt), len(content), len(out), stderr.Len(), g.MaxTokens,
+			strings.Contains(out, "S|"), strings.Contains(out, "\nZ"),
+		)
+		hint := ""
+		if strings.Contains(out, "S|") && !strings.Contains(out, "\nZ") {
+			hint = fmt.Sprintf(" (output stopped before Z; GEMMA_MAX_TOKENS=%d may be too low)", g.MaxTokens)
+		}
 		return Result{}, fmt.Errorf(
-			"Gemma output invalid: %w; stdout=%s; stderr=%s",
+			"Gemma output invalid: %w%s; stdout_tail=%s; stderr_tail=%s",
 			parseErr,
-			trim(stdout.String(), 500),
-			trim(stderr.String(), 500),
+			hint,
+			gemmaOutputTail(out, 800),
+			gemmaOutputTail(stderr.String(), 300),
 		)
 	}
 
@@ -407,11 +418,23 @@ func sourceDigest(content string) string {
 		return ""
 	}
 
-	keys := make([]string, 0, len(obj))
-	for k := range obj {
-		keys = append(keys, k)
+	// Numbers and booleans come first, then short strings. Identifier-like
+	// values (ids, timestamps, paths, hashes) are skipped: they cost many
+	// tokens, carry no counts, and Gemma tends to copy them into F.
+	var scalarKeys, stringKeys []string
+	for k, val := range obj {
+		switch val := val.(type) {
+		case json.Number, bool:
+			scalarKeys = append(scalarKeys, k)
+		case string:
+			if !digestSkipsString(k, val) {
+				stringKeys = append(stringKeys, k)
+			}
+		}
 	}
-	sort.Strings(keys)
+	sort.Strings(scalarKeys)
+	sort.Strings(stringKeys)
+	keys := append(scalarKeys, stringKeys...)
 
 	const prefix = "SOURCE_DIGEST: "
 	var b strings.Builder
@@ -424,8 +447,6 @@ func sourceDigest(content string) string {
 			v = val.String()
 		case bool:
 			v = strconv.FormatBool(val)
-		default:
-			continue
 		}
 		v = strings.Join(strings.Fields(v), " ")
 		v = truncateUTF8(v, sourceDigestValueLimit)
@@ -445,6 +466,37 @@ func sourceDigest(content string) string {
 		return ""
 	}
 	return prefix + b.String()
+}
+
+// digestSkipsString reports whether a top-level string value is
+// identifier-like and should stay out of SOURCE_DIGEST.
+func digestSkipsString(key, value string) bool {
+	k := strings.ToLower(key)
+	switch k {
+	case "id", "ts", "source", "path", "timestamp", "time", "created", "updated":
+		return true
+	}
+	for _, suffix := range []string{"_id", "_hash", "_path", "_ts", "_at", "_time", "_sha", "_sha256"} {
+		if strings.HasSuffix(k, suffix) {
+			return true
+		}
+	}
+	if strings.Contains(value, "/") || strings.Contains(value, "\\") {
+		return true
+	}
+	run := 0
+	for i := 0; i < len(value); i++ {
+		c := value[i]
+		if (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') {
+			run++
+			if run >= 16 {
+				return true
+			}
+		} else {
+			run = 0
+		}
+	}
+	return false
 }
 
 // withSourceDigest prepends the SOURCE_DIGEST line and a blank line to a JSON
@@ -1007,6 +1059,29 @@ func clean(in []string, max int) []string {
 	}
 	return out
 }
+
+// gemmaOutputTail drops llama loader banner lines and keeps the last n bytes
+// of s, so an error shows what Gemma generated rather than the banner.
+func gemmaOutputTail(s string, n int) string {
+	var kept []string
+	for _, line := range strings.Split(s, "\n") {
+		t := strings.TrimSpace(line)
+		if t == "Loading model..." || strings.ContainsAny(t, "\u2584\u2588\u2580") {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	s = strings.TrimSpace(strings.Join(kept, "\n"))
+	if len(s) <= n {
+		return s
+	}
+	start := len(s) - n
+	for start < len(s) && !utf8.RuneStart(s[start]) {
+		start++
+	}
+	return "..." + s[start:]
+}
+
 func trim(s string, n int) string {
 	s = strings.TrimSpace(s)
 	if len(s) > n {

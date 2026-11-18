@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 func waveSourceForDigestTest() string {
@@ -34,8 +35,8 @@ func waveSourceForDigestTest() string {
 func TestSourceDigestListsSortedTopLevelScalarsAndSkipsArraysAndObjects(t *testing.T) {
 	got := sourceDigest(waveSourceForDigestTest())
 	want := "SOURCE_DIGEST: compressed_states=6; compression_ratio=0.42857; " +
-		"frames_sampled=14; id=MAXIOM_REAL_TEMPORAL_79799fccd2b44d5c; locked=true; " +
-		"state=MAXIOM_REAL_TEMPORAL_WAVE_LOCKED; wave_states=14"
+		"frames_sampled=14; locked=true; wave_states=14; " +
+		"state=MAXIOM_REAL_TEMPORAL_WAVE_LOCKED"
 	if got != want {
 		t.Fatalf("digest =\n%q\nwant\n%q", got, want)
 	}
@@ -183,7 +184,72 @@ OUT
 	if !strings.Contains(string(prompt), "SOURCE:\nSOURCE_DIGEST: compressed_states=6; compression_ratio=0.42857; frames_sampled=14;") {
 		t.Fatalf("prompt missing digest:\n%s", prompt)
 	}
-	if !strings.Contains(string(prompt), "wave_states=14\n\n{") {
+	if !strings.Contains(string(prompt), "state=MAXIOM_REAL_TEMPORAL_WAVE_LOCKED\n\n{") {
 		t.Fatalf("digest not followed by blank line and original content:\n%s", prompt)
+	}
+}
+
+func TestSourceDigestSkipsIdentifierLikeValues(t *testing.T) {
+	source := `{
+  "id": "MAXIOM_REAL_TEMPORAL_c5050781dc3f84f0",
+  "ts": "2026-11-17T13:33:11.916351+00:00",
+  "state": "MAXIOM_REAL_TEMPORAL_WAVE_LOCKED",
+  "source": "/storage/emulated/0/ECOPIVOT/VISION/MAXIOM/INBOX/79799fccd2b44d5c_MAXIOM_AXIOM_SEMANTIC_WAVE_FIELD.mp4",
+  "source_hash": "c5050781dc3f84f0706bc4ee4c48f8133333d46f7c4b6546dfc4ac3542a56fb4",
+  "frames_sampled": 1,
+  "wave_states": 1,
+  "compressed_states": 1,
+  "compression_ratio": 1.0,
+  "label": "x 0123456789abcdef0123",
+  "acronyms": {"MV": "Motion Vector"},
+  "compressed_wave": [{"t": 0}]
+}`
+	got := sourceDigest(source)
+	want := "SOURCE_DIGEST: compressed_states=1; compression_ratio=1.0; frames_sampled=1; " +
+		"wave_states=1; state=MAXIOM_REAL_TEMPORAL_WAVE_LOCKED"
+	if got != want {
+		t.Fatalf("digest =\n%q\nwant\n%q", got, want)
+	}
+}
+
+func TestGemmaOutputTailDropsBannerAndKeepsTail(t *testing.T) {
+	banner := "Loading model...\n\n\u2584\u2584 \u2584\u2584\n\u2588\u2588 \u2588\u2588\n    \u2580\u2580\n"
+	got := gemmaOutputTail(banner+"S|wave\nK|L\nF|1 frame", 1000)
+	if got != "S|wave\nK|L\nF|1 frame" {
+		t.Fatalf("tail = %q", got)
+	}
+	long := strings.Repeat("\u00e9", 50) + "END"
+	got = gemmaOutputTail(long, 11)
+	if !strings.HasSuffix(got, "END") || !utf8.ValidString(got) || len(got) > 3+11 {
+		t.Fatalf("tail = %q", got)
+	}
+}
+
+func TestAnalyzeInvalidOutputErrorShowsGeneratedTail(t *testing.T) {
+	root := t.TempDir()
+	model := filepath.Join(root, "model.gguf")
+	if err := os.WriteFile(model, []byte("test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	binary := filepath.Join(root, "llama-completion")
+	script := "#!/bin/sh\nprintf 'Loading model...\\n\\n\u2584\u2584 \u2584\u2584\\n\u2588\u2588 \u2588\u2588\\n'\n" +
+		"printf 'S|MAXIOM wave\\nK|L\\nF|one frame sampled and still going'\n"
+	if err := os.WriteFile(binary, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	g := GemmaCLI{Binary: binary, Model: model, Context: 2048, MaxTokens: 80, Threads: 1, Timeout: 5 * time.Second}
+	_, err := g.Analyze(context.Background(), Input{Name: "w.json", Content: []byte(`{"frames_sampled": 1}`)})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "F|one frame sampled and still going") {
+		t.Fatalf("error hides generated output: %s", msg)
+	}
+	if strings.Contains(msg, "\u2588") || strings.Contains(msg, "Loading model") {
+		t.Fatalf("error still shows banner: %s", msg)
+	}
+	if !strings.Contains(msg, "GEMMA_MAX_TOKENS=80 may be too low") {
+		t.Fatalf("error missing stop-before-Z hint: %s", msg)
 	}
 }
