@@ -45,8 +45,8 @@ type AuthorizeParams struct {
 
 func main() {
 	stateDir := flag.String("state", ".field", "Path to sovereign state directory")
-	socketPath := flag.String("socket", "/tmp/fieldd.sock", "Path to Unix domain socket")
-	pidPath := flag.String("pid", "/tmp/fieldd.pid", "Path to PID file")
+	socketPath := flag.String("socket", filepath.Join(os.TempDir(), "fieldd.sock"), "Path to Unix domain socket")
+	pidPath := flag.String("pid", filepath.Join(os.TempDir(), "fieldd.pid"), "Path to PID file")
 	httpAddr := flag.String("http", "", "Optional loopback-only HTTP status listener")
 	flag.Parse()
 
@@ -110,79 +110,69 @@ func main() {
 			_ = json.NewEncoder(w).Encode(dispatch(rt, Request{Method: "status"}))
 		})
 
-mux.HandleFunc("/actions", func(w http.ResponseWriter, req *http.Request) {
-if req.Method != http.MethodGet {
-http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-return
-}
-
-emergionID := req.URL.Query().Get("emergion_id")
-if emergionID == "" {
-http.Error(w, "missing emergion_id", http.StatusBadRequest)
-return
-}
-
-actionsJSON, err := rt.ActionsJSON(emergionID, true)
-if err != nil {
-http.Error(w, err.Error(), http.StatusBadRequest)
-return
-}
-
-w.Header().Set("Content-Type", "application/json")
-_, _ = w.Write([]byte(actionsJSON))
-})
-
-
-mux.HandleFunc("/authorize", func(w http.ResponseWriter, req *http.Request) {
-if req.Method != http.MethodPost {
-http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-return
-}
-
-var p AuthorizeParams
-if err := json.NewDecoder(req.Body).Decode(&p); err != nil {
-http.Error(w, "invalid authorize params", http.StatusBadRequest)
-return
-}
-
-params, err := json.Marshal(p)
-if err != nil {
-http.Error(w, err.Error(), http.StatusInternalServerError)
-return
-}
-
-resp := dispatch(rt, Request{Method: "authorize", Params: params})
-w.Header().Set("Content-Type", "application/json")
-_ = json.NewEncoder(w).Encode(resp)
-})
-
-mux.HandleFunc("/decide", func(w http.ResponseWriter, req *http.Request) {
-if req.Method != http.MethodPost {
-http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-return
-}
-var p DecideParams
-if err := json.NewDecoder(req.Body).Decode(&p); err != nil {
-http.Error(w, "invalid decide params", http.StatusBadRequest)
-return
-}
-params, err := json.Marshal(p)
-if err != nil {
-http.Error(w, err.Error(), http.StatusInternalServerError)
-return
-}
-resp := dispatch(rt, Request{Method: "decide", Params: params})
-w.Header().Set("Content-Type", "application/json")
-_ = json.NewEncoder(w).Encode(resp)
-})
-
-		mux.HandleFunc("/living-universe", func(w http.ResponseWriter, req *http.Request) {
+		mux.HandleFunc("/actions", func(w http.ResponseWriter, req *http.Request) {
 			if req.Method != http.MethodGet {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			http.ServeFile(w, req, filepath.Join("cmd", "fieldd", "living-universe.html"))
+
+			emergionID := req.URL.Query().Get("emergion_id")
+			if emergionID == "" {
+				http.Error(w, "missing emergion_id", http.StatusBadRequest)
+				return
+			}
+
+			actionsJSON, err := rt.ActionsJSON(emergionID, true)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(actionsJSON))
+		})
+
+		mux.HandleFunc("/authorize", func(w http.ResponseWriter, req *http.Request) {
+			if req.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+
+			var p AuthorizeParams
+			if err := json.NewDecoder(req.Body).Decode(&p); err != nil {
+				http.Error(w, "invalid authorize params", http.StatusBadRequest)
+				return
+			}
+
+			params, err := json.Marshal(p)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			resp := dispatch(rt, Request{Method: "authorize", Params: params})
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(resp)
+		})
+
+		mux.HandleFunc("/decide", func(w http.ResponseWriter, req *http.Request) {
+			if req.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var p DecideParams
+			if err := json.NewDecoder(req.Body).Decode(&p); err != nil {
+				http.Error(w, "invalid decide params", http.StatusBadRequest)
+				return
+			}
+			params, err := json.Marshal(p)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			resp := dispatch(rt, Request{Method: "decide", Params: params})
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(resp)
 		})
 
 		mux.HandleFunc("/field.json", func(w http.ResponseWriter, req *http.Request) {
@@ -200,6 +190,24 @@ _ = json.NewEncoder(w).Encode(resp)
 			http.ServeFile(w, req, filepath.Join("outputs", "field.json"))
 		})
 
+		mux.HandleFunc("/real_temporal_wave.json", func(w http.ResponseWriter, req *http.Request) {
+			if req.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			http.ServeFile(w, req, filepath.Join("outputs", "real_temporal_wave.json"))
+		})
+
+		mux.HandleFunc("/living-universe", func(w http.ResponseWriter, req *http.Request) {
+			if req.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			http.ServeFile(w, req, filepath.Join("cmd", "fieldd", "living-universe.html"))
+		})
+
 		mux.HandleFunc("/field.html", func(w http.ResponseWriter, req *http.Request) {
 			if req.Method != http.MethodGet {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -215,7 +223,7 @@ _ = json.NewEncoder(w).Encode(resp)
 		})
 
 		go func() {
-                        mux.Handle("/deliverables/", http.StripPrefix("/deliverables/", http.FileServer(http.Dir(filepath.Join("outputs", "deliverables")))))
+			mux.Handle("/deliverables/", http.StripPrefix("/deliverables/", http.FileServer(http.Dir(filepath.Join("outputs", "deliverables")))))
 			log.Printf("Field Sovereign HTTP status listening on %s", *httpAddr)
 			if err := http.ListenAndServe(*httpAddr, mux); err != nil {
 				log.Printf("HTTP status listener stopped: %v", err)

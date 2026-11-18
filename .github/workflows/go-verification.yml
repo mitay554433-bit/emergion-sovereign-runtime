@@ -1,0 +1,33 @@
+name: UNIFUSION Go verification
+
+on:
+  push:
+    branches:
+      - governed-demand-v1
+      - evidence-provider-selection-20261025
+      - unifusion-system-reconciliation-20261024
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Existing formatting debt (non-blocking)
+        run: |
+          files="$(gofmt -l $(git ls-files '*.go'))"
+          if [ -n "$files" ]; then
+            printf 'Existing gofmt debt; does not block unit tests:\n%s\n' "$files"
+          fi
+      - name: Unit tests
+        run: go test ./...
+      - name: Vet
+        run: go vet ./...

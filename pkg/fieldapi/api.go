@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"emergion-sovereign-runtime/internal/adapters"
@@ -181,7 +183,9 @@ func (r *Runtime) GovernedCycle(
 ) ([]core.EmergION, core.EmergION, bool, error) {
 	circulated := []core.EmergION{}
 
+	started := time.Now()
 	saws, err := r.CirculateSAWs(ctx)
+	fmt.Fprintln(os.Stderr, "GOVERNED_CYCLE_TIMING", "operation=CirculateSAWs", "elapsed=", time.Since(started))
 	if err != nil {
 		return circulated, core.EmergION{}, false, err
 	}
@@ -196,10 +200,19 @@ func (r *Runtime) GovernedCycle(
 		".",
 	)
 	if err != nil {
-		return circulated, core.EmergION{}, false, err
-	}
-	if proposed {
+		// A bounded Gemma proposal timeout must not starve independently
+		// permitted safe work. Other failures still fail closed.
+		if ctx.Err() != nil || !strings.Contains(err.Error(), "Gemma timed out:") {
+			return circulated, core.EmergION{}, false, err
+		}
+		fmt.Fprintln(os.Stderr, "GEMMA_PROGRAM_PROPOSAL_DEFERRED:", err)
+	} else if proposed {
 		circulated = append(circulated, program)
+	}
+
+	beforeReview, err := r.state()
+	if err != nil {
+		return circulated, core.EmergION{}, false, err
 	}
 
 	reorder, proposedReorder, err := r.capturePendingRealizationReorder(ctx)
@@ -207,22 +220,17 @@ func (r *Runtime) GovernedCycle(
 		return circulated, core.EmergION{}, false, err
 	}
 	if proposedReorder {
-		circulated = append(circulated, reorder)
-		// A changed order is new governed evidence. Stop this cycle at AtGOV
-		// rather than executing either the prior or proposed strongest
-		// realization before HUMAN_FINAL/REG resolves the transition.
-		return circulated, core.EmergION{}, false, nil
-	}
-
-	selection, proposedSelection, err := r.capturePendingRealizationSelection(ctx)
-	if err != nil {
-		return circulated, core.EmergION{}, false, err
-	}
-	if proposedSelection {
-		circulated = append(circulated, selection)
-		// A discovered unique strongest realization is only a governed
-		// selection candidate. Stop at AtGOV until HUMAN_FINAL/REG resolves it.
-		return circulated, core.EmergION{}, false, nil
+		if _, pending := beforeReview.AtGOV[reorder.IDN]; !pending {
+			circulated = append(circulated, reorder)
+		}
+	} else {
+		selection, proposedSelection, err := r.capturePendingRealizationSelection(ctx)
+		if err != nil {
+			return circulated, core.EmergION{}, false, err
+		}
+		if _, pending := beforeReview.AtGOV[selection.IDN]; proposedSelection && !pending {
+			circulated = append(circulated, selection)
+		}
 	}
 
 	signal, executed, err := (fieldruntime.Runtime{
@@ -261,6 +269,10 @@ func (r *Runtime) Run(
 				circulated, signal, executed, err :=
 					r.GovernedCycle(cycleCtx, gemma)
 				if err != nil {
+					if cycleCtx.Err() == nil && strings.Contains(err.Error(), "Gemma timed out:") {
+						fmt.Fprintln(os.Stderr, "GEMMA_REASONING_DEFERRED:", err)
+						return nil
+					}
 					return err
 				}
 
@@ -287,12 +299,25 @@ func (r *Runtime) Run(
 						}
 					}
 					if returned.IDN != "" {
-						evidence, marshalErr := json.Marshal(map[string]any{
+
+						evidenceFields := map[string]any{
 							"source_kind":       "RETURNED_CONTINUATION",
 							"returned_emergion": returned.IDN,
 							"returned_state":    returned.STA,
 							"source_hash":       returned.MEM.SourceHash,
-						})
+						}
+						for _, key := range []string{
+							"transition_emergion",
+							"required_capability",
+							"capability_resolution",
+							"capability_provider_edge_proposal",
+						} {
+							if value := strings.TrimSpace(returned.REL[key]); value != "" {
+								evidenceFields[key] = value
+							}
+						}
+						evidence, marshalErr := json.Marshal(evidenceFields)
+
 						if marshalErr != nil {
 							return marshalErr
 						}
@@ -400,9 +425,24 @@ func (r *Runtime) CirculateSAWs(
 		Reasoner: r.reasoner,
 	}
 
+	events, err := r.store.Events()
+	if err != nil {
+		return nil, err
+	}
+	knownSourceHashes := make(map[string]struct{}, len(events))
+	for _, event := range events {
+		if event.EmergION != nil {
+			knownSourceHashes[event.EmergION.MEM.SourceHash] = struct{}{}
+		}
+	}
+
 	out := make([]core.EmergION, 0, len(sources))
 
 	for _, source := range sources {
+		if _, exists := knownSourceHashes[store.Hash(source.Content)]; exists {
+			continue
+		}
+
 		em, duplicate, err := runtime.CaptureBytes(
 			ctx,
 			source.ID,

@@ -16,7 +16,7 @@ func comparisonDiscoveryState() core.State {
 
 func addComparisonExecutionResult(
 	st *core.State,
-	id, parent, adapter, action string,
+	id, kin, adapter, action string,
 	succeeded bool,
 ) {
 	fact := "execution_failed"
@@ -26,7 +26,7 @@ func addComparisonExecutionResult(
 		STA: core.StateAccepted,
 		REL: map[string]string{
 			"source_kind": "EXECUTION_RESULT",
-			"parent_emergion": parent,
+			"kin_emergion": kin,
 			"adapter": adapter,
 			"action": action,
 		},

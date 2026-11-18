@@ -44,14 +44,14 @@ func captureAcceptedAutoReorderMember(
 func captureAcceptedAutoReorderResult(
 	t *testing.T,
 	r Runtime,
-	parent string,
+	kin string,
 	succeeded bool,
 ) {
 	t.Helper()
 	request := adapters.ExecutionRequest{
-		EmergIONID: parent,
-		SourceHash: parent + "-source",
-		AuthorizationID: "EV-Q-" + parent,
+		EmergIONID: kin,
+		SourceHash: kin + "-source",
+		AuthorizationID: "EV-Q-" + kin,
 		Authority: "HUMAN_FINAL",
 		Adapter: "LOCAL_GEMMA",
 		Action: "ANALYZE",

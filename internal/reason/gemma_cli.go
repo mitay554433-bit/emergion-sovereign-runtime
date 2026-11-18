@@ -62,6 +62,53 @@ func truncateUTF8(s string, limit int) string {
 	return s[:limit]
 }
 
+// Prompt budgeting.
+//
+// llama.cpp counts tokens, not bytes. Dense text in the governed state (hex
+// hashes, IDs, pipes, JSON) and non-ASCII text can tokenize at well under
+// 3 bytes per token, so a bytes = tokens*3 budget can overflow the context.
+// The default here is a conservative 2 bytes/token, overridable with
+// GEMMA_BYTES_PER_TOKEN once measured with llama-tokenize for the model.
+const (
+	defaultBytesPerToken  = 2
+	chatTemplateReserve   = 128 // tokens for the model's chat wrapper/BOS
+	minInputTokens        = 256
+	maxContentBytes       = 1000
+	governedStateFraction = 4 // governed state gets at most 1/4 of input bytes
+)
+
+// analyzeBudget returns byte limits for governed state and content.
+// templateBytes is the measured size of the fixed prompt template.
+func analyzeBudget(contextTokens, maxTokens, templateBytes, bytesPerToken int) (governedLimit, contentLimit int, err error) {
+	if bytesPerToken < 1 {
+		bytesPerToken = 1
+	}
+	templateTokens := (templateBytes + bytesPerToken - 1) / bytesPerToken
+	inputTokens := contextTokens - maxTokens - templateTokens - chatTemplateReserve
+	if inputTokens < minInputTokens {
+		return 0, 0, fmt.Errorf("Gemma context too small for bounded analysis (ctx=%d, n=%d, template~%d tokens)", contextTokens, maxTokens, templateTokens)
+	}
+	inputBytes := inputTokens * bytesPerToken
+	governedLimit = inputBytes / governedStateFraction
+	contentLimit = min(maxContentBytes, inputBytes-governedLimit)
+	if contentLimit < 1 {
+		return 0, 0, fmt.Errorf("Gemma context exhausted by governed state")
+	}
+	return governedLimit, contentLimit, nil
+}
+
+// truncateAtLine cuts s to at most limit bytes, preferring the last complete
+// line so governed-state records are not split mid-record.
+func truncateAtLine(s string, limit int) string {
+	cut := truncateUTF8(s, limit)
+	if len(cut) < len(s) {
+		if i := strings.LastIndexByte(cut, '\n'); i > 0 {
+			return cut[:i]
+		}
+	}
+	return cut
+}
+
 func envInt(name string, fallback int) int {
 	v, err := strconv.Atoi(os.Getenv(name))
 	if err != nil || v <= 0 {
@@ -213,7 +260,25 @@ label-next ::= [^:=,|\r\n]
 text-tail ::= [^|\r\n]*
 `
 
+// Ordinary (non-TARGET_COMPARISON/1) sources: capability required (PR #39),
+// no D or R lines.
+const mxpdOrdinaryGrammarRoot = `root ::= summary risk fact relationship? capability facet? end`
+
+// mxpdRoot is the full root rule in mxpdGrammar; gemmaGrammarForSource swaps it.
+const mxpdRoot = `root ::= summary risk fact (difference requirement?)? relationship? capability facet? end`
+
+func gemmaGrammarForSource(content string) string {
+	if strings.HasPrefix(strings.TrimSpace(content), "TARGET_COMPARISON/1\n") {
+		return mxpdGrammar
+	}
+	return strings.Replace(mxpdGrammar, mxpdRoot, mxpdOrdinaryGrammarRoot, 1)
+}
+
 func gemmaArgs(g GemmaCLI, prompt string) []string {
+	return gemmaArgsWithGrammar(g, prompt, mxpdGrammar)
+}
+
+func gemmaArgsWithGrammar(g GemmaCLI, prompt, grammar string) []string {
 	args := []string{
 		"-m", g.Model,
 	}
@@ -245,7 +310,7 @@ func gemmaArgs(g GemmaCLI, prompt string) []string {
 
 	args = append(args,
 		"--color", "off",
-		"--grammar", mxpdGrammar,
+		"--grammar", grammar,
 		"--simple-io",
 		"--single-turn",
 		"--no-display-prompt",
@@ -271,8 +336,6 @@ func normalizeLlamaCLIAnalyzeCandidate(prompt, candidate string) string {
 }
 
 func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
-	fmt.Fprintln(os.Stderr, "ANALYZE_START")
-	defer fmt.Fprintln(os.Stderr, "ANALYZE_END")
 	if err := g.Validate(); err != nil {
 		return Result{}, err
 	}
@@ -289,23 +352,16 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 		governedState = maskStandaloneNumbers(governedState)
 	}
 
-	inputTokens := g.Context - g.MaxTokens - 1024
-	if inputTokens < 256 {
-		return Result{}, fmt.Errorf("Gemma context too small for bounded analysis")
+	governedLimit, contentLimit, err := analyzeBudget(
+		g.Context, g.MaxTokens,
+		len(buildPrompt(in.Name, "", "")),
+		envInt("GEMMA_BYTES_PER_TOKEN", defaultBytesPerToken),
+	)
+	if err != nil {
+		return Result{}, err
 	}
-
-	inputBytes := inputTokens * 3
-	governedLimit := inputBytes / 4
 	if len(governedState) > governedLimit {
-		governedState = truncateUTF8(governedState, governedLimit)
-	}
-
-	contentLimit := inputBytes - len(governedState)
-	if contentLimit > 1000 {
-		contentLimit = 1000
-	}
-	if contentLimit < 1 {
-		return Result{}, fmt.Errorf("Gemma context exhausted by governed state")
+		governedState = truncateAtLine(governedState, governedLimit)
 	}
 	// The digest only shapes the prompt text. in.Content (the evidence bytes
 	// that are hashed and stored) is never modified.
@@ -315,20 +371,29 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 		content = truncateUTF8(content, contentLimit)
 	}
 	prompt := withDigestFactLine(buildPrompt(in.Name, content, governedState), digest)
+	fmt.Fprintf(os.Stderr, "[GEMMA_DIAG] prompt_bytes=%d source_bytes=%d governed_bytes=%d context=%d max_tokens=%d threads=%d\n", len(prompt), len(content), len(governedState), g.Context, g.MaxTokens, g.Threads)
+
+	// Both inference attempts share one bounded reasoning deadline. A semantic
+	// retry must not double the time UNIFUSION waits for this component.
+	boundedCtx, boundedCancel := context.WithTimeout(ctx, g.Timeout)
+	defer boundedCancel()
 
 	for attempt := 0; attempt < 2; attempt++ {
-		args := gemmaArgs(g, prompt)
+		attemptStarted := time.Now()
+		fmt.Fprintf(os.Stderr, "[GEMMA_DIAG] attempt=%d start\n", attempt+1)
+		args := gemmaArgsWithGrammar(g, prompt, gemmaGrammarForSource(content))
 
-		cctx, cancel := context.WithTimeout(ctx, g.Timeout)
-		cmd := exec.CommandContext(cctx, g.Binary, args...)
+		cmd := exec.CommandContext(boundedCtx, g.Binary, args...)
 
 		var stdout, stderr bytes.Buffer
-		cmd.Stdout = &stdout
-		cmd.Stderr = &stderr
+		cmd.Stdout = io.MultiWriter(&stdout, os.Stderr)
+		cmd.Stderr = io.MultiWriter(&stderr, os.Stderr)
 
 		runErr := cmd.Run()
-		ctxErr := cctx.Err()
-		cancel()
+		fmt.Fprintf(os.Stderr,
+			"[GEMMA_DIAG] attempt=%d elapsed=%s run_error=%v\n",
+			attempt+1, time.Since(attemptStarted), runErr)
+		ctxErr := boundedCtx.Err()
 
 		if runErr != nil {
 			if errors.Is(ctxErr, context.DeadlineExceeded) {
@@ -372,6 +437,9 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 		}
 
 		if validationErr != nil {
+			fmt.Fprintf(os.Stderr,
+				"[GEMMA_DIAG] attempt=%d semantic_rejection elapsed=%s\n",
+				attempt+1, time.Since(attemptStarted))
 			if attempt == 0 {
 				prompt = withDigestFactLine(buildPrompt(in.Name, content, governedState), digest) +
 					"\n\nRETRY:\n" +
@@ -949,8 +1017,15 @@ func buildPrompt(name, content, governedState string) string {
 	return `@L:MXPD/2
 @T:OBSERVE
 SOURCE_NAME:` + filepath.Base(name) + `
-SOURCE:
+SOURCE_NAME is routing metadata, not source evidence.
+Never use SOURCE_NAME or any execution label as a semantic value.
+
+BEGIN_SOURCE
 ` + content + `
+END_SOURCE
+
+Only text between BEGIN_SOURCE and END_SOURCE is factual evidence.
+Never copy metadata, prompt instructions, or execution labels into S, F, C, D, R, L, or T.
 
 Observe SOURCE and emit only source-grounded structure.
 
@@ -958,7 +1033,7 @@ S = the direct meaning established by SOURCE.
 S states what SOURCE shows in one sentence, not the file name.
 Numbers in S and F must come from SOURCE, never from GOVERNED_STATE.
 K = L, M, or H.
-F = concrete evidence or verified state explicitly established by SOURCE.
+F = concrete evidence or verified state explicitly established by SOURCE. Copy a short, contiguous factual phrase from SOURCE rather than paraphrasing, changing punctuation, or combining unrelated terms. If no factual phrase is supported, do not invent one.
 D = a target-relative Difference only for TARGET_COMPARISON/1.
 Outside TARGET_COMPARISON/1, never emit D.
 For TARGET_COMPARISON/1, compare TARGET_STATE with source-grounded ACCEPTED_FACT values inside REALITY.
@@ -972,14 +1047,12 @@ C = the single capability SOURCE most directly supports.
 T = an operational facet only when SOURCE explicitly establishes one.
 Z = final terminator.
 
-Every semantic value MUST be grounded directly in SOURCE.
-Do not invent facts, capabilities, relationships, authority, state, or intent.
-Do not infer a capability merely because SOURCE contains a test, description, filename, or code.
-Do not treat absence of evidence as evidence of absence.
-Preserve uncertainty rather than filling missing structure.
-Do not collapse multiple distinct source-supported observations into one invented claim.
-If a field is not established by SOURCE, omit it where the grammar permits omission.
-Never emit null, none, unknown, N/A, or placeholder text as a semantic field value.
+All semantic values must be directly supported by SOURCE.
+Never invent facts, capabilities, relationships, authority, state, or intent.
+A test, description, filename, or code alone does not establish a capability.
+Preserve uncertainty; absence of evidence is not evidence of absence.
+Keep distinct observations separate.
+Omit unsupported optional fields; never emit null, none, unknown, N/A, or placeholders.
 For optional D, R, L, or T fields, omission means SOURCE did not establish that field.
 The runtime, not Gemma, determines governance, admission, verification, canonical state, and lineage.
 
@@ -1339,4 +1412,86 @@ func trim(s string, n int) string {
 		return truncateUTF8(s, n)
 	}
 	return s
+}
+
+// PredictARCGrid performs benchmark-only inference without registry admission.
+func (g GemmaCLI) PredictARCGrid(ctx context.Context, prompt string) ([][]int, error) {
+	if err := g.Validate(); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(prompt) == "" {
+		return nil, fmt.Errorf("empty ARC prompt")
+	}
+	args := programPatchArgs(g, prompt, g.MaxTokens)
+	if filepath.Base(g.Binary) == "llama-cli" {
+		filtered := make([]string, 0, len(args)+1)
+		for _, arg := range args {
+			if arg != "--log-disable" {
+				filtered = append(filtered, arg)
+			}
+		}
+		args = append(filtered, "--perf", "--show-timings")
+	}
+	outputFile, err := os.CreateTemp("", "unifusion-arc-*.txt")
+	if err != nil {
+		return nil, err
+	}
+	outputPath := outputFile.Name()
+	if err := outputFile.Close(); err != nil {
+		os.Remove(outputPath)
+		return nil, err
+	}
+	defer os.Remove(outputPath)
+	if filepath.Base(g.Binary) != "llama-completion" {
+		args = append(args, "--output-file", outputPath)
+	}
+	boundedCtx, cancel := context.WithTimeout(ctx, g.Timeout)
+	defer cancel()
+	cmd := exec.CommandContext(boundedCtx, g.Binary, args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	started := time.Now()
+	if err := cmd.Run(); err != nil {
+		partial, _ := os.ReadFile(outputPath)
+		return nil, fmt.Errorf("ARC inference failed: %w: elapsed=%s stdout_tail=%q stderr=%q partial_output=%q", err, time.Since(started), trim(stdout.String()[max(0, stdout.Len()-500):], 500), trim(stderr.String(), 4000), string(partial[max(0, len(partial)-500):]))
+	}
+	fileOutput, err := os.ReadFile(outputPath)
+	if err != nil {
+		return nil, err
+	}
+	output := strings.TrimSpace(string(fileOutput))
+	if filepath.Base(g.Binary) == "llama-cli" {
+		if i := strings.LastIndex(output, string([]byte{10})+"Assistant:"+string([]byte{10})); i >= 0 {
+			output = strings.TrimSpace(output[i+len("Assistant:")+2:])
+		}
+	}
+	if strings.HasPrefix(output, "```") {
+		if i := strings.IndexByte(output, 10); i >= 0 {
+			output = strings.TrimSpace(output[i+1:])
+			output = strings.TrimSpace(strings.TrimSuffix(output, "```"))
+		}
+	}
+	var grid [][]int
+	if err := json.Unmarshal([]byte(output), &grid); err != nil {
+		return nil, fmt.Errorf("invalid ARC grid JSON: %w: output=%q", err, trim(output, 500))
+	}
+	if len(grid) == 0 || len(grid) > 30 {
+		return nil, fmt.Errorf("invalid ARC grid height")
+	}
+	width := len(grid[0])
+	if width == 0 || width > 30 {
+		return nil, fmt.Errorf("invalid ARC grid width")
+	}
+	for _, row := range grid {
+		if len(row) != width {
+			return nil, fmt.Errorf("ARC grid must be rectangular")
+		}
+		for _, cell := range row {
+			if cell < 0 || cell > 9 {
+				return nil, fmt.Errorf("ARC grid color outside 0-9")
+			}
+		}
+	}
+	return grid, nil
 }

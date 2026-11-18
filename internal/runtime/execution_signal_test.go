@@ -31,7 +31,7 @@ func TestExecutionResultReentersEmergIONPipeline(t *testing.T) {
 	}
 
 	request := adapters.ExecutionRequest{
-		EmergIONID:      "E-PARENT",
+		EmergIONID:      "E-KIN",
 		AuthorizationID: "EV-Q-PROOF",
 		Adapter:         "EMAIL",
 		Action:          "SEND",
@@ -89,9 +89,9 @@ func TestExecutionResultReentersEmergIONPipeline(t *testing.T) {
 		)
 	}
 
-	if got.REL["kin_emergion"] != "E-PARENT" {
+	if got.REL["kin_emergion"] != "E-KIN" {
 		t.Fatalf(
-			"parent = %q",
+			"kin lineage = %q",
 			got.REL["kin_emergion"],
 		)
 	}
@@ -117,7 +117,7 @@ func TestFailedExecutionAlsoBecomesSignal(t *testing.T) {
 	}
 
 	request := adapters.ExecutionRequest{
-		EmergIONID: "E-PARENT",
+		EmergIONID: "E-KIN",
 		Adapter:    "EMAIL",
 		Action:     "SEND",
 		Authority:  "SEND_GATED",
@@ -177,7 +177,7 @@ func TestExecutionResultMustMatchRequest(t *testing.T) {
 	_, _, err = r.CaptureExecutionResult(
 		context.Background(),
 		adapters.ExecutionRequest{
-			EmergIONID: "E-PARENT",
+			EmergIONID: "E-KIN",
 			Adapter:    "EMAIL",
 			Action:     "SEND",
 		},
@@ -195,7 +195,7 @@ func TestExecutionResultMustMatchRequest(t *testing.T) {
 
 func TestExecutionTransitionPreRunSerializationIsDeterministic(t *testing.T) {
 	request := adapters.ExecutionRequest{
-		EmergIONID:           "E-PARENT",
+		EmergIONID:           "E-KIN",
 		SourceHash:           "SOURCE-HASH-PROOF",
 		AuthorizationID:      "EV-Q-PROOF",
 		TransitionEmergIONID: "E-TRANSITION-PROOF",
@@ -218,7 +218,7 @@ func TestExecutionTransitionPreRunSerializationIsDeterministic(t *testing.T) {
 	want := "" +
 		"S=4:XS/1\n" +
 		"K=2:XT\n" +
-		"P=8:E-PARENT\n" +
+		"P=5:E-KIN\n" +
 		"H=17:SOURCE-HASH-PROOF\n" +
 		"Q=10:EV-Q-PROOF\n" +
 		"A=11:HUMAN_FINAL\n" +
@@ -236,7 +236,7 @@ func TestExecutionTransitionPreRunSerializationIsDeterministic(t *testing.T) {
 
 func TestExecutionTransitionIdentityDerivesDeterministicallyFromCanonicalBytes(t *testing.T) {
 	request := adapters.ExecutionRequest{
-		EmergIONID:      "E-PARENT",
+		EmergIONID:      "E-KIN",
 		SourceHash:      "SOURCE-HASH-PROOF",
 		AuthorizationID: "EV-Q-PROOF",
 		Authority:       "HUMAN_FINAL",
@@ -276,7 +276,7 @@ func TestExecutionRecapturePreservesTravellingEmergIONIdentity(t *testing.T) {
 	}
 
 	request := adapters.ExecutionRequest{
-		EmergIONID:      "E-PARENT",
+		EmergIONID:      "E-KIN",
 		SourceHash:      "SOURCE-HASH-PROOF",
 		AuthorizationID: "EV-Q-PROOF",
 		Authority:       "HUMAN_FINAL",
@@ -325,7 +325,7 @@ func TestExecutionRecapturePreservesTravellingEmergIONThroughCOSLRebuild(t *test
 	}
 
 	request := adapters.ExecutionRequest{
-		EmergIONID:      "E-PARENT",
+		EmergIONID:      "E-KIN",
 		SourceHash:      "SOURCE-HASH-PROOF",
 		AuthorizationID: "EV-Q-PROOF",
 		Authority:       "HUMAN_FINAL",
@@ -392,7 +392,7 @@ func TestExecutionRoverAppearsInAtGOVFieldLifecycleProjection(t *testing.T) {
 	}
 
 	request := adapters.ExecutionRequest{
-		EmergIONID:      "E-PARENT",
+		EmergIONID:      "E-KIN",
 		SourceHash:      "SOURCE-HASH-PROOF",
 		AuthorizationID: "EV-Q-PROOF",
 		Authority:       "HUMAN_FINAL",
@@ -487,7 +487,7 @@ func TestAcceptedExecutionSignalPreservesTravellingEmergIONIdentity(t *testing.T
 	}
 
 	request := adapters.ExecutionRequest{
-		EmergIONID:      "E-PARENT",
+		EmergIONID:      "E-KIN",
 		SourceHash:      "SOURCE-HASH-PROOF",
 		AuthorizationID: "EV-Q-PROOF",
 		Authority:       "HUMAN_FINAL",
@@ -589,7 +589,7 @@ func TestExecutionCoverageFailureDerivesOnlyRecognizedRequiredCapability(t *test
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			request := adapters.ExecutionRequest{
-				EmergIONID:      "E-PARENT",
+				EmergIONID:      "E-KIN",
 				SourceHash:      "SOURCE-HASH-PROOF",
 				AuthorizationID: "EV-Q-PROOF",
 				Authority:       "HUMAN_FINAL",
@@ -726,7 +726,7 @@ func TestExecutionCoverageFailureResolvesThroughAcceptedCapabilityProviders(t *t
 	}
 
 	request := adapters.ExecutionRequest{
-		EmergIONID:      "E-PARENT",
+		EmergIONID:      "E-KIN",
 		SourceHash:      "SOURCE-HASH-PROOF",
 		AuthorizationID: "EV-Q-PROOF",
 		Authority:       "HUMAN_FINAL",
@@ -873,7 +873,7 @@ func TestExecutionCoverageFailureProducesCapabilityProviderEdgeProposal(t *testi
 	}
 
 	request := adapters.ExecutionRequest{
-		EmergIONID:      "E-PARENT",
+		EmergIONID:      "E-KIN",
 		SourceHash:      "SOURCE-HASH-PROOF",
 		AuthorizationID: "EV-Q-PROOF",
 		Authority:       "HUMAN_FINAL",
@@ -1291,6 +1291,22 @@ func TestGovernedRecursiveEmergenceTinyLoop(t *testing.T) {
 		)
 	}
 
+	// Wave n+1 is derived from governed Wave n evidence, but must not
+	// become executable merely because its source was captured.
+	beforeSAWDecision, err := livefield.Rebuild(mustEvents(t, s))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := beforeSAWDecision.AtGOV[sawEmergION.IDN]; !ok {
+		t.Fatal("derived wave n+1 source missing from HUMAN_FINAL queue")
+	}
+	if _, ok := beforeSAWDecision.Accepted[sawEmergION.IDN]; ok {
+		t.Fatal("derived wave n+1 source bypassed HUMAN_FINAL/REG")
+	}
+	if _, err := adapters.PrepareExecution(beforeSAWDecision, sawEmergION.IDN, "LOCAL_GEMMA", "ANALYZE", true); err == nil {
+		t.Fatal("derived wave n+1 became executable before HUMAN_FINAL/REG")
+	}
+
 	approvedSAW, sawDecision, err := gov.Decide(
 		sawEmergION,
 		gov.Approve,
@@ -1388,7 +1404,7 @@ func TestGovernedRecursiveEmergenceTinyLoop(t *testing.T) {
 
 	if signal.REL["kin_emergion"] != acceptedSAW.IDN {
 		t.Fatalf(
-			"execution parent = %q want %q",
+			"execution kin lineage = %q want %q",
 			signal.REL["kin_emergion"],
 			acceptedSAW.IDN,
 		)
@@ -1608,5 +1624,75 @@ func TestHistoricalExecutionSignalV1MaterializesVerifiedDeliverable(t *testing.T
 	}
 	if got.FieldTip == "" {
 		t.Fatal("deliverable missing FIELD tip")
+	}
+}
+
+// Pre-kin evidence wrote the kin lineage under the legacy "parent_emergion"
+// key. Those bytes are hash-addressed in COSL and must keep decoding and
+// verifying unchanged; the runtime reads them as kin lineage.
+func TestPreKinLegacyKeyEvidenceStillVerifiesAsKinLineage(t *testing.T) {
+	s, err := store.Open(filepath.Join(t.TempDir(), "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const kinID = "E-LEGACY-KIN"
+	evidence := []byte(`{"schema":"EXECUTION_SIGNAL_V1","source_kind":"EXECUTION_RESULT","parent_emergion":"E-LEGACY-KIN","source_hash":"SOURCE-LEGACY-PROOF","authority":"CAP_ONLY","adapter":"LOCAL_GEMMA","action":"ANALYZE","succeeded":true,"output":"legacy output"}`)
+
+	rt := Runtime{Store: s}
+	signalRuntime := rt
+	signalRuntime.Reasoner = fixedReasoner{
+		name:    "execution-signal",
+		version: "v1",
+		result: reason.Result{
+			Summary: "legacy execution result observation",
+			Relationships: map[string]string{
+				"source_kind":     "EXECUTION_RESULT",
+				"parent_emergion": kinID,
+				"adapter":         "LOCAL_GEMMA",
+				"action":          "ANALYZE",
+			},
+			Capabilities: []string{"OBS", "CMP"},
+			Facts:        []string{"execution_result_observed", "execution_succeeded"},
+			Risk:         "L",
+		},
+	}
+	signal, _, err := signalRuntime.captureBytes(context.Background(), "execution-result", evidence, "execution_signal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	approved, decision, err := gov.Decide(signal, gov.Approve, "HUMAN_FINAL", "accept legacy proof")
+	if err != nil {
+		t.Fatal(err)
+	}
+	decisionID, err := s.SaveDecision(decision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted, receipt, err := reg.Accept(approved, decisionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveAccepted(receipt); err != nil {
+		t.Fatal(err)
+	}
+
+	// Evidence bytes and hash are untouched; COSL chain still verifies.
+	stored, err := s.ReadEvidence(accepted.MEM.SourceHash)
+	if err != nil || string(stored) != string(evidence) || store.Hash(evidence) != accepted.MEM.SourceHash {
+		t.Fatalf("legacy evidence bytes/hash changed: %v", err)
+	}
+	if _, err := s.Events(); err != nil {
+		t.Fatalf("COSL chain no longer verifies: %v", err)
+	}
+	if _, err := s.VerifyEvidence(); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := rt.MaterializeAcceptedExecutionResult(accepted.IDN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.SourceEmergIONID != kinID || got.Output != "legacy output" {
+		t.Fatalf("legacy record lost kin lineage: %+v", got)
 	}
 }

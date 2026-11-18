@@ -573,9 +573,9 @@ func TestGovernedCycleCirculatesAndExecutesExistingSafeWork(t *testing.T) {
 		Binary:    binary,
 		Model:     model,
 		Threads:   4,
-		Context:   2048,
-		MaxTokens: 80,
-		Timeout:   180 * time.Second,
+		Context:   4096,
+		MaxTokens: 1024,
+		Timeout:   600 * time.Second,
 		ExtraArgs: []string{"--seed", "1"},
 	}
 
@@ -702,10 +702,10 @@ func TestGovernedCycleCirculatesAndExecutesExistingSafeWork(t *testing.T) {
 		t.Fatal("T_n+1 execution signal did not pass RECOIL/WVC")
 	}
 
-	if signalNext.REL["parent_emergion"] != circulatedID {
+	if signalNext.REL["kin_emergion"] != circulatedID {
 		t.Fatalf(
-			"T_n+1 execution parent = %q want governed T_n SAW %q",
-			signalNext.REL["parent_emergion"],
+			"T_n+1 execution kin lineage = %q want governed T_n SAW %q",
+			signalNext.REL["kin_emergion"],
 			circulatedID,
 		)
 	}
@@ -828,9 +828,9 @@ func TestRunDrivesSuccessiveGovernedCyclesWithoutManualInvocation(t *testing.T) 
 		Binary:    binary,
 		Model:     model,
 		Threads:   4,
-		Context:   2048,
-		MaxTokens: 80,
-		Timeout:   180 * time.Second,
+		Context:   4096,
+		MaxTokens: 1024,
+		Timeout:   600 * time.Second,
 		ExtraArgs: []string{"--seed", "1"},
 	}
 
@@ -845,6 +845,7 @@ func TestRunDrivesSuccessiveGovernedCyclesWithoutManualInvocation(t *testing.T) 
 
 	cycles := make(chan cycleObservation, 4)
 	runErr := make(chan error, 1)
+	started := time.Now()
 
 	go func() {
 		runErr <- rt.Run(
@@ -858,6 +859,7 @@ func TestRunDrivesSuccessiveGovernedCyclesWithoutManualInvocation(t *testing.T) 
 				signal core.EmergION,
 				executed bool,
 			) {
+				t.Logf("unattended cycle elapsed=%s circulated=%d executed=%t signal=%s", time.Since(started), len(circulated), executed, signal.IDN)
 				cycles <- cycleObservation{
 					circulated: circulated,
 					signal:     signal,
@@ -916,10 +918,10 @@ func TestRunDrivesSuccessiveGovernedCyclesWithoutManualInvocation(t *testing.T) 
 		t.Fatal("first unattended execution signal bypassed RECOIL/WVC")
 	}
 
-	if firstSignal.REL["parent_emergion"] != safeWork.IDN {
+	if firstSignal.REL["kin_emergion"] != safeWork.IDN {
 		t.Fatalf(
-			"first unattended execution parent = %q want %q",
-			firstSignal.REL["parent_emergion"],
+			"first unattended execution kin lineage = %q want %q",
+			firstSignal.REL["kin_emergion"],
 			safeWork.IDN,
 		)
 	}
@@ -965,8 +967,8 @@ func TestRunContinuesHumanFinalReturnedBeforeIdleProjection(t *testing.T) {
 	gemma := reason.GemmaCLI{
 		Binary:    fake,
 		Model:     model,
-		Context:   2048,
-		MaxTokens: 80,
+		Context:   4096,
+		MaxTokens: 1024,
 		Threads:   1,
 		Timeout:   5 * time.Second,
 	}
@@ -984,7 +986,11 @@ func TestRunContinuesHumanFinalReturnedBeforeIdleProjection(t *testing.T) {
 			Summary:    "governed source requiring HUMAN_FINAL rework",
 		},
 		REL: map[string]string{
-			"source_kind": "SOURCE",
+			"source_kind":                       "SOURCE",
+			"transition_emergion":               "E-TEST-TRANSITION",
+			"required_capability":               "DERIVE_CAPABILITY",
+			"capability_resolution":             "UNRESOLVED",
+			"capability_provider_edge_proposal": "TEST_PROVIDER_EDGE",
 		},
 		CAP: []string{"OBS", "CMP"},
 		VAL: core.Validation{
@@ -1068,6 +1074,25 @@ func TestRunContinuesHumanFinalReturnedBeforeIdleProjection(t *testing.T) {
 	if continuation.IDN == "" {
 		t.Fatal("Run did not derive governed continuation from HUMAN_FINAL RETURNED source")
 	}
+        evidence, err := rt.store.ReadEvidence(continuation.MEM.SourceHash)
+        if err != nil {
+                t.Fatal(err)
+        }
+        var fields map[string]any
+        if err := json.Unmarshal(evidence, &fields); err != nil {
+                t.Fatal(err)
+        }
+        for key, want := range map[string]string{
+                "transition_emergion": "E-TEST-TRANSITION",
+                "required_capability": "DERIVE_CAPABILITY",
+                "capability_resolution": "UNRESOLVED",
+                "capability_provider_edge_proposal": "TEST_PROVIDER_EDGE",
+        } {
+                if got := fields[key]; got != want {
+                        t.Fatalf("continuation evidence %s = %v; want %q", key, got, want)
+                }
+        }
+
 	if continuation.STA != core.StateAtGOV {
 		t.Fatalf("continuation state = %q want %q", continuation.STA, core.StateAtGOV)
 	}
@@ -1203,8 +1228,8 @@ func TestGovernedCycleCirculatesSAWBeforeProgramProposalFailure(t *testing.T) {
 		reason.GemmaCLI{
 			Binary:    fake,
 			Model:     model,
-			Context:   2048,
-			MaxTokens: 80,
+			Context:   4096,
+			MaxTokens: 1024,
 			Threads:   1,
 			Timeout:   5 * time.Second,
 		},
@@ -1262,8 +1287,8 @@ func TestRunRecomparesPersistentTargetWhenAcceptedRealityChanges(t *testing.T) {
 	gemma := reason.GemmaCLI{
 		Binary:    fake,
 		Model:     model,
-		Context:   2048,
-		MaxTokens: 80,
+		Context:   4096,
+		MaxTokens: 1024,
 		Threads:   1,
 		Timeout:   5 * time.Second,
 	}
@@ -1626,7 +1651,7 @@ func TestHumanFinalApprovalRenderCurrentPublishesVerifiedDeliverable(t *testing.
 }
 
 
-func TestGovernedCycleReorderBoundaryStopsAtHumanFinal(t *testing.T) {
+func TestGovernedCyclePendingReorderAllowsIndependentSafeWork(t *testing.T) {
 	root := t.TempDir()
 	rt, err := Open(filepath.Join(root, "state"), sawCirculationReasoner{})
 	if err != nil { t.Fatal(err) }
@@ -1680,11 +1705,11 @@ func TestGovernedCycleReorderBoundaryStopsAtHumanFinal(t *testing.T) {
 	if duplicate { t.Fatal("selection unexpectedly duplicate") }
 	accept(selection, "accept initial realization selection")
 
-	captureResult := func(parent string, succeeded bool) {
+	captureResult := func(kin string, succeeded bool) {
 		request := adapters.ExecutionRequest{
-			EmergIONID: parent,
-			SourceHash: parent + "-source",
-			AuthorizationID: "EV-Q-" + parent,
+			EmergIONID: kin,
+			SourceHash: kin + "-source",
+			AuthorizationID: "EV-Q-" + kin,
 			Authority: "HUMAN_FINAL",
 			Adapter: "LOCAL_GEMMA",
 			Action: "ANALYZE",
@@ -1710,7 +1735,7 @@ func TestGovernedCycleReorderBoundaryStopsAtHumanFinal(t *testing.T) {
 
 	reorder, pending, err := rt.capturePendingRealizationReorder(context.Background())
 	if err != nil { t.Fatal(err) }
-	if !pending { t.Fatal("changed order did not stop cycle for HUMAN_FINAL") }
+	if !pending { t.Fatal("changed order was not submitted for HUMAN_FINAL") }
 	if reorder.STA != core.StateAtGOV {
 		t.Fatalf("reorder state = %q want AtGOV", reorder.STA)
 	}
@@ -1721,12 +1746,45 @@ func TestGovernedCycleReorderBoundaryStopsAtHumanFinal(t *testing.T) {
 		t.Fatalf("selected = %q want %q", reorder.REL["selected_realization"], b.IDN)
 	}
 
-	// Re-check before HUMAN_FINAL. The same pending evidence must continue to
-	// stop the cycle rather than allowing execution to fall through.
+	// Re-check before HUMAN_FINAL to confirm the same proposal stays pending.
 	same, pending, err := rt.capturePendingRealizationReorder(context.Background())
 	if err != nil { t.Fatal(err) }
 	if !pending || same.IDN != reorder.IDN {
-		t.Fatal("pending reorder did not remain a cycle stop condition")
+		t.Fatal("pending reorder was not reused")
+	}
+
+	work := member("E-INDEPENDENT-SAFE-WORK")
+	work.REL = nil
+	work.EVO.Metadata = &core.Metadata{
+		CapturedAt:   time.Now().UTC(),
+		PromptSchema: "MXPD/2",
+		Facets:       []core.Facet{core.FacetAnalyticsForecast},
+	}
+	accept(work, "accept independent safe work")
+
+	binary := filepath.Join(root, "llama-cli")
+	model := filepath.Join(root, "fake.gguf")
+	if err := os.WriteFile(model, []byte("test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	script := "#!/bin/sh\nprintf 'S|E-INDEPENDENT-SAFE-WORK evidence\\nK|L\\nF|E-INDEPENDENT-SAFE-WORK evidence\\nZ\\n'\n"
+	if err := os.WriteFile(binary, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	circulated, signal, executed, err := rt.GovernedCycle(context.Background(), reason.GemmaCLI{
+		Binary: binary, Model: model, Threads: 1,
+		Context: 2048, MaxTokens: 64, Timeout: 5 * time.Second,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !executed || signal.REL["kin_emergion"] != work.IDN {
+		t.Fatalf("independent work did not execute: executed=%t kin=%q", executed, signal.REL["kin_emergion"])
+	}
+	for _, em := range circulated {
+		if em.IDN == reorder.IDN {
+			t.Fatal("existing pending reorder was reported as new work")
+		}
 	}
 
 	state, err := rt.state()
@@ -1825,3 +1883,211 @@ func TestGovernedCycleDiscoveredSelectionStopsAtHumanFinal(t *testing.T) {
 		t.Fatal("selection boundary manufactured action authorization")
 	}
 }
+
+func TestRunExecutesTwoDistinctSafeWorksAcrossProductiveGovernedCycles(t *testing.T) {
+	root := t.TempDir()
+	binary := os.Getenv("GEMMA_BIN")
+	model := os.Getenv("GEMMA_MODEL")
+	if binary == "" || model == "" {
+		t.Skip("set GEMMA_BIN and GEMMA_MODEL for unattended Run integration test")
+	}
+
+	s, err := store.Open(filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rt := &Runtime{
+		store:    s,
+		reasoner: sawCirculationReasoner{},
+	}
+
+	accept := func(em core.EmergION, reasonText string, evidence []byte) {
+		t.Helper()
+
+		em.STA = core.StateAtGOV
+		em.VAL.Recoil = true
+		em.VAL.WVC = true
+
+		if em.EVO.Version == 0 {
+			em.EVO.Version = 1
+		}
+		if em.EVO.Metadata == nil {
+			em.EVO.Metadata = &core.Metadata{
+				CapturedAt:   time.Now().UTC(),
+				AIIntegrated: false,
+				PromptSchema: "MXPD/2",
+			}
+		}
+
+		if len(evidence) == 0 {
+
+			evidence = []byte(em.IDN)
+
+		}
+		preserved, err := s.Preserve(evidence)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		em.MEM.SourceHash = preserved.Hash
+		em.MEM.Codec = preserved.Codec
+		em.MEM.Bytes = preserved.Bytes
+		em.MEM.Stored = preserved.Stored
+
+		if _, err := s.SaveCandidate(em); err != nil {
+			t.Fatal(err)
+		}
+
+		approved, decision, err := gov.Decide(
+			em,
+			gov.Approve,
+			"HUMAN_FINAL",
+			reasonText,
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		decisionID, err := s.SaveDecision(decision)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, receipt, err := reg.Accept(approved, decisionID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := s.SaveAccepted(receipt); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	safeWork := core.EmergION{
+		IDN: "E-RUN-AUTONOMY-SAFE-WORK",
+		CAP: []string{"ANALYZE"},
+		EVO: core.Evolution{
+			Version: 1,
+			Metadata: &core.Metadata{
+				CapturedAt:   time.Now().UTC(),
+				AIIntegrated: false,
+				PromptSchema: "MXPD/2",
+				Facets: []core.Facet{
+					core.FacetAnalyticsForecast,
+				},
+			},
+		},
+	}
+
+	accept(safeWork, "accept unattended run safe work", []byte("This preserved source is an analytics forecast workload for analysis."))
+
+	secondWork := safeWork
+	secondWork.IDN = "E-RUN-AUTONOMY-SAFE-WORK-SECOND"
+	accept(secondWork, "accept second unattended safe work", []byte("Second independent preserved analytics forecast workload."))
+
+	gemma := reason.GemmaCLI{
+		Binary:    binary,
+		Model:     model,
+		Threads:   4,
+		Context:   4096,
+		MaxTokens: 1024,
+		Timeout:   600 * time.Second,
+		ExtraArgs: []string{"--seed", "1"},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	type cycleObservation struct {
+		circulated []core.EmergION
+		signal     core.EmergION
+		executed   bool
+	}
+
+	cycles := make(chan cycleObservation, 4)
+	runErr := make(chan error, 1)
+	started := time.Now()
+
+	go func() {
+		runErr <- rt.Run(
+			ctx,
+			filepath.Join(root, "dropzone"),
+			10*time.Millisecond,
+			gemma,
+			nil,
+			func(
+				circulated []core.EmergION,
+				signal core.EmergION,
+				executed bool,
+			) {
+				t.Logf("unattended cycle elapsed=%s circulated=%d executed=%t signal=%s", time.Since(started), len(circulated), executed, signal.IDN)
+				cycles <- cycleObservation{
+					circulated: circulated,
+					signal:     signal,
+					executed:   executed,
+				}
+			},
+		)
+	}()
+
+	var productive []cycleObservation
+	timeout := time.NewTimer(600 * time.Second)
+	defer timeout.Stop()
+	for len(productive) < 2 {
+		select {
+		case cycle := <-cycles:
+			if cycle.executed {
+				productive = append(productive, cycle)
+			}
+		case err := <-runErr:
+			t.Fatalf("Run exited before two productive cycles: %v", err)
+		case <-timeout.C:
+			t.Fatal("Run did not execute two distinct safe works in unattended cycles")
+		}
+	}
+
+	cancel()
+
+	select {
+	case err := <-runErr:
+		if err != nil && err != context.Canceled {
+			t.Fatalf("Run cancellation error = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run did not stop after context cancellation")
+	}
+
+	kinLineages := map[string]bool{}
+	for _, cycle := range productive {
+		signal := cycle.signal
+		if signal.IDN == "" || signal.STA != core.StateAtGOV {
+			t.Fatalf("productive cycle missing AtGOV execution signal: %+v", signal)
+		}
+		if !signal.VAL.Recoil || !signal.VAL.WVC {
+			t.Fatal("productive execution signal bypassed RECOIL/WVC")
+		}
+		kin := signal.REL["kin_emergion"]
+		if kin != safeWork.IDN && kin != secondWork.IDN {
+			t.Fatalf("unexpected execution kin lineage %q", kin)
+		}
+		if kinLineages[kin] {
+			t.Fatalf("safe work %q executed twice rather than two distinct works", kin)
+		}
+		kinLineages[kin] = true
+	}
+	state, err := rt.state()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, cycle := range productive {
+		if _, ok := state.AtGOV[cycle.signal.IDN]; !ok {
+			t.Fatalf("execution signal %q missing from AtGOV", cycle.signal.IDN)
+		}
+		if _, ok := state.Accepted[cycle.signal.IDN]; ok {
+			t.Fatalf("execution signal %q self-authorized into REG", cycle.signal.IDN)
+		}
+	}
+
+}
+

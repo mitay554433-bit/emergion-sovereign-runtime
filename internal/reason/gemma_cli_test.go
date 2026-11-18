@@ -2,8 +2,11 @@ package reason
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -218,6 +221,21 @@ func TestBuildPromptDiagnostic(t *testing.T) {
 		governedState,
 	)
 
+	sourceStart := strings.Index(prompt, "BEGIN_SOURCE\n")
+	sourceEnd := strings.Index(prompt, "\nEND_SOURCE")
+	if sourceStart < 0 || sourceEnd < 0 || sourceEnd <= sourceStart {
+		t.Fatal("prompt missing valid source evidence boundaries")
+	}
+	sourceStart += len("BEGIN_SOURCE\n")
+	if got := prompt[sourceStart:sourceEnd]; got != string(source) {
+		t.Fatal("source evidence was modified or escaped its boundaries")
+	}
+	if !strings.Contains(prompt[:sourceStart], "SOURCE_NAME:SYSTEM_STATUS.md") {
+		t.Fatal("source name missing from routing metadata")
+	}
+	if !strings.Contains(prompt, "Only text between BEGIN_SOURCE and END_SOURCE is factual evidence.") {
+		t.Fatal("prompt missing source evidence restriction")
+	}
 	t.Logf(
 		"source_bytes=%d governed_state_bytes=%d final_prompt_bytes=%d",
 		len(source),
@@ -974,4 +992,135 @@ func TestCleanTextAndTrimPreserveUTF8(t *testing.T) {
 			t.Fatalf("%s = %q want %q", name, got, "abc")
 		}
 	}
+}
+
+func TestGemmaGrammarForSourceRestrictsOrdinaryDifference(t *testing.T) {
+	ordinary := gemmaGrammarForSource("existing REG accepted safe local analyze work")
+	if !strings.Contains(ordinary, mxpdOrdinaryGrammarRoot) {
+		t.Fatal("ordinary source grammar does not use restricted root")
+	}
+	if strings.Contains(ordinary, "root ::= summary risk fact (difference requirement?)?") {
+		t.Fatal("ordinary source grammar still permits Difference and Requirement")
+	}
+	// Owner choice A: ordinary sources require exactly one capability and
+	// never emit D or R.
+	if !strings.Contains(ordinary, "root ::= summary risk fact relationship? capability facet? end\n") {
+		t.Fatal("ordinary source grammar is not choice A (capability required, no D/R)")
+	}
+	if strings.Contains(ordinary, "capability?") {
+		t.Fatal("ordinary source grammar makes capability optional")
+	}
+	if !strings.Contains(mxpdGrammar, mxpdRoot+"\n") {
+		t.Fatal("mxpdRoot no longer matches mxpdGrammar; the ordinary swap would silently do nothing")
+	}
+	if got := gemmaGrammarForSource("TARGET_COMPARISON/1\nTARGET_STATE:\ndeployed\nREALITY:\nACCEPTED_FACT:observation-only\nZ\n"); got != mxpdGrammar {
+		t.Fatal("structured target comparison lost canonical grammar")
+	}
+	if got := gemmaGrammarForSource("TARGET_COMPARISON/1 in ordinary prose"); got == mxpdGrammar {
+		t.Fatal("ordinary prose improperly enabled target comparison grammar")
+	}
+}
+
+func TestGemmaArgsWithGrammarUsesRestrictedRoot(t *testing.T) {
+	g := GemmaCLI{Model: "/models/gemma.gguf", Context: 2048, MaxTokens: 80, Threads: 1}
+	grammar := gemmaGrammarForSource("ordinary evidence")
+	args := gemmaArgsWithGrammar(g, "prompt", grammar)
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == "--grammar" {
+			if args[i+1] != grammar {
+				t.Fatal("execution grammar differs from selected source grammar")
+			}
+			return
+		}
+	}
+	t.Fatal("missing grammar argument")
+}
+
+func TestPredictARCGridInstalledRuntime(t *testing.T) {
+	binary := os.Getenv("GEMMA_BIN")
+	model := os.Getenv("GEMMA_MODEL")
+	if binary == "" || model == "" {
+		t.Skip("set GEMMA_BIN and GEMMA_MODEL")
+	}
+	g := GemmaCLI{
+		Binary: binary, Model: model,
+		Threads: 4, Context: 2048,
+		MaxTokens: 128, Timeout: 180 * time.Second,
+	}
+	grid, err := g.PredictARCGrid(context.Background(),
+		"Return only a JSON 2D integer array representing this grid: first row 1,2; second row 3,4. No explanation.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(grid) != 2 || len(grid[0]) != 2 || len(grid[1]) != 2 {
+		t.Fatalf("unexpected grid dimensions: %v", grid)
+	}
+	if grid[0][0] != 1 || grid[0][1] != 2 || grid[1][0] != 3 || grid[1][1] != 4 {
+		t.Fatalf("unexpected grid: %v", grid)
+	}
+}
+
+func TestPredictARCGridOfficialTaskE8686506(t *testing.T) {
+	binary := os.Getenv("GEMMA_BIN")
+	model := os.Getenv("GEMMA_MODEL")
+	if binary == "" || model == "" {
+		t.Skip("set GEMMA_BIN and GEMMA_MODEL")
+	}
+
+	type example struct {
+		Input  [][]int `json:"input"`
+		Output [][]int `json:"output"`
+	}
+	var task struct {
+		Train []example `json:"train"`
+		Test  []example `json:"test"`
+	}
+
+	data, err := os.ReadFile("../../arc-agi-2/data/evaluation/e8686506.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &task); err != nil {
+		t.Fatal(err)
+	}
+	if len(task.Train) == 0 || len(task.Test) != 1 {
+		t.Fatal("unexpected ARC task structure")
+	}
+
+	var prompt strings.Builder
+	prompt.WriteString("Infer the grid transformation from the examples. Return only the output grid as a JSON array of integer arrays. No explanation.\n")
+
+	for i, ex := range task.Train {
+		input, _ := json.Marshal(ex.Input)
+		output, _ := json.Marshal(ex.Output)
+		fmt.Fprintf(&prompt, "\nTraining example %d\nInput: %s\nOutput: %s\n", i+1, input, output)
+	}
+
+	testInput, _ := json.Marshal(task.Test[0].Input)
+	fmt.Fprintf(&prompt, "\nTest input: %s\nOutput:", testInput)
+
+	g := GemmaCLI{
+		Binary:    binary,
+		Model:     model,
+		Threads:   4,
+		Context:   4096,
+		MaxTokens: 512,
+		Timeout:   300 * time.Second,
+	}
+
+	predicted, err := g.PredictARCGrid(context.Background(), prompt.String())
+	if err != nil {
+		t.Logf("ARC-AGI-2 task=e8686506 exact_match=0/1 inference_error=%v", err)
+		return
+	}
+
+	expected := task.Test[0].Output
+	exact := reflect.DeepEqual(predicted, expected)
+
+	score := 0
+	if exact {
+		score = 1
+	}
+
+	t.Logf("ARC-AGI-2 task=e8686506 exact_match=%d/1 predicted=%v", score, predicted)
 }

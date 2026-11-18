@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -31,15 +32,19 @@ type Deliverable struct {
 }
 
 type historicalExecutionSignalV1 struct {
-	Schema         string `json:"schema"`
-	SourceKind     string `json:"source_kind"`
-	ParentEmergION string `json:"parent_emergion"`
-	SourceHash     string `json:"source_hash"`
-	Authority      string `json:"authority"`
-	Adapter        string `json:"adapter"`
-	Action         string `json:"action"`
-	Succeeded      bool   `json:"succeeded"`
-	Output         string `json:"output"`
+	Schema     string `json:"schema"`
+	SourceKind string `json:"source_kind"`
+	// LegacyKinEmergION reads the pre-kin key written into historical,
+	// hash-addressed EXECUTION_SIGNAL_V1 evidence. The key is wire format and
+	// stays byte-identical; new evidence uses kin_emergion only.
+	LegacyKinEmergION string `json:"parent_emergion"`
+	KinEmergION       string `json:"kin_emergion"`
+	SourceHash        string `json:"source_hash"`
+	Authority         string `json:"authority"`
+	Adapter           string `json:"adapter"`
+	Action            string `json:"action"`
+	Succeeded         bool   `json:"succeeded"`
+	Output            string `json:"output"`
 }
 
 func parseHistoricalExecutionSignalV1(content []byte) (adapters.ExecutionResult, error) {
@@ -50,11 +55,18 @@ func parseHistoricalExecutionSignalV1(content []byte) (adapters.ExecutionResult,
 	if signal.Schema != "EXECUTION_SIGNAL_V1" || signal.SourceKind != "EXECUTION_RESULT" {
 		return adapters.ExecutionResult{}, fmt.Errorf("not an EXECUTION_SIGNAL_V1 execution result")
 	}
-	if signal.ParentEmergION == "" || signal.SourceHash == "" || signal.Authority == "" || signal.Adapter == "" || signal.Action == "" {
+	if signal.LegacyKinEmergION != "" && signal.KinEmergION != "" && signal.LegacyKinEmergION != signal.KinEmergION {
+		return adapters.ExecutionResult{}, fmt.Errorf("conflicting EXECUTION_SIGNAL_V1 kin lineage")
+	}
+	lineage := signal.KinEmergION
+	if lineage == "" {
+		lineage = signal.LegacyKinEmergION
+	}
+	if lineage == "" || signal.SourceHash == "" || signal.Authority == "" || signal.Adapter == "" || signal.Action == "" {
 		return adapters.ExecutionResult{}, fmt.Errorf("incomplete EXECUTION_SIGNAL_V1 execution result")
 	}
 	return adapters.ExecutionResult{
-		EmergIONID: signal.ParentEmergION,
+		EmergIONID: lineage,
 		SourceHash: signal.SourceHash,
 		Authority:  signal.Authority,
 		Adapter:    signal.Adapter,
@@ -107,7 +119,18 @@ func (r Runtime) MaterializeAcceptedExecutionResult(id string) (Deliverable, err
 		return Deliverable{}, fmt.Errorf("%w: %s", ErrExecutionResultUnsuccessful, id)
 	}
 
-	if result.EmergIONID != em.REL["parent_emergion"] ||
+	kinLineage := em.REL["kin_emergion"]
+	// Pre-kin accepted records carry the same lineage under the legacy
+	// "parent_emergion" REL key; it is read-only and never written.
+	if legacy := em.REL["parent_emergion"]; legacy != "" {
+		if kinLineage != "" && kinLineage != legacy {
+			return Deliverable{}, fmt.Errorf("conflicting accepted execution kin lineage: %s", id)
+		}
+		if kinLineage == "" {
+			kinLineage = legacy
+		}
+	}
+	if result.EmergIONID == "" || result.EmergIONID != kinLineage ||
 		result.AuthorizationID != em.REL["authorization_event"] ||
 		result.Adapter != em.REL["adapter"] ||
 		result.Action != em.REL["action"] {
@@ -233,12 +256,25 @@ func (r Runtime) PublishAcceptedDeliverables(out string) ([]string, error) {
 			return published, err
 		}
 
+		receiptPath := filepath.Join(out, "deliverables", id, "receipt.json")
+		beforeReceipt, readErr := os.ReadFile(receiptPath)
+		if readErr != nil && !os.IsNotExist(readErr) {
+			return published, readErr
+		}
+
 		receipt, _, err := PublishDeliverable(out, deliverable)
 		if err != nil {
 			return published, err
 		}
 		receipts = append(receipts, receipt)
-		published = append(published, id)
+
+		afterReceipt, err := os.ReadFile(receiptPath)
+		if err != nil {
+			return published, err
+		}
+		if os.IsNotExist(readErr) || !bytes.Equal(beforeReceipt, afterReceipt) {
+			published = append(published, id)
+		}
 	}
 
 	if _, err := publishDeliverableIndex(out, st.TipHash, receipts); err != nil {

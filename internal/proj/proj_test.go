@@ -423,10 +423,10 @@ func TestPRMCrystallizesAcceptedGovernedPrimitive(t *testing.T) {
 	}
 
 	em := core.EmergION{
-		IDN: "E-PRM-CHILD",
+		IDN: "E-PRM-KIN",
 		STA: core.StateAccepted,
 		MEM: core.Memory{
-			SourceHash: "source-child",
+			SourceHash: "source-kin",
 			Summary:    "accepted reusable mechanism",
 		},
 		REL: map[string]string{
@@ -571,11 +571,11 @@ func TestPRMCrystallizationDoesNotMergeSovereignKin(t *testing.T) {
 		CAP: []string{"ANALYZE"},
 	}
 
-	child := core.EmergION{
-		IDN: "E-PRM-KIN-CHILD",
+	kin := core.EmergION{
+		IDN: "E-PRM-KIN-LINEAGE",
 		STA: core.StateAccepted,
 		MEM: core.Memory{
-			SourceHash: "kin-child-source",
+			SourceHash: "kin-lineage-source",
 		},
 		CAP: []string{"SIMULATE"},
 		EVO: core.Evolution{
@@ -585,7 +585,7 @@ func TestPRMCrystallizationDoesNotMergeSovereignKin(t *testing.T) {
 
 	st := core.EmptyState()
 	st.Accepted[root.IDN] = root
-	st.Accepted[child.IDN] = child
+	st.Accepted[kin.IDN] = kin
 
 	prms, err := crystallizePRMs(st)
 	if err != nil {
@@ -607,8 +607,8 @@ func TestPRMCrystallizationDoesNotMergeSovereignKin(t *testing.T) {
 		t.Fatal("PRM crystallization mutated root EmergION")
 	}
 
-	if st.Accepted[child.IDN].CAP[0] != "SIMULATE" {
-		t.Fatal("PRM crystallization mutated child EmergION")
+	if st.Accepted[kin.IDN].CAP[0] != "SIMULATE" {
+		t.Fatal("PRM crystallization mutated kin EmergION")
 	}
 }
 
@@ -1283,7 +1283,6 @@ func TestHumanFinalRowsSelectOnlyAtGOV(t *testing.T) {
 	}
 }
 
-
 func TestRealizationRowsProjectAcceptedAndPendingGovernedOrder(t *testing.T) {
 	st := core.EmptyState()
 
@@ -1291,10 +1290,10 @@ func TestRealizationRowsProjectAcceptedAndPendingGovernedOrder(t *testing.T) {
 		IDN: "E-SELECTION",
 		STA: core.StateAccepted,
 		REL: map[string]string{
-			"source_kind": "REALIZATION_SELECTION",
-			"target_thing": "KNIFE",
+			"source_kind":          "REALIZATION_SELECTION",
+			"target_thing":         "KNIFE",
 			"selected_realization": "E-KNIFE-A",
-			"runners_up": "E-KNIFE-B,E-KNIFE-C",
+			"runners_up":           "E-KNIFE-B,E-KNIFE-C",
 		},
 	}
 	rows := realizationRows(st)
@@ -1309,10 +1308,10 @@ func TestRealizationRowsProjectAcceptedAndPendingGovernedOrder(t *testing.T) {
 		IDN: "E-REORDER",
 		STA: core.StateAtGOV,
 		REL: map[string]string{
-			"source_kind": "REALIZATION_REORDER",
-			"target_thing": "KNIFE",
+			"source_kind":          "REALIZATION_REORDER",
+			"target_thing":         "KNIFE",
 			"selected_realization": "E-KNIFE-B",
-			"runners_up": "E-KNIFE-A,E-KNIFE-C",
+			"runners_up":           "E-KNIFE-A,E-KNIFE-C",
 		},
 	}
 	rows = realizationRows(st)
@@ -1345,5 +1344,23 @@ func TestRealizationRowsProjectAcceptedAndPendingGovernedOrder(t *testing.T) {
 		if !strings.Contains(html, want) {
 			t.Fatalf("REALIZATION FIELD missing %q", want)
 		}
+	}
+}
+
+func TestEngineeringTwinMissingEvidenceFailsClosed(t *testing.T) {
+	got := engineeringTwinStatus(t.TempDir())
+	if got.Status != "UNAVAILABLE" || got.SHA256 != "" {
+		t.Fatalf("missing evidence must not be verified: %+v", got)
+	}
+}
+
+func TestEngineeringTwinCorruptArchiveFailsClosed(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "UNIFUSION_TWIN_20261026T075503Z.zip"), []byte("not a zip"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got := engineeringTwinStatus(dir)
+	if got.Status != "UNVERIFIED" || got.SHA256 != "" {
+		t.Fatalf("corrupt archive must not be verified: %+v", got)
 	}
 }

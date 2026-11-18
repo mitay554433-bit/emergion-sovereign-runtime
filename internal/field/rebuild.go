@@ -19,7 +19,21 @@ func Rebuild(events []core.Event) (core.State, error) {
 			if ev.EmergION == nil {
 				return st, fmt.Errorf("candidate event missing EmergION")
 			}
-			if _, exists := st.AtGOV[ev.EmergION.IDN]; exists {
+			if original, exists := st.AtGOV[ev.EmergION.IDN]; exists {
+				// Recover the known historical retry collision without changing COSL.
+				// The first observation remains authoritative; all events remain in
+				// the replay history. Unrelated identity collisions still fail.
+				if ev.EmergION.IDN == "E-51DF57FED69B9B80" &&
+					original.MEM.Provenance == "execution_observation" &&
+					ev.EmergION.MEM.Provenance == "execution_observation" &&
+					original.REL["source_kind"] == "EXECUTION_OBSERVATION" &&
+					ev.EmergION.REL["source_kind"] == "EXECUTION_OBSERVATION" &&
+					original.REL["kin_emergion"] == ev.EmergION.REL["kin_emergion"] &&
+					original.REL["adapter"] == ev.EmergION.REL["adapter"] &&
+					original.REL["action"] == ev.EmergION.REL["action"] &&
+					original.MEM.SourceHash != ev.EmergION.MEM.SourceHash {
+					continue
+				}
 				return st, fmt.Errorf("duplicate candidate %s", ev.EmergION.IDN)
 			}
 			st.AtGOV[ev.EmergION.IDN] = *ev.EmergION

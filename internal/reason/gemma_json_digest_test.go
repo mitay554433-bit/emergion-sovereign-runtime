@@ -209,7 +209,7 @@ OUT
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(prompt), "SOURCE:\nSource summary: locked true; frames sampled 14; wave states 14; compressed states 6; compression ratio 0.42857;") {
+	if !strings.Contains(string(prompt), "BEGIN_SOURCE\nSource summary: locked true; frames sampled 14; wave states 14; compressed states 6; compression ratio 0.42857;") {
 		t.Fatalf("prompt missing digest:\n%s", prompt)
 	}
 	if !strings.Contains(string(prompt), "state MAXIOM_REAL_TEMPORAL_WAVE_LOCKED.\n\n{") {
