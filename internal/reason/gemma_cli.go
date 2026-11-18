@@ -309,11 +309,12 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 	}
 	// The digest only shapes the prompt text. in.Content (the evidence bytes
 	// that are hashed and stored) is never modified.
+	digest := sourceDigest(content)
 	content = withSourceDigest(content)
 	if len(content) > contentLimit {
 		content = truncateUTF8(content, contentLimit)
 	}
-	prompt := buildPrompt(in.Name, content, governedState)
+	prompt := withDigestFactLine(buildPrompt(in.Name, content, governedState), digest)
 
 	for attempt := 0; attempt < 2; attempt++ {
 		args := gemmaArgs(g, prompt)
@@ -367,12 +368,12 @@ func (g GemmaCLI) Analyze(ctx context.Context, in Input) (Result, error) {
 				break
 			}
 
-			return res, nil
+			return withDigestFacts(res, digest), nil
 		}
 
 		if validationErr != nil {
 			if attempt == 0 {
-				prompt = buildPrompt(in.Name, content, governedState) +
+				prompt = withDigestFactLine(buildPrompt(in.Name, content, governedState), digest) +
 					"\n\nRETRY:\n" +
 					"Regenerate from SOURCE only. " +
 					"Do not describe validation, rejection, retry, prompt text, or GOVERNED_STATE. " +
@@ -518,6 +519,134 @@ func digestSkipsString(key, value string) bool {
 		}
 	}
 	return false
+}
+
+// digestFactLine is added to the prompt only for JSON-digest sources.
+const digestFactLine = "F restates every value in Source summary, e.g. \"frames sampled 1; wave states 1\".\n"
+
+func withDigestFactLine(prompt, digest string) string {
+	if digest == "" {
+		return prompt
+	}
+	return strings.Replace(prompt, "Z = final terminator.\n", digestFactLine+"Z = final terminator.\n", 1)
+}
+
+// digestNumericEntries returns the "label value" entries of a source digest
+// whose value is a single number, e.g. "wave states 1".
+func digestNumericEntries(digest string) []string {
+	var out []string
+	for _, entry := range digestEntries(digest) {
+		i := strings.LastIndex(entry, " ")
+		if i <= 0 {
+			continue
+		}
+		value := entry[i+1:]
+		if toks := numberTokens(value); len(toks) == 1 && toks[0] == value {
+			out = append(out, entry)
+		}
+	}
+	return out
+}
+
+// factsCoverDigestEntry reports whether some fact states entry's number
+// (equal values match, 1 and 1.0) together with every word of its label
+// (a trailing "s" is optional, so "1 frame sampled" covers "frames sampled 1").
+func factsCoverDigestEntry(entry string, facts []string) bool {
+	i := strings.LastIndex(entry, " ")
+	label, value := strings.ToLower(entry[:i]), entry[i+1:]
+	for _, fact := range facts {
+		lower := strings.ToLower(fact)
+		if _, ok := ungroundedNumber(fact, []string{value}); !ok {
+			continue
+		}
+		all := true
+		for _, word := range strings.Fields(label) {
+			if !strings.Contains(lower, strings.TrimSuffix(word, "s")) {
+				all = false
+				break
+			}
+		}
+		if all {
+			return true
+		}
+	}
+	return false
+}
+
+// digestEntries returns every "label value" entry of a source digest.
+func digestEntries(digest string) []string {
+	body := strings.TrimPrefix(digest, "Source summary: ")
+	if body == digest {
+		return nil
+	}
+	return strings.Split(strings.TrimSuffix(body, "."), "; ")
+}
+
+// splitDigestListFacts handles a fact that copies the Source summary as one
+// list ("frames sampled 1; wave states 1; ..."). Such a fact is split on ';'.
+// Parts that exactly match a digest entry become that entry, verbatim. Parts
+// that are only the start of a digest entry (cut off) and empty parts are
+// dropped. Other parts are kept as written. Results are deduplicated.
+func splitDigestListFacts(facts []string, digest string) []string {
+	entries := digestEntries(digest)
+	var out []string
+	seen := map[string]bool{}
+	add := func(f string) {
+		if f != "" && !seen[f] {
+			seen[f] = true
+			out = append(out, f)
+		}
+	}
+	for _, fact := range facts {
+		trimmed := strings.TrimSpace(fact)
+		if !strings.Contains(trimmed, ";") && !strings.HasPrefix(trimmed, "Source summary") {
+			add(trimmed)
+			continue
+		}
+		trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, "Source summary:"))
+		trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, "Source summary"))
+	parts:
+		for _, part := range strings.Split(trimmed, ";") {
+			part = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(part), "."))
+			if part == "" {
+				continue
+			}
+			for _, entry := range entries {
+				if part == entry {
+					add(entry)
+					continue parts
+				}
+			}
+			for _, entry := range entries {
+				if strings.HasPrefix(entry, part) {
+					continue parts // cut-off entry
+				}
+			}
+			add(part)
+		}
+	}
+	return out
+}
+
+// withDigestFacts appends, as its own fact, each numeric Source summary entry
+// that Gemma's facts do not already state. The appended text is copied
+// verbatim from the digest, so it is grounded in SOURCE. Existing fact
+// limits (24 facts, 96 bytes each) are respected. No digest, no change.
+func withDigestFacts(r Result, digest string) Result {
+	if digest == "" {
+		return r
+	}
+	r.Facts = splitDigestListFacts(r.Facts, digest)
+	for _, entry := range digestNumericEntries(digest) {
+		if len(r.Facts) >= 24 {
+			break
+		}
+		if len(entry) > 96 || factsCoverDigestEntry(entry, r.Facts) {
+			continue
+		}
+		r.Facts = append(r.Facts, entry)
+	}
+	return r
 }
 
 // withSourceDigest prepends the SOURCE_DIGEST line and a blank line to a JSON
