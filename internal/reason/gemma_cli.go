@@ -398,11 +398,14 @@ const (
 	sourceDigestLimit      = 400
 )
 
-// sourceDigest returns one SOURCE_DIGEST line listing the top-level scalar
-// values of a JSON object source, sorted by key. Arrays and objects are
-// skipped. Values are copied from SOURCE as written (numbers keep their
-// literal form), so anything Gemma echoes from the digest is grounded in
-// SOURCE. Non-JSON sources and TARGET_COMPARISON/1 sources get no digest.
+// sourceDigest returns one plain-English "Source summary:" sentence listing
+// the top-level scalar values of a JSON object source: numbers and booleans
+// first, then short strings, each group in SOURCE key order. Arrays, objects
+// and identifier-like strings are skipped. Keys are shown with underscores
+// as spaces; values are copied from SOURCE as written (numbers keep their
+// literal form), so anything Gemma restates is grounded in SOURCE. Entries
+// that do not fit whole are dropped, never cut. Non-JSON sources and
+// TARGET_COMPARISON/1 sources get no digest.
 func sourceDigest(content string) string {
 	trimmed := strings.TrimSpace(content)
 	if strings.HasPrefix(trimmed, "TARGET_COMPARISON/1") || !strings.HasPrefix(trimmed, "{") {
@@ -410,54 +413,58 @@ func sourceDigest(content string) string {
 	}
 	dec := json.NewDecoder(strings.NewReader(trimmed))
 	dec.UseNumber()
-	var obj map[string]any
-	if err := dec.Decode(&obj); err != nil {
+	if tok, err := dec.Token(); err != nil || tok != json.Delim('{') {
+		return ""
+	}
+	var scalars, texts []string
+	seen := map[string]bool{}
+	for dec.More() {
+		tok, err := dec.Token()
+		if err != nil {
+			return ""
+		}
+		key, _ := tok.(string)
+		var val any
+		if err := dec.Decode(&val); err != nil {
+			return ""
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		label := strings.Join(strings.Fields(strings.ReplaceAll(key, "_", " ")), " ")
+		if label == "" || len(label) > sourceDigestValueLimit || strings.ContainsAny(label, "|;") {
+			continue
+		}
+		switch v := val.(type) {
+		case json.Number:
+			scalars = append(scalars, label+" "+v.String())
+		case bool:
+			scalars = append(scalars, label+" "+strconv.FormatBool(v))
+		case string:
+			v = strings.Join(strings.Fields(v), " ")
+			if v == "" || len(v) > sourceDigestValueLimit || strings.ContainsAny(v, "|;") || digestSkipsString(key, v) {
+				continue
+			}
+			texts = append(texts, label+" "+v)
+		}
+	}
+	if _, err := dec.Token(); err != nil { // closing brace
 		return ""
 	}
 	if _, err := dec.Token(); err != io.EOF {
 		return ""
 	}
 
-	// Numbers and booleans come first, then short strings. Identifier-like
-	// values (ids, timestamps, paths, hashes) are skipped: they cost many
-	// tokens, carry no counts, and Gemma tends to copy them into F.
-	var scalarKeys, stringKeys []string
-	for k, val := range obj {
-		switch val := val.(type) {
-		case json.Number, bool:
-			scalarKeys = append(scalarKeys, k)
-		case string:
-			if !digestSkipsString(k, val) {
-				stringKeys = append(stringKeys, k)
-			}
-		}
-	}
-	sort.Strings(scalarKeys)
-	sort.Strings(stringKeys)
-	keys := append(scalarKeys, stringKeys...)
-
-	const prefix = "SOURCE_DIGEST: "
+	const prefix = "Source summary: "
 	var b strings.Builder
-	for _, k := range keys {
-		var v string
-		switch val := obj[k].(type) {
-		case string:
-			v = val
-		case json.Number:
-			v = val.String()
-		case bool:
-			v = strconv.FormatBool(val)
-		}
-		v = strings.Join(strings.Fields(v), " ")
-		v = truncateUTF8(v, sourceDigestValueLimit)
-		k = truncateUTF8(strings.Join(strings.Fields(k), " "), sourceDigestValueLimit)
-		entry := k + "=" + v
+	for _, entry := range append(scalars, texts...) {
 		sep := ""
 		if b.Len() > 0 {
 			sep = "; "
 		}
-		if len(prefix)+b.Len()+len(sep)+len(entry) > sourceDigestLimit {
-			break
+		if len(prefix)+b.Len()+len(sep)+len(entry)+1 > sourceDigestLimit {
+			continue
 		}
 		b.WriteString(sep)
 		b.WriteString(entry)
@@ -465,11 +472,11 @@ func sourceDigest(content string) string {
 	if b.Len() == 0 {
 		return ""
 	}
-	return prefix + b.String()
+	return prefix + strings.TrimRight(b.String(), ".") + "."
 }
 
 // digestSkipsString reports whether a top-level string value is
-// identifier-like and should stay out of SOURCE_DIGEST.
+// identifier-like and should stay out of the source digest.
 func digestSkipsString(key, value string) bool {
 	k := strings.ToLower(key)
 	switch k {
@@ -656,6 +663,10 @@ func rejectPromptPlaceholders(r Result, source string) error {
 		}
 	}
 
+	if strings.HasPrefix(upperSummary, "SOURCE_NAME") || strings.HasPrefix(upperSummary, "SOURCE:") {
+		return fmt.Errorf("Gemma output rejected: summary restates prompt label")
+	}
+
 	if strings.HasPrefix(strings.TrimSpace(r.Summary), ":") {
 		return fmt.Errorf("Gemma output rejected: summary begins with punctuation")
 	}
@@ -706,6 +717,7 @@ SOURCE:
 Observe SOURCE and emit only source-grounded structure.
 
 S = the direct meaning established by SOURCE.
+S states what SOURCE shows in one sentence, not the file name.
 K = L, M, or H.
 F = concrete evidence or verified state explicitly established by SOURCE.
 D = a target-relative Difference only for TARGET_COMPARISON/1.

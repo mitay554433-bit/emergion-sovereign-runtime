@@ -34,9 +34,9 @@ func waveSourceForDigestTest() string {
 
 func TestSourceDigestListsSortedTopLevelScalarsAndSkipsArraysAndObjects(t *testing.T) {
 	got := sourceDigest(waveSourceForDigestTest())
-	want := "SOURCE_DIGEST: compressed_states=6; compression_ratio=0.42857; " +
-		"frames_sampled=14; locked=true; wave_states=14; " +
-		"state=MAXIOM_REAL_TEMPORAL_WAVE_LOCKED"
+	want := "Source summary: locked true; frames sampled 14; wave states 14; " +
+		"compressed states 6; compression ratio 0.42857; " +
+		"state MAXIOM_REAL_TEMPORAL_WAVE_LOCKED."
 	if got != want {
 		t.Fatalf("digest =\n%q\nwant\n%q", got, want)
 	}
@@ -45,27 +45,55 @@ func TestSourceDigestListsSortedTopLevelScalarsAndSkipsArraysAndObjects(t *testi
 	}
 }
 
-func TestSourceDigestBoundsValuesAndTotalLength(t *testing.T) {
-	long := strings.Repeat("x", 200)
+func TestSourceDigestBoundsValuesAndTotalLengthWithoutPartialEntries(t *testing.T) {
+	fits := strings.Repeat("x", 70)
 	var b strings.Builder
-	b.WriteString("{")
+	b.WriteString(`{"too_long": "` + strings.Repeat("y", sourceDigestValueLimit+1) + `"`)
 	for i := 0; i < 20; i++ {
-		if i > 0 {
-			b.WriteString(",")
-		}
-		b.WriteString(`"k` + string(rune('a'+i)) + `": "` + long + `"`)
+		b.WriteString(`, "k` + string(rune('a'+i)) + `": "` + fits + `"`)
 	}
 	b.WriteString("}")
 
 	got := sourceDigest(b.String())
-	if got == "" {
-		t.Fatal("expected digest")
-	}
 	if len(got) > sourceDigestLimit {
 		t.Fatalf("digest length = %d want <= %d", len(got), sourceDigestLimit)
 	}
-	if !strings.HasPrefix(got, "SOURCE_DIGEST: ka="+strings.Repeat("x", sourceDigestValueLimit)+"; kb=") {
-		t.Fatalf("value not truncated to %d bytes: %q", sourceDigestValueLimit, got)
+	if strings.Contains(got, "yyyy") {
+		t.Fatalf("over-long value was cut instead of skipped: %q", got)
+	}
+	if !strings.HasPrefix(got, "Source summary: ka "+fits+"; kb "+fits+"; ") || !strings.HasSuffix(got, fits+".") {
+		t.Fatalf("digest = %q", got)
+	}
+	for _, entry := range strings.Split(strings.TrimSuffix(strings.TrimPrefix(got, "Source summary: "), "."), "; ") {
+		if len(entry) != len("ka ")+len(fits) {
+			t.Fatalf("partial entry %q in %q", entry, got)
+		}
+	}
+}
+
+func TestSourceDigestFactRestatementIsGrounded(t *testing.T) {
+	source := `{"frames_sampled": 1, "wave_states": 1, "compressed_states": 1, "compression_ratio": 1.0}`
+	content := withSourceDigest(source)
+	for _, fact := range []string{
+		"1 frames sampled, 1 wave states",
+		"frames sampled 1; wave states 1; compressed states 1; compression ratio 1.0",
+	} {
+		if !sourceSupportsFact(content, fact) {
+			t.Fatalf("fact %q not grounded in %q", fact, content)
+		}
+	}
+}
+
+func TestRejectsSummaryThatRestatesSourceName(t *testing.T) {
+	r := Result{Summary: "SOURCE_NAME:c5050781dc3f84f0_real_temporal_wave.json", Risk: "L", Facts: []string{"frames sampled 1"}}
+	if err := rejectPromptPlaceholders(r, "Source summary: frames sampled 1."); err == nil {
+		t.Fatal("expected rejection of file-name summary")
+	}
+}
+
+func TestBuildPromptAsksForSummaryNotFileName(t *testing.T) {
+	if !strings.Contains(buildPrompt("x.json", "c", "s"), "S states what SOURCE shows in one sentence, not the file name.\n") {
+		t.Fatal("prompt missing summary line")
 	}
 }
 
@@ -90,7 +118,7 @@ func TestSourceDigestOmittedForNonJSONAndTargetComparison(t *testing.T) {
 func TestWithSourceDigestPrependsDigestAndBlankLine(t *testing.T) {
 	source := `{"frames_sampled": 14, "frames": [1, 2]}`
 	got := withSourceDigest(source)
-	want := "SOURCE_DIGEST: frames_sampled=14\n\n" + source
+	want := "Source summary: frames sampled 14.\n\n" + source
 	if got != want {
 		t.Fatalf("content = %q want %q", got, want)
 	}
@@ -181,10 +209,10 @@ OUT
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(prompt), "SOURCE:\nSOURCE_DIGEST: compressed_states=6; compression_ratio=0.42857; frames_sampled=14;") {
+	if !strings.Contains(string(prompt), "SOURCE:\nSource summary: locked true; frames sampled 14; wave states 14; compressed states 6; compression ratio 0.42857;") {
 		t.Fatalf("prompt missing digest:\n%s", prompt)
 	}
-	if !strings.Contains(string(prompt), "state=MAXIOM_REAL_TEMPORAL_WAVE_LOCKED\n\n{") {
+	if !strings.Contains(string(prompt), "state MAXIOM_REAL_TEMPORAL_WAVE_LOCKED.\n\n{") {
 		t.Fatalf("digest not followed by blank line and original content:\n%s", prompt)
 	}
 }
@@ -205,8 +233,8 @@ func TestSourceDigestSkipsIdentifierLikeValues(t *testing.T) {
   "compressed_wave": [{"t": 0}]
 }`
 	got := sourceDigest(source)
-	want := "SOURCE_DIGEST: compressed_states=1; compression_ratio=1.0; frames_sampled=1; " +
-		"wave_states=1; state=MAXIOM_REAL_TEMPORAL_WAVE_LOCKED"
+	want := "Source summary: frames sampled 1; wave states 1; compressed states 1; " +
+		"compression ratio 1.0; state MAXIOM_REAL_TEMPORAL_WAVE_LOCKED."
 	if got != want {
 		t.Fatalf("digest =\n%q\nwant\n%q", got, want)
 	}
