@@ -1,6 +1,7 @@
 package main
 
 import (
+	"emergion-sovereign-runtime/internal/gemmalive"
 "encoding/json"
 "path/filepath"
 "testing"
@@ -13,7 +14,7 @@ func TestNativeBridgeLogic(t *testing.T) {
 tmpDir := t.TempDir()
 statePath := filepath.Join(tmpDir, "state")
 
-rt, err := fieldapi.Open(statePath, reason.GemmaFromEnv())
+rt, err := fieldapi.Open(statePath, reason.GemmaCLI{Binary: gemmalive.AbsentBinary, Model: gemmalive.AbsentModel})
 if err != nil {
 t.Fatalf("failed to open runtime: %v", err)
 }

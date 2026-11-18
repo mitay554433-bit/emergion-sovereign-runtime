@@ -2,6 +2,7 @@ package reason
 
 import (
 	"context"
+	"emergion-sovereign-runtime/internal/gemmalive"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -174,6 +175,7 @@ func TestCalibrateRelationshipTrimCollisionIsDeterministic(t *testing.T) {
 }
 
 func TestGemmaCLIAnalyzeInstalledRuntime(t *testing.T) {
+	gemmalive.Skip(t)
 	binary := os.Getenv("GEMMA_BIN")
 	model := os.Getenv("GEMMA_MODEL")
 
@@ -1037,6 +1039,7 @@ func TestGemmaArgsWithGrammarUsesRestrictedRoot(t *testing.T) {
 }
 
 func TestPredictARCGridInstalledRuntime(t *testing.T) {
+	gemmalive.Skip(t)
 	binary := os.Getenv("GEMMA_BIN")
 	model := os.Getenv("GEMMA_MODEL")
 	if binary == "" || model == "" {
@@ -1061,6 +1064,7 @@ func TestPredictARCGridInstalledRuntime(t *testing.T) {
 }
 
 func TestPredictARCGridOfficialTaskE8686506(t *testing.T) {
+	gemmalive.Skip(t)
 	binary := os.Getenv("GEMMA_BIN")
 	model := os.Getenv("GEMMA_MODEL")
 	if binary == "" || model == "" {

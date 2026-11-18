@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"emergion-sovereign-runtime/internal/gemmalive"
 	"context"
 	"emergion-sovereign-runtime/internal/adapters"
 	"emergion-sovereign-runtime/internal/core"
@@ -2293,6 +2294,7 @@ func TestGovernedStateContextDiagnostic(t *testing.T) {
 }
 
 func TestGemmaAnalyzeRealisticGovernedContextDiagnostic(t *testing.T) {
+	gemmalive.Skip(t)
 	stateRoot := os.Getenv("FIELD_HOME")
 	binary := os.Getenv("GEMMA_BIN")
 	model := os.Getenv("GEMMA_MODEL")
@@ -5771,6 +5773,7 @@ func TestCaptureImplementationEvidenceUsesGovernedCandidatePath(t *testing.T) {
 }
 
 func TestCaptureTargetComparisonInstalledGemma(t *testing.T) {
+	gemmalive.Skip(t)
 	binary := os.Getenv("GEMMA_BIN")
 	model := os.Getenv("GEMMA_MODEL")
 	if binary == "" || model == "" {
@@ -5992,6 +5995,7 @@ func TestTargetComparisonDeduplicatesSameRealityButReopensOnRealityChange(t *tes
 }
 
 func TestGemmaAnalyzeLiveProofSourceDiagnostic(t *testing.T) {
+	gemmalive.Skip(t)
 	stateRoot := os.Getenv("FIELD_HOME")
 	binary := os.Getenv("GEMMA_BIN")
 	model := os.Getenv("GEMMA_MODEL")

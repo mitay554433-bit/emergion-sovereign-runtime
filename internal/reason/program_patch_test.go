@@ -3,6 +3,7 @@ package reason
 import (
 	"bytes"
 	"context"
+	"emergion-sovereign-runtime/internal/gemmalive"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -181,6 +182,7 @@ func TestParseProgramEditAcceptsNoChangeWithLlamaEndMarker(t *testing.T) {
 }
 
 func TestProposeProgramPatchWithLocalGemma(t *testing.T) {
+	gemmalive.Skip(t)
 	bin := os.Getenv("GEMMA_BIN")
 	model := os.Getenv("GEMMA_MODEL")
 	if bin == "" || model == "" {

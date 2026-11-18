@@ -1,6 +1,7 @@
 package fieldapi
 
 import (
+	"emergion-sovereign-runtime/internal/gemmalive"
 	"context"
 	"encoding/json"
 	"os"
@@ -428,6 +429,7 @@ func TestRenderCurrentJSONUsesCanonicalProjectionReceipt(t *testing.T) {
 }
 
 func TestGovernedCycleCirculatesAndExecutesExistingSafeWork(t *testing.T) {
+	gemmalive.Skip(t)
 	binary := os.Getenv("GEMMA_BIN")
 	model := os.Getenv("GEMMA_MODEL")
 	if binary == "" || model == "" {
@@ -727,6 +729,7 @@ func TestGovernedCycleCirculatesAndExecutesExistingSafeWork(t *testing.T) {
 }
 
 func TestRunDrivesSuccessiveGovernedCyclesWithoutManualInvocation(t *testing.T) {
+	gemmalive.Skip(t)
 	root := t.TempDir()
 	binary := os.Getenv("GEMMA_BIN")
 	model := os.Getenv("GEMMA_MODEL")
@@ -1885,6 +1888,7 @@ func TestGovernedCycleDiscoveredSelectionStopsAtHumanFinal(t *testing.T) {
 }
 
 func TestRunExecutesTwoDistinctSafeWorksAcrossProductiveGovernedCycles(t *testing.T) {
+	gemmalive.Skip(t)
 	root := t.TempDir()
 	binary := os.Getenv("GEMMA_BIN")
 	model := os.Getenv("GEMMA_MODEL")
