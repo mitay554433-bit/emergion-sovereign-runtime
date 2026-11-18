@@ -608,6 +608,58 @@ func sourceSupportsDifference(source, difference string) bool {
 	return sourceSupportsFact(target+"\n"+reality, difference)
 }
 
+// numberTokens returns the maximal numeric runs in s (integers or decimals
+// such as 14, 0.42857, 1.0). A run never starts or ends inside another run of
+// digits, so "14" is not found inside "2014" or "0.142".
+func numberTokens(s string) []string {
+	var out []string
+	for i := 0; i < len(s); {
+		if s[i] < '0' || s[i] > '9' {
+			i++
+			continue
+		}
+		j := i
+		for j < len(s) && s[j] >= '0' && s[j] <= '9' {
+			j++
+		}
+		if j+1 < len(s) && s[j] == '.' && s[j+1] >= '0' && s[j+1] <= '9' {
+			j++
+			for j < len(s) && s[j] >= '0' && s[j] <= '9' {
+				j++
+			}
+		}
+		out = append(out, s[i:j])
+		i = j
+	}
+	return out
+}
+
+// ungroundedNumber reports the first number in values that does not appear
+// as a number in source. Only the SOURCE text is consulted, never
+// GOVERNED_STATE. Equal numeric values match (1 and 1.0).
+func ungroundedNumber(source string, values []string) (string, bool) {
+	exact := map[string]bool{}
+	numeric := map[float64]bool{}
+	for _, tok := range numberTokens(source) {
+		exact[tok] = true
+		if f, err := strconv.ParseFloat(tok, 64); err == nil {
+			numeric[f] = true
+		}
+	}
+	for _, v := range values {
+		for _, tok := range numberTokens(v) {
+			if exact[tok] {
+				continue
+			}
+			if f, err := strconv.ParseFloat(tok, 64); err == nil && numeric[f] {
+				continue
+			}
+			return tok, false
+		}
+	}
+	return "", true
+}
+
 func rejectPromptPlaceholders(r Result, source string) error {
 	if strings.EqualFold(strings.TrimSpace(r.Summary), "one sentence summary") {
 		return fmt.Errorf("Gemma output rejected: prompt placeholder summary")
@@ -629,6 +681,10 @@ func rejectPromptPlaceholders(r Result, source string) error {
 		if !sourceSupportsFact(source, fact) {
 			return fmt.Errorf("Gemma output rejected: fact lacks source support: %q", fact)
 		}
+	}
+
+	if n, ok := ungroundedNumber(source, append([]string{r.Summary}, r.Facts...)); !ok {
+		return fmt.Errorf("Gemma output rejected: number %s not in SOURCE", n)
 	}
 
 	for _, difference := range r.Differences {
@@ -718,6 +774,7 @@ Observe SOURCE and emit only source-grounded structure.
 
 S = the direct meaning established by SOURCE.
 S states what SOURCE shows in one sentence, not the file name.
+Numbers in S and F must come from SOURCE, never from GOVERNED_STATE.
 K = L, M, or H.
 F = concrete evidence or verified state explicitly established by SOURCE.
 D = a target-relative Difference only for TARGET_COMPARISON/1.

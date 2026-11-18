@@ -281,3 +281,102 @@ func TestAnalyzeInvalidOutputErrorShowsGeneratedTail(t *testing.T) {
 		t.Fatalf("error missing stop-before-Z hint: %s", msg)
 	}
 }
+
+func oneFrameWaveSourceForTest() string {
+	return `{
+  "id": "MAXIOM_REAL_TEMPORAL_c5050781dc3f84f0",
+  "ts": "2026-11-17T13:33:11.916351+00:00",
+  "state": "MAXIOM_REAL_TEMPORAL_WAVE_LOCKED",
+  "frames_sampled": 1,
+  "wave_states": 1,
+  "compressed_states": 1,
+  "compression_ratio": 1.0
+}
+`
+}
+
+func TestNumberTokens(t *testing.T) {
+	got := strings.Join(numberTokens("14 frames, ratio 0.42857, 1.0 at 2026-11-17T13:33 end."), ",")
+	if got != "14,0.42857,1.0,2026,11,17,13,33" {
+		t.Fatalf("tokens = %s", got)
+	}
+}
+
+func TestNumericGroundingRejectsGovernedStateNumbers(t *testing.T) {
+	source := withSourceDigest(oneFrameWaveSourceForTest())
+	bad := "The source shows 14 frames sampled, 1 wave state, 6 compressed states, and a compression ratio of 1.0."
+	r := Result{Summary: bad, Risk: "L", Facts: []string{bad}}
+	err := rejectPromptPlaceholders(r, source)
+	if err == nil || !strings.Contains(err.Error(), "number 14 not in SOURCE") {
+		t.Fatalf("err = %v", err)
+	}
+
+	good := "The source shows 1 frames sampled, 1 wave states, 1 compressed states, and a compression ratio of 1.0."
+	r = Result{Summary: good, Risk: "L", Facts: []string{"1 frames sampled, 1 wave states, 1 compressed states (ratio 1)"}}
+	if err := rejectPromptPlaceholders(r, source); err != nil {
+		t.Fatalf("grounded numbers rejected: %v", err)
+	}
+}
+
+func TestNumericGroundingAcceptsFourteenFrameWave(t *testing.T) {
+	source := withSourceDigest(waveSourceForDigestTest())
+	if len(source) > 1000 {
+		source = truncateUTF8(source, 1000)
+	}
+	fact := "14 frames sampled, 14 wave states, 6 compressed states (ratio 0.42857)"
+	r := Result{Summary: "MAXIOM real temporal wave: " + fact + ".", Risk: "L", Facts: []string{fact}}
+	if err := rejectPromptPlaceholders(r, source); err != nil {
+		t.Fatalf("grounded wave rejected: %v", err)
+	}
+}
+
+func TestAnalyzeRegeneratesWhenNumbersComeFromGovernedState(t *testing.T) {
+	root := t.TempDir()
+	model := filepath.Join(root, "model.gguf")
+	if err := os.WriteFile(model, []byte("test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	count := filepath.Join(root, "count")
+	binary := filepath.Join(root, "llama-completion")
+	script := `#!/bin/sh
+if [ -f "` + count + `" ]; then
+cat <<'OUT'
+S|MAXIOM real temporal wave with 1 frames sampled and 1 wave states
+K|L
+F|1 frames sampled, 1 wave states, 1 compressed states, ratio 1.0
+C|VLD
+Z
+OUT
+else
+touch "` + count + `"
+cat <<'OUT'
+S|The source shows 14 frames sampled and 6 compressed states
+K|L
+F|14 frames sampled, 1 wave state, 6 compressed states, ratio 1.0
+C|VLD
+Z
+OUT
+fi
+`
+	if err := os.WriteFile(binary, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	g := GemmaCLI{Binary: binary, Model: model, Context: 2048, MaxTokens: 80, Threads: 1, Timeout: 5 * time.Second}
+	res, err := g.Analyze(context.Background(), Input{
+		Name:          "c5050781-wave-v3.json",
+		Content:       []byte(oneFrameWaveSourceForTest()),
+		GovernedState: "ACCEPTED_FACT: 14 frames sampled, 14 wave states, 6 compressed states (ratio 0.42857)",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Facts) != 1 || strings.Contains(res.Facts[0], "14") {
+		t.Fatalf("facts = %#v", res.Facts)
+	}
+}
+
+func TestBuildPromptKeepsNumbersInSource(t *testing.T) {
+	if !strings.Contains(buildPrompt("x.json", "c", "s"), "Numbers in S and F must come from SOURCE, never from GOVERNED_STATE.\n") {
+		t.Fatal("prompt missing numeric grounding line")
+	}
+}
