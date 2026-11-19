@@ -21,7 +21,8 @@ import (
 // Stress tests use only temporary state. They never open a live .field
 // directory and they never call decide on real state.
 //
-// UNIFUSION_STRESS=1 runs the scale timing test, which is kept out of the
+// UNIFUSION_STRESS=1 runs the scale timing test (verify and FIELD rebuild
+// at 1x and 10x registry size), which is kept out of the
 // default suite so a phone `go test` stays fast.
 // UNIFUSION_STRESS_FINDINGS=1 runs the tests that pin known gaps. Those
 // tests are expected to fail until the gap is closed; they must not be
@@ -874,6 +875,25 @@ func TestVerifyScaleGrowth(t *testing.T) {
 		return elapsed
 	}
 
+	// timeRebuild times the FIELD projection rebuild from the COSL ledger
+	// (read events, then livefield.Rebuild), the same work fieldd and
+	// `field status` repeat on every read.
+	timeRebuild := func(t *testing.T, label string, s *store.Store) time.Duration {
+		t.Helper()
+		start := time.Now()
+		events, err := s.Events()
+		if err != nil {
+			t.Fatalf("%s rebuild read failed: %v", label, err)
+		}
+		st, err := livefield.Rebuild(events)
+		if err != nil {
+			t.Fatalf("%s rebuild failed: %v", label, err)
+		}
+		elapsed := time.Since(start)
+		t.Logf("%s: FIELD rebuild in %s (%d events, %d accepted)", label, elapsed, len(events), len(st.Accepted))
+		return elapsed
+	}
+
 	const size1x = 200
 	const size10x = 2000
 	s1 := build(t, size1x)
@@ -886,6 +906,11 @@ func TestVerifyScaleGrowth(t *testing.T) {
 	}
 	ratio := float64(t10) / float64(t1)
 	t.Logf("10x/1x verify ratio = %.2f (size ratio = %.1f). ~linear would be near 10.", ratio, float64(size10x)/float64(size1x))
+	r1 := timeRebuild(t, fmt.Sprintf("1x n=%d", size1x), s1)
+	r10 := timeRebuild(t, fmt.Sprintf("10x n=%d", size10x), s10)
+	if r1 > 0 && r10 > 0 {
+		t.Logf("10x/1x FIELD rebuild ratio = %.2f", float64(r10)/float64(r1))
+	}
 }
 
 func TestAcceptedContradictionGoesUndetected(t *testing.T) {

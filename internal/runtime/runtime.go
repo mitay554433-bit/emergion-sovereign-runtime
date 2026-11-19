@@ -63,12 +63,31 @@ func (e *sourceAnalysisError) Unwrap() error {
 	return e.Err
 }
 
+// lineageRejectedError is a per-file admission stoppage: the analysis
+// claimed a runtime-owned relationship, or named a COMPOSITION_KIN,
+// supersedes or RETURNED predecessor that is not in the governed state.
+// It is raised before any evidence is preserved, so nothing is written.
+// Once isolates it like an empty source; the message is unchanged.
+type lineageRejectedError struct {
+	msg string
+}
+
+func (e *lineageRejectedError) Error() string { return e.msg }
+
+func lineageRejected(format string, args ...any) error {
+	return &lineageRejectedError{msg: fmt.Sprintf(format, args...)}
+}
+
 func isolatableBatchFileError(err error) bool {
 	if errors.Is(err, errEmptySource) {
 		return true
 	}
 	var analysis *sourceAnalysisError
-	return errors.As(err, &analysis)
+	if errors.As(err, &analysis) {
+		return true
+	}
+	var lineage *lineageRejectedError
+	return errors.As(err, &lineage)
 }
 
 type Runtime struct {
@@ -1054,7 +1073,7 @@ func (r Runtime) validateLineage(analysis *reason.Result) error {
 			"next_probe",
 		} {
 			if value := strings.TrimSpace(analysis.Relationships[key]); value != "" {
-				return fmt.Errorf(
+				return lineageRejected(
 					"lineage rejected: relationship %q is runtime-owned",
 					key,
 				)
@@ -1065,7 +1084,7 @@ func (r Runtime) validateLineage(analysis *reason.Result) error {
 	// step inside the target-comparison capture may write it.
 	if r.Reasoner.Name() != "target-comparison" &&
 		strings.TrimSpace(analysis.Relationships["requirement_basis"]) != "" {
-		return fmt.Errorf(
+		return lineageRejected(
 			"lineage rejected: relationship %q is runtime-owned",
 			"requirement_basis",
 		)
@@ -1076,7 +1095,7 @@ func (r Runtime) validateLineage(analysis *reason.Result) error {
 	if r.Reasoner.Name() != fractureProbeReasonerName {
 		for _, key := range []string{"fracture_gap", "fracture_level", "fracture_evidence"} {
 			if strings.TrimSpace(analysis.Relationships[key]) != "" {
-				return fmt.Errorf(
+				return lineageRejected(
 					"lineage rejected: relationship %q is runtime-owned",
 					key,
 				)
@@ -1104,7 +1123,7 @@ func (r Runtime) validateLineage(analysis *reason.Result) error {
 	compositionTarget := strings.TrimSpace(analysis.Relationships["COMPOSITION_KIN"])
 	if compositionTarget != "" {
 		if _, ok := st.Accepted[compositionTarget]; !ok {
-			return fmt.Errorf(
+			return lineageRejected(
 				"composition rejected: COMPOSITION_KIN target %q is not REG-accepted",
 				compositionTarget,
 			)
@@ -1115,6 +1134,8 @@ func (r Runtime) validateLineage(analysis *reason.Result) error {
 	if returnedID != "" {
 		previous, ok := st.Returned[returnedID]
 		if !ok {
+			// A wrong ReturnedPredecessor is runtime configuration, not one
+			// malformed file: it still stops the batch.
 			return fmt.Errorf("rework rejected: predecessor %q is not HUMAN_FINAL RETURNED", returnedID)
 		}
 
@@ -1131,7 +1152,7 @@ func (r Runtime) validateLineage(analysis *reason.Result) error {
 
 	previous, ok := st.Accepted[analysis.Supersedes]
 	if !ok {
-		return fmt.Errorf("lineage rejected: supersedes %q is not REG-accepted", analysis.Supersedes)
+		return lineageRejected("lineage rejected: supersedes %q is not REG-accepted", analysis.Supersedes)
 	}
 
 	analysis.Delta = deriveDelta(previous, *analysis)
