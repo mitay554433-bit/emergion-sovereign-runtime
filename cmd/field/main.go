@@ -163,6 +163,8 @@ func main() {
 	dropzone := flag.String("dropzone", envOr("FIELD_DROPZONE", "dropzone"), "transient intake directory")
 	poll := flag.Duration("poll", 2*time.Second, "dropzone polling interval")
 	output := flag.String("output", envOr("FIELD_OUTPUT", "outputs"), "living FIELD projection directory")
+	probeWorktree := flag.String("probe-worktree", envOr("FIELD_PROBE_WORKTREE", ""), "dedicated clean git worktree for fracture probes")
+	maxRounds := flag.Int("max-rounds", 3, "maximum fracture probe rounds per boundary")
 	flag.Parse()
 	args := flag.Args()
 	if len(args) == 0 {
@@ -522,8 +524,19 @@ func main() {
 			fail(fmt.Errorf("usage: field execute <emergion-id> <adapter> <action>"))
 		}
 
+		probe, err := targetIsFractureProbe(s, args[1])
+		if err != nil {
+			fail(err)
+		}
+		if probe {
+			if err := probeWorktreeSynced(".", *probeWorktree); err != nil {
+				fail(err)
+			}
+		}
+
 		rt := fieldruntime.Runtime{
-			Store: s,
+			Store:        s,
+			ProbeWorkDir: *probeWorktree,
 		}
 
 		request, result, signal, duplicate, execErr := rt.ExecuteAction(
@@ -544,6 +557,34 @@ func main() {
 		if execErr != nil {
 			fail(execErr)
 		}
+
+	case "fracture-next":
+		if len(args) != 1 {
+			fail(fmt.Errorf("usage: field fracture-next"))
+		}
+		if err := probeWorktreeSynced(".", *probeWorktree); err != nil {
+			fail(err)
+		}
+		// Proposal only: at most one probe or target recompute candidate is
+		// admitted to GOV. Nothing is authorized, applied or executed.
+		rt := fieldruntime.Runtime{
+			Store:        s,
+			Reasoner:     mkReasoner(),
+			ProbeWorkDir: *probeWorktree,
+		}
+		statuses, candidate, err := rt.ProposeNextFractureWaveRound(
+			context.Background(),
+			*probeWorktree,
+			*maxRounds,
+		)
+		if err != nil {
+			fail(err)
+		}
+		renderField(s, *output)
+		printJSON(map[string]any{
+			"wave":      statuses,
+			"candidate": candidate.IDN,
+		})
 
 	case "safe-action":
 		if len(args) != 1 {
@@ -663,6 +704,7 @@ Commands:
   authorize <id> <adapter> <action> [why] HUMAN_FINAL authorization for a derivable gated action
   execute <id> <adapter> <action> execute one governed local action and recapture its result
   safe-action                  execute at most one eligible bounded CAP_ONLY action
+  fracture-next                propose the next fracture wave round (probe or target recompute); proposal only
   materialize <accepted-execution-result-id>  read verified output from a REG-accepted successful execution result
   render [directory]           static JSON and HTML FIELD projection
   verify                       verify chain/evidence and remove orphan objects
@@ -674,5 +716,13 @@ Commands:
 Environment:
   GEMMA_BIN, GEMMA_MODEL, GEMMA_THREADS, GEMMA_CONTEXT,
   GEMMA_MAX_TOKENS, GEMMA_TIMEOUT_SECONDS, GEMMA_EXTRA_ARGS,
-  FIELD_HOME, FIELD_DROPZONE, FIELD_OUTPUT, FIELD_REASONER`)
+  FIELD_HOME, FIELD_DROPZONE, FIELD_OUTPUT, FIELD_REASONER,
+  FIELD_PROBE_WORKTREE (or -probe-worktree; -max-rounds, default 3)
+
+Fracture probes run only in a dedicated clean worktree. One-time setup,
+from the repository:
+  git worktree add --detach ../esr-probes HEAD
+  export FIELD_PROBE_WORKTREE="$(cd ../esr-probes && pwd)"
+After a structural addition lands, sync it:
+  git -C "$FIELD_PROBE_WORKTREE" checkout -q --detach "$(git rev-parse HEAD)"`)
 }
