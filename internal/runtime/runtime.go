@@ -122,11 +122,11 @@ func coverage(em *core.EmergION, governedState string) error {
 	if strings.TrimSpace(em.MEM.Summary) == "" {
 		bridgegaps = append(bridgegaps, "BRIDGEGAP:summary")
 	}
-	// With governed state present, the runtime used to append the
-	// "living_state_projected" label to Facts before this check, so the facts
-	// gap could not fire there. The label is gone (Facts hold only
-	// source-grounded entries); this keeps admission outcomes unchanged.
-	if len(em.VAL.Facts) == 0 && strings.TrimSpace(governedState) == "" {
+	// Every candidate needs at least one fact taken from its own source,
+	// whether or not governed state exists. Earlier accepted records do not
+	// stand in for the candidate's own evidence, so a candidate with zero facts
+	// gets the facts gap and stops for review.
+	if len(em.VAL.Facts) == 0 {
 		bridgegaps = append(bridgegaps, "BRIDGEGAP:facts")
 	}
 	if len(em.CAP) == 0 {
