@@ -215,8 +215,14 @@ func captureDifferenceComparison(t *testing.T, f differenceFixture, observer rea
 	if comparison.REL["comparison_state"] != "UNRESOLVED" {
 		t.Fatalf("comparison_state = %q want UNRESOLVED", comparison.REL["comparison_state"])
 	}
-	if len(comparison.VAL.Gaps) != 0 {
+	// Section 11: a Difference alone never becomes a BRIDGEGAP. Only a
+	// genuinely unmet Section 8 requirement records exactly one.
+	want := genuineRemainderBridgeGap(comparison.REL["required_capability"], comparison.REL["requirement_basis"])
+	switch {
+	case want == "" && len(comparison.VAL.Gaps) != 0:
 		t.Fatalf("Difference became a BRIDGEGAP: %#v", comparison.VAL.Gaps)
+	case want != "" && (len(comparison.VAL.Gaps) != 1 || comparison.VAL.Gaps[0] != want):
+		t.Fatalf("genuine remainder gaps = %#v want [%q]", comparison.VAL.Gaps, want)
 	}
 	return comparison
 }
