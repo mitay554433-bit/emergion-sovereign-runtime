@@ -140,6 +140,7 @@ func TestCaptureAcceptsREGAcceptedSupersedes(t *testing.T) {
 		EVO: core.Evolution{Version: 1},
 	}
 
+	attachPreservedSource(t, s, &predecessor)
 	if _, err := s.SaveCandidate(predecessor); err != nil {
 		t.Fatal(err)
 	}
@@ -268,6 +269,7 @@ func TestGovernedStateContextRemainsValidJSON(t *testing.T) {
 			EVO: core.Evolution{Version: 1},
 		}
 
+		attachPreservedSource(t, s, &em)
 		if _, err := s.SaveCandidate(em); err != nil {
 			t.Fatal(err)
 		}
@@ -392,6 +394,7 @@ func TestReturnedEmergIONReentersThroughRework(t *testing.T) {
 		},
 	}
 
+	attachPreservedSource(t, s, &original)
 	if _, err := s.SaveCandidate(original); err != nil {
 		t.Fatal(err)
 	}
@@ -1787,6 +1790,7 @@ func TestCaptureAllowsCompositionKinToREGAcceptedTarget(t *testing.T) {
 		},
 	}
 
+	attachPreservedSource(t, s, &target)
 	if _, err := s.SaveCandidate(target); err != nil {
 		t.Fatal(err)
 	}
@@ -1961,6 +1965,7 @@ func TestCaptureRejectsCompositionKinSelfReference(t *testing.T) {
 		},
 	}
 
+	attachPreservedSource(t, s, &target)
 	if _, err := s.SaveCandidate(target); err != nil {
 		t.Fatal(err)
 	}
@@ -2092,6 +2097,7 @@ func TestSAWSourceReentersGovernedExecutionAndRecapture(t *testing.T) {
 		candidate := em
 		candidate.STA = core.StateAtGOV
 
+		attachPreservedSource(t, s, &candidate)
 		if _, err := s.SaveCandidate(candidate); err != nil {
 			t.Fatal(err)
 		}
@@ -2496,6 +2502,7 @@ func TestCoverageRecaptureResolvesExistingAcceptedCapabilityProviders(t *testing
 		if _, err := s.Preserve([]byte(provider.IDN)); err != nil {
 			t.Fatal(err)
 		}
+		attachPreservedSource(t, s, &provider)
 		if _, err := s.SaveCandidate(provider); err != nil {
 			t.Fatal(err)
 		}
@@ -2654,6 +2661,7 @@ func TestRequiredCapabilityUsesREGAcceptedCapability(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	attachPreservedSource(t, s, &accepted)
 	if _, err := s.SaveCandidate(accepted); err != nil {
 		t.Fatal(err)
 	}
@@ -2811,6 +2819,7 @@ func TestDeriveRelationshipRequirementUsesAcceptedCapability(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	attachPreservedSource(t, s, &provider)
 	if _, err := s.SaveCandidate(provider); err != nil {
 		t.Fatal(err)
 	}
@@ -3385,6 +3394,7 @@ func TestRecaptureCarriesGovernedProviderEdgeProposalWithoutCompositionKin(t *te
 			},
 		}
 
+		attachPreservedSource(t, s, &candidate)
 		if _, err := s.SaveCandidate(candidate); err != nil {
 			t.Fatal(err)
 		}
@@ -3525,6 +3535,7 @@ func TestReturnedProviderEdgeProposalCanReenterAsGovernedComposition(t *testing.
 		},
 	}
 
+	attachPreservedSource(t, s, &target)
 	if _, err := s.SaveCandidate(target); err != nil {
 		t.Fatal(err)
 	}
@@ -3580,6 +3591,7 @@ func TestReturnedProviderEdgeProposalCanReenterAsGovernedComposition(t *testing.
 		},
 	}
 
+	attachPreservedSource(t, s, &proposal)
 	if _, err := s.SaveCandidate(proposal); err != nil {
 		t.Fatal(err)
 	}
@@ -3745,6 +3757,7 @@ func TestGovernedProviderCompositionCirculatesThroughSAWExecutionRecapture(t *te
 		},
 	}
 
+	attachPreservedSource(t, s, &target)
 	if _, err := s.SaveCandidate(target); err != nil {
 		t.Fatal(err)
 	}
@@ -3800,6 +3813,7 @@ func TestGovernedProviderCompositionCirculatesThroughSAWExecutionRecapture(t *te
 		},
 	}
 
+	attachPreservedSource(t, s, &proposal)
 	if _, err := s.SaveCandidate(proposal); err != nil {
 		t.Fatal(err)
 	}
@@ -5014,6 +5028,7 @@ func TestRecaptureProviderPopulationOriginMustExistBeforeDerivedBranches(t *test
 			t.Fatal(err)
 		}
 
+		attachPreservedSource(t, s, &em)
 		if _, err := s.SaveCandidate(em); err != nil {
 			t.Fatal(err)
 		}
@@ -5216,6 +5231,7 @@ func TestRevalidateInterpretationReanalyzesPreservedEvidence(t *testing.T) {
 		},
 	}
 
+	attachPreservedSource(t, s, &original)
 	if _, err := s.SaveCandidate(original); err != nil {
 		t.Fatal(err)
 	}

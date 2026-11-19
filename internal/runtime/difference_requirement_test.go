@@ -120,6 +120,7 @@ func newDifferenceFixture(t *testing.T) differenceFixture {
 
 func (f differenceFixture) accept(em core.EmergION) {
 	f.t.Helper()
+	attachPreservedSource(f.t, f.store, &em)
 	if _, err := f.store.SaveCandidate(em); err != nil {
 		f.t.Fatal(err)
 	}

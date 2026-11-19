@@ -24,6 +24,7 @@ func TestTargetComparisonMaterializesAcceptedProviderPopulationAtGOV(t *testing.
 	accept := func(em core.EmergION) {
 		t.Helper()
 
+		attachPreservedSource(t, s, &em)
 		if _, err := s.SaveCandidate(em); err != nil {
 			t.Fatal(err)
 		}

@@ -156,6 +156,7 @@ func acceptExactQTarget(t *testing.T, s *store.Store, id string) core.EmergION {
 			},
 		},
 	}
+	attachPreservedSource(t, s, &em)
 	if _, err := s.SaveCandidate(em); err != nil {
 		t.Fatal(err)
 	}

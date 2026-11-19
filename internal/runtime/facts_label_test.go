@@ -81,6 +81,7 @@ func TestCaptureWithGovernedStateZeroFactsGetsFactsGap(t *testing.T) {
 		VAL: core.Validation{Recoil: true, WVC: true},
 		EVO: core.Evolution{Version: 1},
 	}
+	attachPreservedSource(t, s, &prior)
 	if _, err := s.SaveCandidate(prior); err != nil {
 		t.Fatal(err)
 	}
