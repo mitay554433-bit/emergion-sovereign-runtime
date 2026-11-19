@@ -35,7 +35,7 @@ func TestDaemonIPCProtocol(t *testing.T) {
 		if err != nil {
 			return
 		}
-		handleConn(rt, conn)
+		handleConn(rt, conn, "test-token")
 	}()
 
 	time.Sleep(50 * time.Millisecond)
@@ -65,7 +65,7 @@ func TestDaemonIPCProtocol(t *testing.T) {
 	}
 
 	// 2. Test unknown method failure mode
-	badReq := Request{Method: "nonexistent_method"}
+	badReq := Request{Method: "nonexistent_method", Token: "test-token"}
 	if err := encoder.Encode(badReq); err != nil {
 		t.Fatalf("failed to send bad request: %v", err)
 	}
