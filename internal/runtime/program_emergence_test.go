@@ -88,6 +88,7 @@ func TestProposeOneProgramPatchAdmitsPatchAtGOVWithRuntimeOrigin(t *testing.T) {
 			Facets:       []core.Facet{core.FacetProgramForge},
 		}},
 	}
+	attachPreservedSource(t, s, &origin)
 	if _, err := s.SaveCandidate(origin); err != nil {
 		t.Fatal(err)
 	}
