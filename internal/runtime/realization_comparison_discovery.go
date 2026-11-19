@@ -29,16 +29,16 @@ func DeriveDiscoveredRealizationComparisons(
 
 	out := RealizationPopulation{
 		TargetThing: population.TargetThing,
-		Members: members,
+		Members:     members,
 	}
 
 	for i := 0; i < len(members); i++ {
 		for j := i + 1; j < len(members); j++ {
 			comparison := RealizationComparison{
 				TargetThing: population.TargetThing,
-				Left: members[i],
-				Right: members[j],
-				Result: RealizationUnresolved,
+				Left:        members[i],
+				Right:       members[j],
+				Result:      RealizationUnresolved,
 			}
 
 			leftOutcomes := acceptedRealizationExecutionOutcomes(st, comparison.Left)

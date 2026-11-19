@@ -30,7 +30,6 @@ func (Heuristic) Analyze(_ context.Context, in Input) (Result, error) {
 
 	if strings.TrimSpace(in.GovernedState) != "" {
 		relationships["governed_state"] = "accepted_context_present"
-		facts = append(facts, "living_state_projected")
 	}
 
 	return Result{

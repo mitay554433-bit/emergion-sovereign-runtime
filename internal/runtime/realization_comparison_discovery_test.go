@@ -20,15 +20,17 @@ func addComparisonExecutionResult(
 	succeeded bool,
 ) {
 	fact := "execution_failed"
-	if succeeded { fact = "execution_succeeded" }
+	if succeeded {
+		fact = "execution_succeeded"
+	}
 	st.Accepted[id] = core.EmergION{
 		IDN: id,
 		STA: core.StateAccepted,
 		REL: map[string]string{
-			"source_kind": "EXECUTION_RESULT",
+			"source_kind":  "EXECUTION_RESULT",
 			"kin_emergion": kin,
-			"adapter": adapter,
-			"action": action,
+			"adapter":      adapter,
+			"action":       action,
 		},
 		VAL: core.Validation{Facts: []string{fact}},
 	}
@@ -41,9 +43,11 @@ func TestDeriveDiscoveredRealizationComparisonsUsesComparableGovernedOutcomes(t 
 
 	population, err := DeriveDiscoveredRealizationComparisons(st, RealizationPopulation{
 		TargetThing: "KNIFE",
-		Members: []string{"E-B", "E-A"},
+		Members:     []string{"E-B", "E-A"},
 	})
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(population.Comparisons) != 1 {
 		t.Fatalf("comparisons = %d want 1", len(population.Comparisons))
 	}
@@ -62,9 +66,11 @@ func TestDeriveDiscoveredRealizationComparisonsLeavesUnresolvedWithoutDistinguis
 
 	population, err := DeriveDiscoveredRealizationComparisons(st, RealizationPopulation{
 		TargetThing: "KNIFE",
-		Members: []string{"E-A", "E-B"},
+		Members:     []string{"E-A", "E-B"},
 	})
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	c := population.Comparisons[0]
 	if c.Result != RealizationUnresolved || len(c.Differences) != 0 {
 		t.Fatalf("comparison = %#v want unresolved", c)
@@ -81,9 +87,11 @@ func TestDeriveDiscoveredRealizationComparisonsDoesNotCrossActions(t *testing.T)
 
 	population, err := DeriveDiscoveredRealizationComparisons(st, RealizationPopulation{
 		TargetThing: "KNIFE",
-		Members: []string{"E-A", "E-B"},
+		Members:     []string{"E-A", "E-B"},
 	})
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if population.Comparisons[0].Result != RealizationUnresolved {
 		t.Fatalf("different actions compared: %#v", population.Comparisons[0])
 	}
@@ -96,9 +104,11 @@ func TestDeriveDiscoveredRealizationComparisonsPreservesPartialPopulation(t *tes
 
 	population, err := DeriveDiscoveredRealizationComparisons(st, RealizationPopulation{
 		TargetThing: "KNIFE",
-		Members: []string{"E-C", "E-B", "E-A"},
+		Members:     []string{"E-C", "E-B", "E-A"},
 	})
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(population.Comparisons) != 3 {
 		t.Fatalf("comparisons = %d want 3", len(population.Comparisons))
 	}

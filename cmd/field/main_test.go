@@ -199,7 +199,6 @@ func TestPublishAcceptedDeliverablesMaterializesAcceptedExecutionResult(t *testi
 	}
 }
 
-
 func TestDaemonPathsUsePlatformTempDirectory(t *testing.T) {
 	t.Setenv("FIELD_SOCKET", "")
 	t.Setenv("FIELD_PID", "")

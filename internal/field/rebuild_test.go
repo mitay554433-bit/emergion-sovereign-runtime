@@ -12,10 +12,10 @@ func TestRebuildExecutionObservationIdentityCollisionPreservesFirstCandidate(t *
 		STA: core.StateAtGOV,
 		MEM: core.Memory{SourceHash: "original-observation", Provenance: "execution_observation"},
 		REL: map[string]string{
-			"source_kind": "EXECUTION_OBSERVATION",
+			"source_kind":  "EXECUTION_OBSERVATION",
 			"kin_emergion": "E-ACCEPTED-KIN",
-			"adapter": "LOCAL_GEMMA",
-			"action": "ANALYZE",
+			"adapter":      "LOCAL_GEMMA",
+			"action":       "ANALYZE",
 		},
 		EVO: core.Evolution{Version: 1},
 	}

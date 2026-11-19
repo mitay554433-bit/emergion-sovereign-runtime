@@ -12,7 +12,9 @@ import (
 
 func TestCaptureObservedRealizationReorderAdmitsAtGOV(t *testing.T) {
 	s, err := store.Open(t.TempDir())
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for _, id := range []string{"E-A", "E-B"} {
 		acceptRealizationForSelectionGovernance(t, s, core.EmergION{
@@ -28,7 +30,7 @@ func TestCaptureObservedRealizationReorderAdmitsAtGOV(t *testing.T) {
 
 	r := Runtime{Store: s}
 	for _, outcome := range []struct {
-		kin    string
+		kin       string
 		succeeded bool
 	}{
 		{kin: "E-A", succeeded: false},
@@ -49,7 +51,9 @@ func TestCaptureObservedRealizationReorderAdmitsAtGOV(t *testing.T) {
 				Succeeded: outcome.succeeded,
 				Output:    "observed realization execution",
 				Error: func() string {
-					if outcome.succeeded { return "" }
+					if outcome.succeeded {
+						return ""
+					}
 					return "observed execution failure"
 				}(),
 			},
@@ -59,26 +63,34 @@ func TestCaptureObservedRealizationReorderAdmitsAtGOV(t *testing.T) {
 			request,
 			result,
 		)
-		if err != nil { t.Fatal(err) }
-		if duplicate { t.Fatal("execution result unexpectedly duplicate") }
+		if err != nil {
+			t.Fatal(err)
+		}
+		if duplicate {
+			t.Fatal("execution result unexpectedly duplicate")
+		}
 		acceptRealizationForSelectionGovernance(t, s, signal)
 	}
 
 	p := RealizationPopulation{
 		TargetThing: "KNIFE",
-		Members: []string{"E-A", "E-B"},
+		Members:     []string{"E-A", "E-B"},
 		Comparisons: []RealizationComparison{{
 			TargetThing: "KNIFE",
-			Left: "E-A",
-			Right: "E-B",
-			Result: RealizationLeftPreferred,
+			Left:        "E-A",
+			Right:       "E-B",
+			Result:      RealizationLeftPreferred,
 			Differences: []string{"INITIAL:A>B"},
 		}},
 	}
 
 	em, duplicate, err := r.CaptureObservedRealizationReorder(context.Background(), p)
-	if err != nil { t.Fatal(err) }
-	if duplicate { t.Fatal("first reorder unexpectedly duplicate") }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate {
+		t.Fatal("first reorder unexpectedly duplicate")
+	}
 	if em.STA != core.StateAtGOV {
 		t.Fatalf("state = %q want %q", em.STA, core.StateAtGOV)
 	}
@@ -99,12 +111,12 @@ func TestCaptureObservedRealizationReorderAdmitsAtGOV(t *testing.T) {
 func TestCaptureObservedRealizationReorderEvidenceDeterministic(t *testing.T) {
 	p := RealizationPopulation{
 		TargetThing: "KNIFE",
-		Members: []string{"E-B", "E-A"},
+		Members:     []string{"E-B", "E-A"},
 		Comparisons: []RealizationComparison{{
 			TargetThing: "KNIFE",
-			Left: "E-A",
-			Right: "E-B",
-			Result: RealizationRightPreferred,
+			Left:        "E-A",
+			Right:       "E-B",
+			Result:      RealizationRightPreferred,
 			Differences: []string{"Z", "A"},
 		}},
 	}

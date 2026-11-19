@@ -1,8 +1,8 @@
 package fieldapi
 
 import (
-	"emergion-sovereign-runtime/internal/gemmalive"
 	"context"
+	"emergion-sovereign-runtime/internal/gemmalive"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -1077,24 +1077,24 @@ func TestRunContinuesHumanFinalReturnedBeforeIdleProjection(t *testing.T) {
 	if continuation.IDN == "" {
 		t.Fatal("Run did not derive governed continuation from HUMAN_FINAL RETURNED source")
 	}
-        evidence, err := rt.store.ReadEvidence(continuation.MEM.SourceHash)
-        if err != nil {
-                t.Fatal(err)
-        }
-        var fields map[string]any
-        if err := json.Unmarshal(evidence, &fields); err != nil {
-                t.Fatal(err)
-        }
-        for key, want := range map[string]string{
-                "transition_emergion": "E-TEST-TRANSITION",
-                "required_capability": "DERIVE_CAPABILITY",
-                "capability_resolution": "UNRESOLVED",
-                "capability_provider_edge_proposal": "TEST_PROVIDER_EDGE",
-        } {
-                if got := fields[key]; got != want {
-                        t.Fatalf("continuation evidence %s = %v; want %q", key, got, want)
-                }
-        }
+	evidence, err := rt.store.ReadEvidence(continuation.MEM.SourceHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(evidence, &fields); err != nil {
+		t.Fatal(err)
+	}
+	for key, want := range map[string]string{
+		"transition_emergion":               "E-TEST-TRANSITION",
+		"required_capability":               "DERIVE_CAPABILITY",
+		"capability_resolution":             "UNRESOLVED",
+		"capability_provider_edge_proposal": "TEST_PROVIDER_EDGE",
+	} {
+		if got := fields[key]; got != want {
+			t.Fatalf("continuation evidence %s = %v; want %q", key, got, want)
+		}
+	}
 
 	if continuation.STA != core.StateAtGOV {
 		t.Fatalf("continuation state = %q want %q", continuation.STA, core.StateAtGOV)
@@ -1653,26 +1653,39 @@ func TestHumanFinalApprovalRenderCurrentPublishesVerifiedDeliverable(t *testing.
 	}
 }
 
-
 func TestGovernedCyclePendingReorderAllowsIndependentSafeWork(t *testing.T) {
 	root := t.TempDir()
 	rt, err := Open(filepath.Join(root, "state"), sawCirculationReasoner{})
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	accept := func(em core.EmergION, why string) {
-		if _, err := rt.store.SaveCandidate(em); err != nil { t.Fatal(err) }
+		if _, err := rt.store.SaveCandidate(em); err != nil {
+			t.Fatal(err)
+		}
 		approved, decision, err := gov.Decide(em, gov.Approve, "HUMAN_FINAL", why)
-		if err != nil { t.Fatal(err) }
+		if err != nil {
+			t.Fatal(err)
+		}
 		decisionID, err := rt.store.SaveDecision(decision)
-		if err != nil { t.Fatal(err) }
+		if err != nil {
+			t.Fatal(err)
+		}
 		_, receipt, err := reg.Accept(approved, decisionID)
-		if err != nil { t.Fatal(err) }
-		if _, err := rt.store.SaveAccepted(receipt); err != nil { t.Fatal(err) }
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := rt.store.SaveAccepted(receipt); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	member := func(id string) core.EmergION {
 		evidence, err := rt.store.Preserve([]byte(id + " evidence"))
-		if err != nil { t.Fatal(err) }
+		if err != nil {
+			t.Fatal(err)
+		}
 		return core.EmergION{
 			IDN: id, STA: core.StateAtGOV,
 			MEM: core.Memory{
@@ -1695,50 +1708,64 @@ func TestGovernedCyclePendingReorderAllowsIndependentSafeWork(t *testing.T) {
 
 	population := fieldruntime.RealizationPopulation{
 		TargetThing: "KNIFE",
-		Members: []string{a.IDN, b.IDN},
+		Members:     []string{a.IDN, b.IDN},
 		Comparisons: []fieldruntime.RealizationComparison{{
 			TargetThing: "KNIFE", Left: a.IDN, Right: b.IDN,
-			Result: fieldruntime.RealizationLeftPreferred,
+			Result:      fieldruntime.RealizationLeftPreferred,
 			Differences: []string{"INITIAL:A>B"},
 		}},
 	}
 	runtime := fieldruntime.Runtime{Store: rt.store}
 	selection, duplicate, err := runtime.CaptureRealizationSelection(context.Background(), population)
-	if err != nil { t.Fatal(err) }
-	if duplicate { t.Fatal("selection unexpectedly duplicate") }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate {
+		t.Fatal("selection unexpectedly duplicate")
+	}
 	accept(selection, "accept initial realization selection")
 
 	captureResult := func(kin string, succeeded bool) {
 		request := adapters.ExecutionRequest{
-			EmergIONID: kin,
-			SourceHash: kin + "-source",
+			EmergIONID:      kin,
+			SourceHash:      kin + "-source",
 			AuthorizationID: "EV-Q-" + kin,
-			Authority: "HUMAN_FINAL",
-			Adapter: "LOCAL_GEMMA",
-			Action: "ANALYZE",
+			Authority:       "HUMAN_FINAL",
+			Adapter:         "LOCAL_GEMMA",
+			Action:          "ANALYZE",
 		}
 		request.TransitionEmergIONID = adapters.ExecutionTransitionID(request)
 		result := adapters.BindExecutionResult(request, adapters.ExecutionResult{
 			Succeeded: succeeded,
-			Output: "observed execution",
+			Output:    "observed execution",
 			Error: func() string {
-				if succeeded { return "" }
+				if succeeded {
+					return ""
+				}
 				return "observed execution failure"
 			}(),
 		})
 		signal, duplicate, err := runtime.CaptureGovernedExecutionResult(
 			context.Background(), request, result,
 		)
-		if err != nil { t.Fatal(err) }
-		if duplicate { t.Fatal("execution result unexpectedly duplicate") }
+		if err != nil {
+			t.Fatal(err)
+		}
+		if duplicate {
+			t.Fatal("execution result unexpectedly duplicate")
+		}
 		accept(signal, "accept governed execution result")
 	}
 	captureResult(a.IDN, false)
 	captureResult(b.IDN, true)
 
 	reorder, pending, err := rt.capturePendingRealizationReorder(context.Background())
-	if err != nil { t.Fatal(err) }
-	if !pending { t.Fatal("changed order was not submitted for HUMAN_FINAL") }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !pending {
+		t.Fatal("changed order was not submitted for HUMAN_FINAL")
+	}
 	if reorder.STA != core.StateAtGOV {
 		t.Fatalf("reorder state = %q want AtGOV", reorder.STA)
 	}
@@ -1751,7 +1778,9 @@ func TestGovernedCyclePendingReorderAllowsIndependentSafeWork(t *testing.T) {
 
 	// Re-check before HUMAN_FINAL to confirm the same proposal stays pending.
 	same, pending, err := rt.capturePendingRealizationReorder(context.Background())
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !pending || same.IDN != reorder.IDN {
 		t.Fatal("pending reorder was not reused")
 	}
@@ -1791,7 +1820,9 @@ func TestGovernedCyclePendingReorderAllowsIndependentSafeWork(t *testing.T) {
 	}
 
 	state, err := rt.state()
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, ok := state.AtGOV[reorder.IDN]; !ok {
 		t.Fatal("reorder did not remain AtGOV")
 	}
@@ -1800,20 +1831,29 @@ func TestGovernedCyclePendingReorderAllowsIndependentSafeWork(t *testing.T) {
 	}
 }
 
-
 func TestGovernedCycleDiscoveredSelectionStopsAtHumanFinal(t *testing.T) {
 	root := t.TempDir()
 	rt, err := Open(filepath.Join(root, "state"), sawCirculationReasoner{})
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	accept := func(em core.EmergION, why string) {
 		approved, decision, err := gov.Decide(em, gov.Approve, "HUMAN_FINAL", why)
-		if err != nil { t.Fatal(err) }
+		if err != nil {
+			t.Fatal(err)
+		}
 		decisionID, err := rt.store.SaveDecision(decision)
-		if err != nil { t.Fatal(err) }
+		if err != nil {
+			t.Fatal(err)
+		}
 		_, receipt, err := reg.Accept(approved, decisionID)
-		if err != nil { t.Fatal(err) }
-		if _, err := rt.store.SaveAccepted(receipt); err != nil { t.Fatal(err) }
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := rt.store.SaveAccepted(receipt); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	runtime := fieldruntime.Runtime{Store: rt.store}
@@ -1825,8 +1865,12 @@ func TestGovernedCycleDiscoveredSelectionStopsAtHumanFinal(t *testing.T) {
 		em, duplicate, err := memberRuntime.CaptureBytes(
 			context.Background(), name, []byte(name+" evidence"), "selection_cycle_fixture",
 		)
-		if err != nil { t.Fatal(err) }
-		if duplicate { t.Fatal("member unexpectedly duplicate") }
+		if err != nil {
+			t.Fatal(err)
+		}
+		if duplicate {
+			t.Fatal("member unexpectedly duplicate")
+		}
 		accept(em, "accept realization")
 		return em
 	}
@@ -1838,35 +1882,47 @@ func TestGovernedCycleDiscoveredSelectionStopsAtHumanFinal(t *testing.T) {
 		identity, duplicate, err := runtime.CaptureRealizationIdentity(
 			context.Background(), member.IDN, "KNIFE",
 		)
-		if err != nil { t.Fatal(err) }
-		if duplicate { t.Fatal("identity unexpectedly duplicate") }
+		if err != nil {
+			t.Fatal(err)
+		}
+		if duplicate {
+			t.Fatal("identity unexpectedly duplicate")
+		}
 		accept(identity, "accept realization identity")
 	}
 
 	captureOutcome := func(kinID string, succeeded bool) {
 		request := adapters.ExecutionRequest{
 			EmergIONID: kinID,
-			Adapter: "LOCAL_GEMMA",
-			Action: "ANALYZE",
+			Adapter:    "LOCAL_GEMMA",
+			Action:     "ANALYZE",
 		}
 		result := adapters.ExecutionResult{
-			Adapter: "LOCAL_GEMMA",
-			Action: "ANALYZE",
+			Adapter:   "LOCAL_GEMMA",
+			Action:    "ANALYZE",
 			Succeeded: succeeded,
 		}
 		signal, duplicate, err := runtime.CaptureExecutionResult(
 			context.Background(), request, result,
 		)
-		if err != nil { t.Fatal(err) }
-		if duplicate { t.Fatal("execution result unexpectedly duplicate") }
+		if err != nil {
+			t.Fatal(err)
+		}
+		if duplicate {
+			t.Fatal("execution result unexpectedly duplicate")
+		}
 		accept(signal, "accept execution observation")
 	}
 	captureOutcome(a.IDN, true)
 	captureOutcome(b.IDN, false)
 
 	selection, pending, err := rt.capturePendingRealizationSelection(context.Background())
-	if err != nil { t.Fatal(err) }
-	if !pending { t.Fatal("discovered selection did not stop for HUMAN_FINAL") }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !pending {
+		t.Fatal("discovered selection did not stop for HUMAN_FINAL")
+	}
 	if selection.STA != core.StateAtGOV {
 		t.Fatalf("selection state = %q want AtGOV", selection.STA)
 	}
@@ -1878,7 +1934,9 @@ func TestGovernedCycleDiscoveredSelectionStopsAtHumanFinal(t *testing.T) {
 	}
 
 	state, err := rt.state()
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, ok := state.AtGOV[selection.IDN]; !ok {
 		t.Fatal("selection did not remain AtGOV")
 	}
@@ -2094,4 +2152,3 @@ func TestRunExecutesTwoDistinctSafeWorksAcrossProductiveGovernedCycles(t *testin
 	}
 
 }
-

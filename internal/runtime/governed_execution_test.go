@@ -107,12 +107,11 @@ func TestExecutionSuccessWithoutProviderValidationDoesNotProveCapability(t *test
 	}
 	signal := core.EmergION{
 		REL: map[string]string{
-			"source_kind": "EXECUTION_RESULT",
+			"source_kind":  "EXECUTION_RESULT",
 			"kin_emergion": request.EmergIONID,
-			"adapter": request.Adapter,
-			"action": request.Action,
+			"adapter":      request.Adapter,
+			"action":       request.Action,
 		},
-		
 	}
 	signal.VAL.Facts = []string{"execution_result_observed", "execution_succeeded"}
 	signal.VAL.WVC = true

@@ -11,15 +11,17 @@ func acceptedExecutionResultFixture(
 	succeeded bool,
 ) core.EmergION {
 	fact := "execution_failed"
-	if succeeded { fact = "execution_succeeded" }
+	if succeeded {
+		fact = "execution_succeeded"
+	}
 	return core.EmergION{
 		IDN: id,
 		STA: core.StateAccepted,
 		REL: map[string]string{
-			"source_kind": "EXECUTION_RESULT",
+			"source_kind":  "EXECUTION_RESULT",
 			"kin_emergion": kin,
-			"adapter": adapter,
-			"action": action,
+			"adapter":      adapter,
+			"action":       action,
 		},
 		VAL: core.Validation{
 			Facts: []string{"execution_result_observed", fact},
@@ -42,18 +44,20 @@ func TestReorderRealizationPopulationObservedExecutionPromotesRunnerUp(t *testin
 
 	p := RealizationPopulation{
 		TargetThing: "KNIFE",
-		Members: []string{"E-A", "E-B"},
+		Members:     []string{"E-A", "E-B"},
 		Comparisons: []RealizationComparison{{
 			TargetThing: "KNIFE",
-			Left: "E-A",
-			Right: "E-B",
-			Result: RealizationLeftPreferred,
+			Left:        "E-A",
+			Right:       "E-B",
+			Result:      RealizationLeftPreferred,
 			Differences: []string{"INITIAL:A>B"},
 		}},
 	}
 
 	updated, order, err := ReorderRealizationPopulationFromObservedExecution(st, p)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if updated.Comparisons[0].Result != RealizationRightPreferred {
 		t.Fatalf("comparison = %s want %s", updated.Comparisons[0].Result, RealizationRightPreferred)
 	}
@@ -72,18 +76,20 @@ func TestReorderRealizationPopulationRequiresBothObservedOutcomes(t *testing.T) 
 
 	p := RealizationPopulation{
 		TargetThing: "KNIFE",
-		Members: []string{"E-A", "E-B"},
+		Members:     []string{"E-A", "E-B"},
 		Comparisons: []RealizationComparison{{
 			TargetThing: "KNIFE",
-			Left: "E-A",
-			Right: "E-B",
-			Result: RealizationLeftPreferred,
+			Left:        "E-A",
+			Right:       "E-B",
+			Result:      RealizationLeftPreferred,
 			Differences: []string{"INITIAL:A>B"},
 		}},
 	}
 
 	updated, order, err := ReorderRealizationPopulationFromObservedExecution(st, p)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if updated.Comparisons[0].Result != RealizationLeftPreferred {
 		t.Fatalf("single outcome changed comparison to %s", updated.Comparisons[0].Result)
 	}
@@ -99,18 +105,20 @@ func TestReorderRealizationPopulationDoesNotCompareDifferentActions(t *testing.T
 
 	p := RealizationPopulation{
 		TargetThing: "KNIFE",
-		Members: []string{"E-A", "E-B"},
+		Members:     []string{"E-A", "E-B"},
 		Comparisons: []RealizationComparison{{
 			TargetThing: "KNIFE",
-			Left: "E-A",
-			Right: "E-B",
-			Result: RealizationLeftPreferred,
+			Left:        "E-A",
+			Right:       "E-B",
+			Result:      RealizationLeftPreferred,
 			Differences: []string{"INITIAL:A>B"},
 		}},
 	}
 
 	updated, order, err := ReorderRealizationPopulationFromObservedExecution(st, p)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if updated.Comparisons[0].Result != RealizationLeftPreferred {
 		t.Fatalf("different action changed comparison to %s", updated.Comparisons[0].Result)
 	}

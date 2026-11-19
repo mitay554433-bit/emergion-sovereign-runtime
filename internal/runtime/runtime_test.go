@@ -1,11 +1,11 @@
 package runtime
 
 import (
-	"emergion-sovereign-runtime/internal/gemmalive"
 	"context"
 	"emergion-sovereign-runtime/internal/adapters"
 	"emergion-sovereign-runtime/internal/core"
 	livefield "emergion-sovereign-runtime/internal/field"
+	"emergion-sovereign-runtime/internal/gemmalive"
 	"emergion-sovereign-runtime/internal/gov"
 	"emergion-sovereign-runtime/internal/pivot"
 	"emergion-sovereign-runtime/internal/proj"
@@ -188,7 +188,6 @@ func TestCaptureAcceptsREGAcceptedSupersedes(t *testing.T) {
 				Capabilities: []string{"OBS"},
 				Facts: []string{
 					"source_preserved",
-					"living_state_projected",
 				},
 				Risk:       "L",
 				Supersedes: predecessor.IDN,
@@ -6025,7 +6024,7 @@ func TestGemmaAnalyzeLiveProofSourceDiagnostic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-        g := reason.GemmaFromEnv()
+	g := reason.GemmaFromEnv()
 
 	start := time.Now()
 
@@ -6056,7 +6055,6 @@ func TestGemmaAnalyzeLiveProofSourceDiagnostic(t *testing.T) {
 		got.Capabilities,
 	)
 }
-
 
 func TestAcceptedCapabilityProviderPopulationExcludesAdjacentSelfReference(t *testing.T) {
 	st := core.EmptyState()

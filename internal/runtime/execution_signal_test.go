@@ -1547,10 +1547,10 @@ func TestHistoricalExecutionSignalV1MaterializesVerifiedDeliverable(t *testing.T
 		result: reason.Result{
 			Summary: "bounded execution result observation",
 			Relationships: map[string]string{
-				"source_kind":     "EXECUTION_RESULT",
+				"source_kind":  "EXECUTION_RESULT",
 				"kin_emergion": sourceID,
-				"adapter":         "LOCAL_GEMMA",
-				"action":          "ANALYZE",
+				"adapter":      "LOCAL_GEMMA",
+				"action":       "ANALYZE",
 			},
 			Capabilities: []string{"OBS", "CMP"},
 			Facts:        []string{"execution_result_observed", "execution_succeeded"},
