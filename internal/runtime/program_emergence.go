@@ -53,6 +53,11 @@ func (r Runtime) ProposeOneProgramPatch(
 
 	for _, id := range ids {
 		origin := st.Accepted[id]
+		// An accepted fracture probe is never an origin for a program
+		// patch: a probe carries no fix and nothing is built on it.
+		if strings.TrimSpace(origin.REL["fracture_gap"]) != "" {
+			continue
+		}
 		if !acceptedProgramActionEnabled(origin, gemma.Validate() == nil) {
 			continue
 		}
