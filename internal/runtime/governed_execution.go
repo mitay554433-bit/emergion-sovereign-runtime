@@ -6,6 +6,7 @@ import (
 
 	"emergion-sovereign-runtime/internal/adapters"
 	"emergion-sovereign-runtime/internal/core"
+	livefield "emergion-sovereign-runtime/internal/field"
 )
 
 // CaptureGovernedExecutionResult is the strict execution-result admission seam.
@@ -28,5 +29,33 @@ func (r *Runtime) CaptureGovernedExecutionResult(
 		)
 	}
 
+	if err := r.verifyExactQAuthorization(result); err != nil {
+		return core.EmergION{}, false, fmt.Errorf(
+			"execution authorization verification failed: %w",
+			err,
+		)
+	}
+
 	return r.CaptureExecutionResult(ctx, request, result)
+}
+
+// verifyExactQAuthorization re-resolves the result's AuthorizationID against
+// canonical Q receipts rebuilt from COSL before recapture. A divergence
+// fails closed and does not enter governed circulation.
+func (r *Runtime) verifyExactQAuthorization(result adapters.ExecutionResult) error {
+	if r.Store == nil {
+		return fmt.Errorf("runtime store not configured")
+	}
+
+	events, err := r.Store.Events()
+	if err != nil {
+		return err
+	}
+
+	st, err := livefield.Rebuild(events)
+	if err != nil {
+		return err
+	}
+
+	return adapters.VerifyCanonicalActionAuthorization(st, result)
 }

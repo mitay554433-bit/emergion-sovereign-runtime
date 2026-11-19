@@ -245,3 +245,67 @@ func PrepareExecution(
 
 	return request, nil
 }
+
+// latestCanonicalActionAuthorization returns the latest rebuilt HUMAN_FINAL
+// authorized Q receipt for this EmergION, adapter, and action. EventID is the
+// exact COSL Q identity assigned at rebuild.
+func latestCanonicalActionAuthorization(
+	st core.State,
+	emergionID string,
+	adapter string,
+	action string,
+) (core.ActionAuthorizationReceipt, bool) {
+	for i := len(st.ActionAuthorizations) - 1; i >= 0; i-- {
+		item := st.ActionAuthorizations[i]
+		if item.EmergIONID == emergionID &&
+			item.Adapter == adapter &&
+			item.Action == action &&
+			item.Authorized &&
+			item.Authority == "HUMAN_FINAL" &&
+			strings.TrimSpace(item.EventID) != "" {
+			return item, true
+		}
+	}
+	return core.ActionAuthorizationReceipt{}, false
+}
+
+// VerifyCanonicalActionAuthorization re-resolves a result's AuthorizationID
+// against rebuilt COSL Q receipts. The ID must equal the EventID of the
+// latest HUMAN_FINAL authorized receipt whose EmergION, adapter, and action
+// match, and that target must remain REG-accepted. Ungated actions with no
+// exact Q and an empty AuthorizationID are admitted. Any other divergence
+// fails closed.
+func VerifyCanonicalActionAuthorization(st core.State, result ExecutionResult) error {
+	authorization, ok := latestCanonicalActionAuthorization(
+		st,
+		result.EmergIONID,
+		result.Adapter,
+		result.Action,
+	)
+	if !ok {
+		if strings.TrimSpace(result.AuthorizationID) == "" && !humanFinalAction(result.Action) {
+			return nil
+		}
+		return fmt.Errorf(
+			"execution authorization %q does not resolve to a canonical COSL Q receipt",
+			result.AuthorizationID,
+		)
+	}
+
+	if _, accepted := st.Accepted[result.EmergIONID]; !accepted {
+		return fmt.Errorf(
+			"execution target is not REG-accepted: %s",
+			result.EmergIONID,
+		)
+	}
+
+	if result.AuthorizationID != authorization.EventID {
+		return fmt.Errorf(
+			"execution authorization %q is not the canonical Q receipt %s",
+			result.AuthorizationID,
+			authorization.EventID,
+		)
+	}
+
+	return nil
+}

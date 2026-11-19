@@ -276,12 +276,11 @@ func TestExecutionRecapturePreservesTravellingEmergIONIdentity(t *testing.T) {
 	}
 
 	request := adapters.ExecutionRequest{
-		EmergIONID:      "E-KIN",
-		SourceHash:      "SOURCE-HASH-PROOF",
-		AuthorizationID: "EV-Q-PROOF",
-		Authority:       "HUMAN_FINAL",
-		Adapter:         "LOCAL_GEMMA",
-		Action:          "ANALYZE",
+		EmergIONID: "E-KIN",
+		SourceHash: "SOURCE-HASH-PROOF",
+		Authority:  "HUMAN_FINAL",
+		Adapter:    "LOCAL_GEMMA",
+		Action:     "ANALYZE",
 	}
 	request.TransitionEmergIONID = adapters.ExecutionTransitionID(request)
 
@@ -325,12 +324,11 @@ func TestExecutionRecapturePreservesTravellingEmergIONThroughCOSLRebuild(t *test
 	}
 
 	request := adapters.ExecutionRequest{
-		EmergIONID:      "E-KIN",
-		SourceHash:      "SOURCE-HASH-PROOF",
-		AuthorizationID: "EV-Q-PROOF",
-		Authority:       "HUMAN_FINAL",
-		Adapter:         "LOCAL_GEMMA",
-		Action:          "ANALYZE",
+		EmergIONID: "E-KIN",
+		SourceHash: "SOURCE-HASH-PROOF",
+		Authority:  "HUMAN_FINAL",
+		Adapter:    "LOCAL_GEMMA",
+		Action:     "ANALYZE",
 	}
 	request.TransitionEmergIONID = adapters.ExecutionTransitionID(request)
 
@@ -392,12 +390,11 @@ func TestExecutionRoverAppearsInAtGOVFieldLifecycleProjection(t *testing.T) {
 	}
 
 	request := adapters.ExecutionRequest{
-		EmergIONID:      "E-KIN",
-		SourceHash:      "SOURCE-HASH-PROOF",
-		AuthorizationID: "EV-Q-PROOF",
-		Authority:       "HUMAN_FINAL",
-		Adapter:         "LOCAL_GEMMA",
-		Action:          "ANALYZE",
+		EmergIONID: "E-KIN",
+		SourceHash: "SOURCE-HASH-PROOF",
+		Authority:  "HUMAN_FINAL",
+		Adapter:    "LOCAL_GEMMA",
+		Action:     "ANALYZE",
 	}
 	request.TransitionEmergIONID =
 		adapters.ExecutionTransitionID(request)
@@ -487,12 +484,11 @@ func TestAcceptedExecutionSignalPreservesTravellingEmergIONIdentity(t *testing.T
 	}
 
 	request := adapters.ExecutionRequest{
-		EmergIONID:      "E-KIN",
-		SourceHash:      "SOURCE-HASH-PROOF",
-		AuthorizationID: "EV-Q-PROOF",
-		Authority:       "HUMAN_FINAL",
-		Adapter:         "LOCAL_GEMMA",
-		Action:          "ANALYZE",
+		EmergIONID: "E-KIN",
+		SourceHash: "SOURCE-HASH-PROOF",
+		Authority:  "HUMAN_FINAL",
+		Adapter:    "LOCAL_GEMMA",
+		Action:     "ANALYZE",
 	}
 	request.TransitionEmergIONID =
 		adapters.ExecutionTransitionID(request)
@@ -589,12 +585,11 @@ func TestExecutionCoverageFailureDerivesOnlyRecognizedRequiredCapability(t *test
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			request := adapters.ExecutionRequest{
-				EmergIONID:      "E-KIN",
-				SourceHash:      "SOURCE-HASH-PROOF",
-				AuthorizationID: "EV-Q-PROOF",
-				Authority:       "HUMAN_FINAL",
-				Adapter:         "LOCAL_GEMMA",
-				Action:          "ANALYZE",
+				EmergIONID: "E-KIN",
+				SourceHash: "SOURCE-HASH-PROOF",
+				Authority:  "HUMAN_FINAL",
+				Adapter:    "LOCAL_GEMMA",
+				Action:     "ANALYZE",
 			}
 			request.TransitionEmergIONID =
 				adapters.ExecutionTransitionID(request)
@@ -726,12 +721,11 @@ func TestExecutionCoverageFailureResolvesThroughAcceptedCapabilityProviders(t *t
 	}
 
 	request := adapters.ExecutionRequest{
-		EmergIONID:      "E-KIN",
-		SourceHash:      "SOURCE-HASH-PROOF",
-		AuthorizationID: "EV-Q-PROOF",
-		Authority:       "HUMAN_FINAL",
-		Adapter:         "LOCAL_GEMMA",
-		Action:          "ANALYZE",
+		EmergIONID: "E-KIN",
+		SourceHash: "SOURCE-HASH-PROOF",
+		Authority:  "HUMAN_FINAL",
+		Adapter:    "LOCAL_GEMMA",
+		Action:     "ANALYZE",
 	}
 	request.TransitionEmergIONID =
 		adapters.ExecutionTransitionID(request)
@@ -873,12 +867,11 @@ func TestExecutionCoverageFailureProducesCapabilityProviderEdgeProposal(t *testi
 	}
 
 	request := adapters.ExecutionRequest{
-		EmergIONID:      "E-KIN",
-		SourceHash:      "SOURCE-HASH-PROOF",
-		AuthorizationID: "EV-Q-PROOF",
-		Authority:       "HUMAN_FINAL",
-		Adapter:         "LOCAL_GEMMA",
-		Action:          "ANALYZE",
+		EmergIONID: "E-KIN",
+		SourceHash: "SOURCE-HASH-PROOF",
+		Authority:  "HUMAN_FINAL",
+		Adapter:    "LOCAL_GEMMA",
+		Action:     "ANALYZE",
 	}
 	request.TransitionEmergIONID =
 		adapters.ExecutionTransitionID(request)
@@ -1044,12 +1037,11 @@ func TestGovernedRecursiveEmergenceTinyLoop(t *testing.T) {
 	}
 
 	requestN := adapters.ExecutionRequest{
-		EmergIONID:      target.IDN,
-		SourceHash:      target.MEM.SourceHash,
-		AuthorizationID: "EV-Q-TINY-N",
-		Authority:       "HUMAN_FINAL",
-		Adapter:         "LOCAL_GEMMA",
-		Action:          "ANALYZE",
+		EmergIONID: target.IDN,
+		SourceHash: target.MEM.SourceHash,
+		Authority:  "HUMAN_FINAL",
+		Adapter:    "LOCAL_GEMMA",
+		Action:     "ANALYZE",
 	}
 	requestN.TransitionEmergIONID = adapters.ExecutionTransitionID(requestN)
 
@@ -1442,12 +1434,11 @@ func TestAcceptedSuccessfulExecutionMaterializesVerifiedDeliverable(t *testing.T
 	}
 
 	request := adapters.ExecutionRequest{
-		EmergIONID:      "E-DELIVERABLE-SOURCE",
-		SourceHash:      "SOURCE-DELIVERABLE-PROOF",
-		AuthorizationID: "EV-Q-DELIVERABLE",
-		Authority:       "HUMAN_FINAL",
-		Adapter:         "LOCAL_GEMMA",
-		Action:          "ANALYZE",
+		EmergIONID: "E-DELIVERABLE-SOURCE",
+		SourceHash: "SOURCE-DELIVERABLE-PROOF",
+		Authority:  "HUMAN_FINAL",
+		Adapter:    "LOCAL_GEMMA",
+		Action:     "ANALYZE",
 	}
 	request.TransitionEmergIONID = adapters.ExecutionTransitionID(request)
 
