@@ -59,7 +59,7 @@ func TestGenuineRemainderBridgeGapReusesExistingMapping(t *testing.T) {
 
 func TestFactRemainderRecordsBridgeGapAndStaysCandidate(t *testing.T) {
 	f := newDifferenceFixture(t)
-	governanceRealityFixture(f)
+	unfillableGovernanceRealityFixture(f)
 
 	observer := fixedDifferenceObserver{result: differenceObserved(
 		[]string{realGovernanceDifference},
@@ -81,8 +81,52 @@ func TestFactRemainderRecordsBridgeGapAndStaysCandidate(t *testing.T) {
 	if _, ok := st.Accepted[comparison.IDN]; ok {
 		t.Fatal("BRIDGEGAP candidate auto-promoted into REG")
 	}
-	// The existing recipe/provider path is unchanged and its candidates carry
-	// no BRIDGEGAP of their own.
+	// No accepted VLD provider: the remainder is unfillable, stays
+	// UNRESOLVED, and no provider candidate is invented.
+	if comparison.REL["capability_resolution"] != "UNRESOLVED" {
+		t.Fatalf("capability_resolution = %q want UNRESOLVED", comparison.REL["capability_resolution"])
+	}
+	if got := f.populations(comparison.IDN); got != 0 {
+		t.Fatalf("provider populations = %d want 0", got)
+	}
+}
+
+// HUMAN_FINAL, Nov 19 2026: a BRIDGEGAP is written only when the remainder
+// is unfillable. When REG-accepted EmergIONs already provide the existing
+// recipe, the comparison records that fill (COMPOSABLE_CANDIDATE plus
+// capability_providers) and carries no gap.
+func TestFillableFactRemainderRecordsFillNotGap(t *testing.T) {
+	f := newDifferenceFixture(t)
+	governanceRealityFixture(f)
+
+	observer := fixedDifferenceObserver{result: differenceObserved(
+		[]string{realGovernanceDifference},
+		"ESTABLISH_FACT",
+	)}
+	comparison := captureDifferenceComparison(t, f, observer,
+		"The SOURCE provides evidence of authority and governance acceptance.")
+
+	if comparison.REL["required_capability"] != "ESTABLISH_FACT" ||
+		comparison.REL["requirement_basis"] != basisFactNotInAcceptedFacts {
+		t.Fatalf("requirement = %q basis = %q",
+			comparison.REL["required_capability"], comparison.REL["requirement_basis"])
+	}
+	if len(comparison.VAL.Gaps) != 0 {
+		t.Fatalf("fillable remainder wrote a gap: %#v", comparison.VAL.Gaps)
+	}
+	if comparison.REL["capability_resolution"] != "COMPOSABLE_CANDIDATE" {
+		t.Fatalf("capability_resolution = %q want COMPOSABLE_CANDIDATE", comparison.REL["capability_resolution"])
+	}
+	if got, want := comparison.REL["capability_providers"], "OBS:E-00000000000000A0,VLD:E-00000000000000A2"; got != want {
+		t.Fatalf("capability_providers = %q want %q", got, want)
+	}
+	st := f.state()
+	if _, ok := st.AtGOV[comparison.IDN]; !ok {
+		t.Fatal("fill candidate not waiting at GOV")
+	}
+	if _, ok := st.Accepted[comparison.IDN]; ok {
+		t.Fatal("fill candidate auto-promoted into REG")
+	}
 	if got := f.populations(comparison.IDN); got != 1 {
 		t.Fatalf("provider populations = %d want 1", got)
 	}
@@ -90,6 +134,64 @@ func TestFactRemainderRecordsBridgeGapAndStaysCandidate(t *testing.T) {
 		if em.MEM.Provenance == "provider_population" && len(em.VAL.Gaps) != 0 {
 			t.Fatalf("provider candidate carries gaps: %#v", em.VAL.Gaps)
 		}
+	}
+}
+
+func TestFillableCapabilityRemainderRecordsFillNotGap(t *testing.T) {
+	f := newDifferenceFixture(t)
+	f.accept(acceptedProviderFixture("E-00000000000000C1", "fill-analyze-source", "ANALYZE"))
+	f.accept(acceptedProviderFixture("E-00000000000000C2", "fill-cmp-source", "CMP"))
+	f.accept(acceptedProviderFixture("E-00000000000000C3", "fill-rlt-source", "RLT"))
+
+	comparison := captureDifferenceComparison(t, f,
+		fixedDifferenceObserver{result: differenceObserved([]string{"TARGET_STATE!=ACCEPTED_REALITY"})},
+		"PROGRAM capability is available")
+
+	if comparison.REL["required_capability"] != "DERIVE_CAPABILITY" {
+		t.Fatalf("required_capability = %q", comparison.REL["required_capability"])
+	}
+	if len(comparison.VAL.Gaps) != 0 {
+		t.Fatalf("fillable remainder wrote a gap: %#v", comparison.VAL.Gaps)
+	}
+	if comparison.REL["capability_resolution"] != "COMPOSABLE_CANDIDATE" {
+		t.Fatalf("capability_resolution = %q want COMPOSABLE_CANDIDATE", comparison.REL["capability_resolution"])
+	}
+	if got, want := comparison.REL["capability_providers"],
+		"ANALYZE:E-00000000000000C1,CMP:E-00000000000000C2,RLT:E-00000000000000C3"; got != want {
+		t.Fatalf("capability_providers = %q want %q", got, want)
+	}
+}
+
+func TestUnfillableRemainderBridgeGap(t *testing.T) {
+	obs := acceptedProviderFixture("E-00000000000000A0", "u-obs", "OBS")
+	obs.STA = core.StateAccepted
+	vld := acceptedProviderFixture("E-00000000000000A2", "u-vld", "VLD")
+	vld.STA = core.StateAccepted
+	pendingVLD := acceptedProviderFixture("E-00000000000000A3", "u-vld-gov", "VLD")
+
+	tests := []struct {
+		name     string
+		required string
+		basis    string
+		reality  map[string]core.EmergION
+		gap      string
+	}{
+		{"empty reality", "ESTABLISH_FACT", basisFactNotInAcceptedFacts, nil, "BRIDGEGAP:facts"},
+		{"partial recipe", "ESTABLISH_FACT", basisFactNotInAcceptedFacts,
+			map[string]core.EmergION{obs.IDN: obs}, "BRIDGEGAP:facts"},
+		{"provider only at GOV is not a fill", "ESTABLISH_FACT", basisFactNotInAcceptedFacts,
+			map[string]core.EmergION{obs.IDN: obs, pendingVLD.IDN: pendingVLD}, "BRIDGEGAP:facts"},
+		{"accepted recipe fills", "ESTABLISH_FACT", basisFactNotInAcceptedFacts,
+			map[string]core.EmergION{obs.IDN: obs, vld.IDN: vld}, ""},
+		{"not found yet is never a gap", "", basisEmergIONNotFoundYet, nil, ""},
+		{"satisfied is never a gap", "", basisSatisfiedAcceptedFact, nil, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := unfillableRemainderBridgeGap(tc.required, tc.basis, tc.reality); got != tc.gap {
+				t.Fatalf("got %q want %q", got, tc.gap)
+			}
+		})
 	}
 }
 
@@ -157,7 +259,7 @@ func TestModelGapLinesNeverBecomeBridgeGap(t *testing.T) {
 // GOV/REG path, and the gap survives FIELD reconstruction.
 func TestBridgeGapCandidateAcceptedOnlyThroughHumanFinal(t *testing.T) {
 	f := newDifferenceFixture(t)
-	governanceRealityFixture(f)
+	unfillableGovernanceRealityFixture(f)
 
 	comparison := captureDifferenceComparison(t, f,
 		fixedDifferenceObserver{result: differenceObserved([]string{realGovernanceDifference})},

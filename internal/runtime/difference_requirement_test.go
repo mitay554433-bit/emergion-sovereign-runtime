@@ -200,7 +200,8 @@ func captureDifferenceComparison(t *testing.T, f differenceFixture, observer rea
 	if err != nil {
 		t.Fatal(err)
 	}
-	comparison, duplicate, err := rt.CaptureTargetComparison(context.Background(), target, f.reality(), nil)
+	reality := f.reality()
+	comparison, duplicate, err := rt.CaptureTargetComparison(context.Background(), target, reality, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,8 +218,9 @@ func captureDifferenceComparison(t *testing.T, f differenceFixture, observer rea
 		t.Fatalf("comparison_state = %q want UNRESOLVED", comparison.REL["comparison_state"])
 	}
 	// Section 11: a Difference alone never becomes a BRIDGEGAP. Only a
-	// genuinely unmet Section 8 requirement records exactly one.
-	want := genuineRemainderBridgeGap(comparison.REL["required_capability"], comparison.REL["requirement_basis"])
+	// genuinely unmet Section 8 requirement that no REG-accepted EmergION
+	// can fill records exactly one.
+	want := unfillableRemainderBridgeGap(comparison.REL["required_capability"], comparison.REL["requirement_basis"], reality)
 	switch {
 	case want == "" && len(comparison.VAL.Gaps) != 0:
 		t.Fatalf("Difference became a BRIDGEGAP: %#v", comparison.VAL.Gaps)
@@ -229,8 +231,15 @@ func captureDifferenceComparison(t *testing.T, f differenceFixture, observer rea
 }
 
 func governanceRealityFixture(f differenceFixture) {
-	f.accept(acceptedProviderFixture("E-00000000000000A0", "section8-actions-source", "OBS", "The SOURCE is actions.go"))
+	unfillableGovernanceRealityFixture(f)
 	f.accept(acceptedProviderFixture("E-00000000000000A2", "section8-vld-source", "VLD"))
+}
+
+// unfillableGovernanceRealityFixture is the same reality without a
+// REG-accepted VLD provider: the ESTABLISH_FACT recipe (OBS+VLD) cannot be
+// filled, so the fact remainder is unfillable.
+func unfillableGovernanceRealityFixture(f differenceFixture) {
+	f.accept(acceptedProviderFixture("E-00000000000000A0", "section8-actions-source", "OBS", "The SOURCE is actions.go"))
 }
 
 func TestRealGovernanceDifferenceRequiresFactEstablishment(t *testing.T) {

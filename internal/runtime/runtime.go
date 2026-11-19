@@ -1464,9 +1464,12 @@ func (t targetComparisonReasoner) Analyze(ctx context.Context, in reason.Input) 
 		relationships["required_capability"] = required
 	}
 	// Section 11: only a genuinely unmet requirement is recorded as a
-	// BRIDGEGAP. The model's own G| lines are never forwarded here.
+	// BRIDGEGAP, and only when no REG-accepted EmergION can fill it
+	// (HUMAN_FINAL, Nov 19 2026). A fillable remainder records its fill
+	// through the existing capability_resolution / capability_providers
+	// path instead. The model's own G| lines are never forwarded here.
 	var gaps []string
-	if gap := genuineRemainderBridgeGap(required, basis); gap != "" {
+	if gap := unfillableRemainderBridgeGap(required, basis, t.reality); gap != "" {
 		gaps = []string{gap}
 	}
 
