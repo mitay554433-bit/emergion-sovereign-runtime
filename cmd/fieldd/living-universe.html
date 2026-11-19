@@ -1,66 +1,395 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>MAXIOM | UNIFUSION Living Universe</title>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#020814"><title>MAXIOM | UNIFUSION Living Universe</title>
 <style>
-:root{color-scheme:dark;--ink:#e4efff;--muted:#8da7cc;--line:#315486;--glass:rgba(4,13,32,.84);--blue:#438cff}*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#020713;color:var(--ink);font:14px system-ui,Arial,sans-serif}canvas{display:block;width:100vw;height:100vh;touch-action:none;cursor:grab}canvas:active{cursor:grabbing}.panel{position:absolute;background:var(--glass);border:1px solid #3866a077;border-radius:14px;backdrop-filter:blur(15px);box-shadow:0 8px 35px #0008}#hud{top:14px;left:14px;width:min(350px,calc(100vw - 28px));padding:17px;max-height:calc(100vh - 90px);overflow:auto}h1{font-size:18px;letter-spacing:.14em;margin:0;color:#b8d5ff}h2{font-size:14px;letter-spacing:.08em;margin:0 0 10px;color:#b8d5ff}.eyebrow{font-size:10px;letter-spacing:.18em;color:#6fa9ff;margin-bottom:5px}.sub,.muted{color:var(--muted);font-size:12px;line-height:1.5}.stats{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:15px 0}.stat{padding:9px;background:#0a1a35a6;border:1px solid #29456a;border-radius:9px}.stat b{display:block;font-size:19px}.stat span{font-size:10px;letter-spacing:.07em;color:var(--muted)}.controls{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}button,.upload{border:1px solid #4875b3;background:#10264b;color:#dceaff;padding:8px 10px;border-radius:8px;font:inherit;cursor:pointer}button:hover,.upload:hover{background:#1c3e74}button.active{background:#2455a0;border-color:#83b5ff}.upload input{display:none}#detail{right:14px;top:14px;width:min(355px,calc(100vw - 28px));padding:16px;max-height:calc(100vh - 95px);overflow:auto}#detail[hidden]{display:none}.kv{border-top:1px solid #2c4a70;padding:7px 0;overflow-wrap:anywhere}.kv small{display:block;color:#8da7cc;font-size:10px;letter-spacing:.08em}.kv div{font-size:12px;line-height:1.5}#bottom{position:absolute;bottom:12px;left:14px;right:14px;display:flex;justify-content:space-between;gap:10px;pointer-events:none}.strip{pointer-events:auto;max-width:100%;background:#05152bc9;border:1px solid #294f80;border-radius:10px;padding:9px 12px;color:#b5cceb;font:11px ui-monospace,monospace}#notice{color:#95bdf7}#legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;font-size:11px;color:#a6bddc}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}.facet{background:#5293ff}.accepted{background:#e2efff}.pending{background:#e6a85e}.wave{background:#75d6f5}#toggleHud{display:none}a{color:#9bc8ff}#detailsText{white-space:pre-wrap}#waveInfo{font:11px ui-monospace,monospace;color:#b6d5fc}#fileState{font-size:11px;color:#a4c1e8;margin-top:7px}#close{float:right} @media(max-width:720px){#hud{padding:12px;width:min(310px,calc(100vw - 24px));top:10px;left:10px;max-height:48vh}#detail{top:auto;bottom:70px;right:10px;width:min(340px,calc(100vw - 20px));max-height:38vh}#bottom{left:10px;right:10px;bottom:9px}.strip{font-size:10px}#hud.collapsed .hideable{display:none}#toggleHud{display:inline-block;float:right;padding:3px 8px}}
+:root{color-scheme:dark;--bg:#020814;--ink:#e6f0ff;--muted:#8ea6c9;--dim:#5f7699;--line:rgba(110,160,235,.22);--glass:rgba(6,16,36,.72);--glass2:rgba(9,22,48,.86);--blue:#5b9dff;--acc:#dcecff;--gov:#f0a95a;--ok:#5fe0b2;--r:14px;--safe-b:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;-webkit-tap-highlight-color:transparent}
+canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block;touch-action:none;cursor:grab}canvas.grabbing{cursor:grabbing}
+.glass{background:var(--glass);border:1px solid var(--line);border-radius:var(--r);backdrop-filter:blur(14px) saturate(130%);-webkit-backdrop-filter:blur(14px) saturate(130%);box-shadow:0 10px 40px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.04)}
+button{font:inherit;color:var(--ink);background:rgba(20,44,86,.75);border:1px solid rgba(110,160,235,.35);border-radius:10px;padding:8px 12px;cursor:pointer;min-height:36px;transition:background .15s,border-color .15s}
+button:hover{background:rgba(34,70,130,.85)}button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+button[aria-pressed=true]{background:rgba(40,88,170,.9);border-color:#8dbbff}
+#gov[aria-pressed=true]{background:rgba(120,72,20,.85);border-color:var(--gov)}
+/* header */
+#hdr{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;right:10px;padding:10px 12px 10px 14px;z-index:3}
+.row{display:flex;align-items:center;gap:10px}
+.brand{min-width:0;flex:1}
+.eyebrow{font-size:10px;letter-spacing:.2em;color:#79aefc;font-weight:600;text-transform:uppercase}
+h1{margin:1px 0 0;font-size:17px;letter-spacing:.16em;font-weight:700;color:#cfe2ff;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sub{font-size:11px;color:var(--muted);letter-spacing:.04em}
+#min{padding:6px 10px;min-height:32px;font-size:12px;color:#b9d3fb}#hdr.compact .chips,#hdr.compact #extra{display:none}#hdr.compact #more{display:none}#more{padding:6px 10px;min-height:32px;font-size:12px;color:#b9d3fb;white-space:nowrap}
+.chips{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:6px;margin-top:9px}
+.chip{min-width:0;padding:6px 9px;border-radius:10px;background:rgba(12,30,62,.7);border:1px solid rgba(110,160,235,.2);border-top:2px solid var(--c,#5b9dff)}
+.chip b{display:block;font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.chip span{display:block;font-size:9.5px;line-height:1.25;letter-spacing:.09em;color:var(--muted);text-transform:uppercase}
+.chip.gov{--c:var(--gov)}.chip.gov b{color:#ffd2a1}.chip[hidden]{display:none}
+#extra{margin-top:10px;border-top:1px solid var(--line);padding-top:9px;font-size:12px;color:var(--muted);display:grid;gap:6px}
+#extra[hidden]{display:none}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px}
+#status{color:#a9c6ef}#status.err{color:#ffb08a}
+.live{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok);margin-right:6px;vertical-align:1px}
+.live.off{background:#ff9a6a;box-shadow:0 0 8px #ff9a6a}
+/* bottom */
+#foot{position:fixed;left:10px;right:10px;bottom:calc(10px + var(--safe-b));z-index:3;display:grid;grid-template-columns:minmax(0,1fr);gap:8px;pointer-events:none}#foot>*{min-width:0}
+#foot>*{pointer-events:auto}
+#timeline{padding:8px 10px}
+.tl-h{display:flex;justify-content:space-between;align-items:baseline;font-size:9.5px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;margin-bottom:6px}
+#tl{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:1px}#tl::-webkit-scrollbar{display:none}
+.ev{flex:0 0 auto;display:flex;align-items:center;gap:7px;max-width:210px;padding:5px 9px;border-radius:9px;background:rgba(12,30,62,.65);border:1px solid rgba(110,160,235,.18);font-size:11.5px;color:#d5e5ff;min-height:32px}
+.ev i{flex:0 0 8px;height:8px;border-radius:50%;background:var(--c);box-shadow:0 0 7px var(--c)}
+.ev span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ev small{color:var(--dim);font-size:10px;white-space:nowrap}
+.bar{display:flex;gap:8px;align-items:stretch;justify-content:space-between}#legend{flex:1;min-width:0}
+#legend{padding:7px 11px;display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11.5px;color:#c4d6f2;align-items:center}
+.lg{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.sw{width:10px;height:10px;border-radius:50%;display:inline-block}
+.sw.acc{background:var(--acc);box-shadow:0 0 8px #6aa6ff}
+.sw.gov{border:2px solid var(--gov);background:transparent;width:10px;height:10px}
+.sw.fac{width:9px;height:9px;border-radius:2px;transform:rotate(45deg);background:linear-gradient(135deg,#7fd1ff,#a98bff)}
+.sw.ln{width:16px;height:2px;border-radius:2px;background:#8fc0ff}
+.sw.pl{width:16px;height:0;border-top:2px solid rgba(240,169,90,.6);border-radius:0}
+.lg[hidden]{display:none}
+#dock{display:flex;gap:6px;padding:6px}
+#dock button{padding:6px 10px;font-size:12.5px}
+#banner{display:flex;align-items:center;justify-content:center;gap:8px;padding:7px 12px;font-size:11px;letter-spacing:.06em;color:#bcd3f5;text-align:center}
+#banner b{color:#e8f1ff;letter-spacing:.1em}
+.shield{width:12px;height:14px;flex:0 0 12px;background:linear-gradient(#7fd1ff,#4b7fe0);clip-path:polygon(50% 0,100% 18%,100% 55%,50% 100%,0 55%,0 18%)}
+#zoomv{color:var(--dim);font-size:10.5px;margin-left:6px;white-space:nowrap}
+/* detail sheet */
+#sheet{position:fixed;z-index:5;left:8px;right:8px;bottom:calc(8px + var(--safe-b));max-height:58vh;display:flex;flex-direction:column;background:var(--glass2);transform:translateY(calc(100% + 30px));transition:transform .28s cubic-bezier(.2,.8,.2,1);visibility:hidden}
+#sheet.open{transform:none;visibility:visible}
+.grip{width:38px;height:4px;border-radius:3px;background:rgba(160,190,235,.35);margin:8px auto 0}
+.sh-h{display:flex;gap:10px;align-items:flex-start;padding:10px 14px 8px}
+.sh-h .t{flex:1;min-width:0}
+#sTitle{margin:3px 0 0;font-size:16px;font-weight:650;color:#eef5ff;overflow-wrap:anywhere}
+.badge{display:inline-block;font-size:10px;letter-spacing:.12em;padding:3px 7px;border-radius:6px;font-weight:650;text-transform:uppercase}
+.badge.acc{background:rgba(90,150,255,.18);color:#bcd8ff;border:1px solid rgba(120,170,255,.4)}
+.badge.gov{background:rgba(240,169,90,.14);color:#ffcf99;border:1px solid rgba(240,169,90,.45)}
+.badge.fac{background:rgba(160,140,255,.14);color:#d4c9ff;border:1px solid rgba(170,150,255,.4)}
+#sClose{padding:4px 10px;min-height:32px}
+#sBody{overflow:auto;padding:0 14px 14px;font-size:12.5px}
+.kv{display:grid;grid-template-columns:96px 1fr;gap:8px;padding:7px 0;border-top:1px solid rgba(110,160,235,.14)}
+.kv small{color:var(--muted);font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding-top:2px}
+.kv div{overflow-wrap:anywhere;color:#dbe8ff}
+.sec{margin:12px 0 4px;font-size:10px;letter-spacing:.16em;color:#79aefc;text-transform:uppercase;font-weight:650}
+.kin{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:7px 9px;margin:4px 0;border-radius:9px;background:rgba(14,34,70,.7);border:1px solid rgba(110,160,235,.18);min-height:38px}
+.kin .w{flex:0 0 auto;font-size:10px;letter-spacing:.08em;font-weight:700;color:#9fd0ff;padding:2px 6px;border-radius:5px;background:rgba(80,140,240,.16)}
+.kin .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kin .d{color:var(--dim);font-size:10.5px}
+.kin.gov .w{color:#ffcf99;background:rgba(240,169,90,.14)}
+.kin.out{opacity:.65;cursor:default}
+.fchips{display:flex;flex-wrap:wrap;gap:5px}
+.fchip{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--c);color:#e8f0ff;background:color-mix(in srgb,var(--c) 18%,transparent)}
+details summary{cursor:pointer;color:var(--muted);font-size:11px;letter-spacing:.08em;margin-top:10px}
+.note{color:var(--muted);font-size:11.5px;margin-top:10px}
+.idchip{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:4px 8px;min-height:30px;margin:2px 4px 2px 0;border-radius:8px;font-size:11.5px;background:rgba(14,34,70,.8);border:1px solid rgba(120,170,255,.35);vertical-align:middle}
+.idchip.gov{border-color:rgba(240,169,90,.5);background:rgba(60,36,10,.55)}.idchip.out{opacity:.55;cursor:default}
+.idchip .nm{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px}.idchip .cap{font-size:9.5px;letter-spacing:.06em;color:#9fd0ff;font-weight:700}
+.tchip{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;background:rgba(90,140,230,.14);border:1px solid rgba(120,170,255,.3);color:#d8e6ff;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.tchip.obs{background:rgba(120,210,255,.08)}.tchip.warn{border-color:rgba(255,160,120,.5);color:#ffd0bd}
+.chipwrap{display:flex;flex-wrap:wrap}
+.kinrow{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:4px 0;border-top:1px solid rgba(110,160,235,.10)}
+.kinrow .w{font-size:10px;letter-spacing:.08em;font-weight:700;color:#9fd0ff;padding:2px 6px;border-radius:5px;background:rgba(80,140,240,.16)}
+.kinrow .dir{color:var(--dim)}.kinrow.prop .idchip{margin:0}
+.rich{display:flex;flex-wrap:wrap;align-items:center;gap:2px 4px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px}
+.wcopy{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.copy{padding:3px 9px;min-height:28px;font-size:11px}
+.flags{display:flex;flex-wrap:wrap;gap:5px}.flag{font-size:11px;padding:2px 8px;border-radius:6px;font-weight:600}
+.flag.ok{background:rgba(95,224,178,.14);color:#9ff0d0;border:1px solid rgba(95,224,178,.4)}.flag.no{background:rgba(255,120,100,.12);color:#ffb3a3;border:1px solid rgba(255,120,100,.4)}.flag.info{background:rgba(120,170,255,.12);color:#cfe0ff;border:1px solid rgba(120,170,255,.3)}
+.govnote{margin:2px 0 6px;padding:9px 11px;border-radius:10px;background:rgba(240,169,90,.12);border:1px solid rgba(240,169,90,.45);color:#ffe0bd;font-size:12px}.govnote b{color:#ffc98a;letter-spacing:.06em}
+@media(max-width:899px){body.sheeting #hdr .chips,body.sheeting #extra{display:none}}
+#sheet.isgov{border-color:rgba(240,169,90,.5)}
+details.ver summary{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#dbe8ff;font-size:11px;letter-spacing:0}
+@media(min-width:900px){
+ #hdr{right:auto;width:330px;left:16px;top:16px}
+ #hdr .chips{grid-template-columns:1fr 1fr}
+ #foot{left:16px;right:16px;bottom:16px;display:flex;flex-wrap:wrap;align-items:stretch}
+ #timeline{flex:1 0 100%}.bar{flex:1 1 auto}#banner{flex:0 0 auto}
+ #sheet{left:auto;right:16px;top:16px;bottom:16px;width:380px;max-height:none;transform:translateX(calc(100% + 40px))}
+ #sheet.open{transform:none}.grip{display:none}
+ #timeline{max-width:calc(100vw - 32px)}
+}
+@media(prefers-reduced-motion:reduce){#sheet{transition:none}}
 </style></head><body>
-<canvas id="c" aria-label="Interactive spatial projection of UNIFUSION"></canvas>
-<section id="hud" class="panel"><button id="toggleHud" aria-label="Collapse panel">−</button><div class="eyebrow">ECOPIVOT / MAXIOM</div><h1>LIVING UNIVERSE</h1><div class="sub">UNIFUSION · governed spatial projection</div><div class="hideable"><div class="stats"><div class="stat"><b id="acceptedCount">—</b><span>ACCEPTED EMERGIONS</span></div><div class="stat"><b id="facetCount">12</b><span>FIELD FACETS</span></div><div class="stat"><b id="edgeCount">—</b><span>VERIFIED REFERENCES</span></div><div class="stat"><b id="waveCount">—</b><span>TEMPORAL STATES</span></div></div><div class="controls"><button id="reset">Reset view</button><button id="pending">Show AtGOV</button><button id="labels" class="active">Labels</button></div><div id="fileState" role="status">FIELD not loaded · awaiting canonical projection</div><div id="legend"><span><i class="dot facet"></i>Facets</span><span><i class="dot accepted"></i>Accepted</span><span><i class="dot pending"></i>AtGOV (optional)</span><span><i class="dot wave"></i>Recorded wave</span></div><p class="muted">Drag to explore · pinch or scroll to zoom · tap a node for evidence. Facet placement is visual layout, not canonical geometry.</p><div id="waveInfo">Temporal wave: loading…</div></div></section>
-<section id="detail" class="panel" hidden><button id="close">Close</button><div class="eyebrow">INSPECT / READ ONLY</div><h2 id="detailTitle">Selection</h2><div id="detailBody"></div></section>
-<div id="bottom"><div class="strip" id="notice">COSL + REG remain authoritative · visualization only</div><div class="strip" id="scaleText">1.0×</div></div>
+<canvas id="c" aria-label="Interactive spatial projection of UNIFUSION. Tap a node to inspect it."></canvas>
+
+<header id="hdr" class="glass">
+ <div class="row"><div class="brand"><div class="eyebrow">EcoPIVOT / MAXIOM</div><h1>Living Universe</h1><div class="sub" id="sub">UNIFUSION · governed spatial projection</div></div><button id="min" aria-pressed="false" aria-label="Hide stats" title="Hide stats">▴</button><button id="more" aria-expanded="false" aria-controls="extra">Details ▾</button></div>
+ <div class="chips" role="list">
+  <div class="chip" role="listitem" style="--c:#8fc0ff"><b id="nAcc">—</b><span>Accepted EmergIONs</span></div>
+  <div class="chip" role="listitem" style="--c:#a98bff"><b id="nFac">12</b><span>Field facets</span></div>
+  <div class="chip" role="listitem" style="--c:#5fe0b2"><b id="nRef">—</b><span>Verified references</span></div>
+  <div class="chip" role="listitem" style="--c:#7fd1ff"><b id="nWave">—</b><span>Temporal states</span></div>
+  <div class="chip gov" role="listitem" id="cGov" hidden><b id="nGov">—</b><span>AtGOV · pending</span></div>
+  <div class="chip gov" role="listitem" id="cGovRef" hidden><b id="nGovRef">—</b><span>Pending references</span></div>
+ </div>
+ <div id="extra" hidden>
+  <div id="status" class="mono" role="status"><span class="live off" id="liveDot"></span><span id="statusText">FIELD not loaded · awaiting canonical projection</span></div>
+  <div id="waveInfo" class="mono">Temporal wave: loading…</div>
+  <div>Verified references count only links between REG-accepted EmergIONs. AtGOV records are awaiting HUMAN_FINAL and are never counted as verified. Facet placement is visual layout, not canonical geometry.</div>
+  <div>Drag to explore · pinch or scroll to zoom · tap a node to inspect.</div>
+ </div>
+</header>
+
+<div id="foot">
+ <section id="timeline" class="glass" aria-label="Recent accepted EmergIONs"><div class="tl-h"><span>Recent accepted · by capture time</span><span id="tlMeta"></span></div><div id="tl"></div></section>
+ <div class="bar">
+  <div id="legend" class="glass" aria-label="Legend"><span class="lg"><i class="sw acc"></i>Accepted (REG)</span><span class="lg"><i class="sw fac"></i>Facet</span><span class="lg"><i class="sw ln"></i>Kin reference</span><span class="lg" id="lgGov" hidden><i class="sw gov"></i>AtGOV · pending</span><span class="lg" id="lgGovRef" hidden><i class="sw pl"></i><span id="lgGovRefT">Pending reference</span></span></div>
+  <div id="dock" class="glass"><button id="fit" title="Fit and centre (F)">Fit</button><button id="gov" aria-pressed="false" title="Show records awaiting HUMAN_FINAL">AtGOV</button><button id="labels" aria-pressed="true">Labels</button></div>
+ </div>
+ <div id="banner" class="glass"><i class="shield"></i><span><b>COSL + REG remain authoritative</b> · visualization only · read-only</span><span id="zoomv" class="mono">1.00×</span></div>
+</div>
+
+<section id="sheet" class="glass" role="dialog" aria-modal="false" aria-labelledby="sTitle">
+ <div class="grip"></div>
+ <div class="sh-h"><div class="t"><span class="badge" id="sBadge">—</span><h2 id="sTitle">Selection</h2></div><button id="sClose" aria-label="Close details">Close</button></div>
+ <div id="sBody"></div>
+</section>
+
 <script>
 'use strict';
-// Existing MAXIOM temporal measurements remain unchanged and are never inferred from FIELD.
-const c=document.getElementById('c'),x=c.getContext('2d');
+// Read-only projection of /field.json. Nothing here writes, decides or authorizes.
+// MAXIOM temporal measurements are shown as recorded and never inferred from FIELD.
 const $=id=>document.getElementById(id);
-let wave=[],waveData=null,frame=0,clock=0,field=null,nodes=[],edges=[],visible=[],hover=null,selected=null,showPending=false,showLabels=true;
-let W=innerWidth,H=innerHeight,dpr=1,zoom=1,panX=0,panY=0,drag=null,pinchDistance=0;
+const c=$('c'),x=c.getContext('2d');
+const reduced=matchMedia('(prefers-reduced-motion: reduce)');
 const facets=['FIELD_COMMAND','EMERGENCE_CAPTURE','PROGRAM_FORGE','PRODUCT_STORE','CUSTOMERS_SALES','COMMUNICATIONS','PAYMENTS_FINANCE','GRANT_FUNDING','PATENT_IP','MA_PARTNERSHIPS','DOCS_PROJECTION','ANALYTICS_FORECAST'];
 const facetLabels=['FIELD Command','Emergence Capture','Program Forge','Product Store','Customers & Sales','Communications','Payments & Finance','Grant Funding','Patent & IP','M&A Partnerships','Docs & Projection','Analytics & Forecast'];
-function resize(){W=innerWidth;H=innerHeight;dpr=Math.min(devicePixelRatio||1,2);c.width=Math.round(W*dpr);c.height=Math.round(H*dpr);x.setTransform(dpr,0,0,dpr,0,0)}addEventListener('resize',resize);resize();
-function hash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
-function rnd(s){return hash(s)/4294967295}
-function facetIndex(s){const z=String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');return facets.findIndex((f,i)=>f.replace(/_/g,'')===z||facetLabels[i].toUpperCase().replace(/[^A-Z0-9]/g,'')===z)}
-function anchors(){return facets.map((f,i)=>{const angle=i*2.39996323;const radius=210+Math.sqrt(i+1)*175;return {id:'facet:'+f,label:facetLabels[i],kind:'facet',x:Math.cos(angle)*radius,y:Math.sin(angle)*radius,depth:.5+0.5*rnd(f),r:20,facet:f}})}
-function rebuild(){const a=anchors(),byID=new Map(),links=new Set();nodes=a.slice();edges=[];
- const addEdge=(u,v,kind)=>{if(!byID.has(u)||!byID.has(v)||u===v)return;const key=[u,v,kind].join('|');if(links.has(key))return;links.add(key);edges.push({a:byID.get(u),b:byID.get(v),kind})};
- const groups=[['Accepted','accepted']];if(showPending)groups.push(['AtGOV','pending']);
- for(const [key,kind] of groups){const records=field&&field[key];if(!records||typeof records!=='object')continue;
- for(const [id,em] of Object.entries(records)){if(!em||typeof em!=='object')continue;const meta=em.e&&em.e.m||{},fs=Array.isArray(meta.f)?meta.f:[],fi=fs.map(facetIndex).filter(i=>i>=0);const home=fi.length?fi[0]:hash(id)%12;const root=a[home];const radius=45+220*Math.sqrt(rnd(id+'radius'));const theta=rnd(id+'angle')*Math.PI*2;const n={id,label:meta.h||id,kind,em,meta,facets:fi,x:root.x+Math.cos(theta)*radius,y:root.y+Math.sin(theta)*radius,depth:.35+.65*rnd(id+'depth'),r:kind==='accepted'?4.3:3.5};nodes.push(n);byID.set(id,n)} }
- for(const n of nodes){if(n.kind==='facet')continue;for(const fi of n.facets){edges.push({a:n,b:a[fi],kind:'facet'})}}
- for(const n of nodes){if(!n.em)continue;const r=n.em.r||{};for(const key of ['parent_emergion','transition_emergion','origin','COMPOSITION_KIN','kin_emergion']){const v=r[key];if(typeof v==='string')addEdge(n.id,v,key==='parent_emergion'?'kin_emergion':key)}
- const providers=r.capability_providers;if(typeof providers==='string')for(const match of providers.matchAll(/E-[A-Fa-f0-9]+/g))addEdge(n.id,match[0],'capability_provider');
- const graph=n.meta.e;if(Array.isArray(graph))for(const e of graph){if(e&&typeof e==='object')addEdge(e.f,e.t,e.k||'build_edge')}
- }
- $('acceptedCount').textContent=field&&field.Accepted?Object.keys(field.Accepted).length:'—';$('edgeCount').textContent=edges.filter(e=>e.kind!=='facet').length||'0';if(selected&&!nodes.some(n=>n.id===selected.id)){$('detail').hidden=true;selected=null}
-}
-function setField(d,origin){if(!d||typeof d!=='object'||!d.Accepted||typeof d.Accepted!=='object'||Array.isArray(d.Accepted))throw Error('Not a FIELD state with an Accepted map');field=d;rebuild();$('fileState').textContent=`FIELD loaded · ${origin} · ${Object.keys(d.Accepted).length} accepted · ${d.Events??'unknown'} events`;}
-async function loadField(url){const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);setField(await r.json(),url)}
+const facetShort=['Command','Capture','Forge','Store','Sales','Comms','Finance','Grants','Patent & IP','M&A','Docs','Analytics'];
+const facetColors=['#5b9dff','#7fd1ff','#a98bff','#ff8fc7','#ffb86b','#ffd86b','#6be3a4','#5fe0d0','#c48bff','#ff9e8f','#9fb8ff','#7ee0ff'];
+const STA={F:'ACCEPTED · REG',G:'AtGOV · awaiting HUMAN_FINAL',A:'APPROVED · HUMAN_FINAL',H:'HELD',X:'REJECTED',B:'RETURNED'};
+// REL keys that name another EmergION, shown with kin words only.
+const KIN_KEYS={kin_emergion:'KIN',parent_emergion:'KIN',COMPOSITION_KIN:'COMPOSED_WITH',transition_emergion:'SUCCESSOR_KIN',origin:'ORIGIN_KIN',capability_providers:'CAPABILITY_KIN'};
+const kinWord=k=>KIN_KEYS[k]||(k==='capability_provider'?'CAPABILITY_KIN':'PROJECTION_KIN');
 
-const fieldUrl='/field.json';let loading=false;async function refreshField(){if(loading||document.hidden)return;loading=true;try{await loadField(fieldUrl);$('fileState').textContent+=' · live'}catch(e){$('fileState').textContent='FIELD unavailable: '+e.message+' · retrying automatically'}finally{loading=false}}refreshField();setInterval(refreshField,120000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshField()});
-fetch('real_temporal_wave.json').then(r=>{if(!r.ok)throw Error('wave unavailable');return r.json()}).then(d=>{waveData=d;wave=Array.isArray(d.compressed_wave)?d.compressed_wave:[];$('waveCount').textContent=wave.length;$('waveInfo').textContent=`${d.state||'RECORDED'} · ${wave.length} states · ${Math.round((1-(d.compression_ratio||0))*100)}% reduction`;}).catch(()=>{$('waveInfo').textContent='Temporal wave unavailable · FIELD projection still operational';});
-$('pending').onclick=()=>{showPending=!showPending;$('pending').classList.toggle('active',showPending);$('pending').textContent=showPending?'Hide AtGOV':'Show AtGOV';rebuild()};$('labels').onclick=()=>{showLabels=!showLabels;$('labels').classList.toggle('active',showLabels)};$('reset').onclick=()=>{zoom=1;panX=panY=0};$('close').onclick=()=>{$('detail').hidden=true;selected=null};$('toggleHud').onclick=()=>{$('hud').classList.toggle('collapsed');$('toggleHud').textContent=$('hud').classList.contains('collapsed')?'+':'−'};
-function point(n){const parallax=.87+.13*n.depth;return {x:W/2+(n.x+panX)*zoom*parallax,y:H/2+(n.y+panY)*zoom*parallax}}
-function line(a,b,color,width){x.beginPath();x.moveTo(a.x,a.y);x.lineTo(b.x,b.y);x.strokeStyle=color;x.lineWidth=width;x.stroke()}
-function label(text,px,py,size=11,color='#a8c9fa'){x.font=`${size}px system-ui`;x.fillStyle=color;x.fillText(String(text).slice(0,35),px,py)}
-function starfield(){for(let i=0;i<450;i++){const xx=(rnd('starx'+i)*W*1.7+(panX*zoom*.035))%(W+10),yy=(rnd('stary'+i)*H*1.7+(panY*zoom*.035))%(H+10);const p=.25+.6*rnd('starbright'+i);x.fillStyle=`rgba(126,171,241,${p})`;x.fillRect((xx+W)%W,(yy+H)%H,1.1,1.1)}}
-function draw(){clock+=.012;x.fillStyle='#020713';x.fillRect(0,0,W,H);starfield();
- // Recorded temporal wave: independent visual signal, never used as a fabricated FIELD metric.
- const s=wave.length?wave[Math.floor(frame)%wave.length]:null;if(s){frame+=.006;const mv=Number(s.MV)||0,sp=Number(s.SP)||0,sd=Number(s.SD)||0,wf=Number(s.WF)||0;
- for(let k=0;k<180;k++){const a=k*2.39996323+clock*(.12+mv);const r=35+Math.sqrt(k)*40+Math.sin(clock+k)*35*wf;const px=W*.56+Math.cos(a)*r*(1+sp),py=H*.5+Math.sin(a)*r*(1+sd);x.beginPath();x.arc(px,py,Math.max(.3,.5+wf*3),0,Math.PI*2);x.fillStyle=`rgba(58,132,235,${.05+wf*.25})`;x.fill()}
- x.beginPath();for(let k=0;k<=160;k++){const px=k*W/160,py=H*.84+Math.sin(k*.16+clock*4)*22*(wf+.2)+Math.cos(k*.07+clock)*18*mv;if(k===0)x.moveTo(px,py);else x.lineTo(px,py)}x.strokeStyle='rgba(80,165,245,.22)';x.lineWidth=1.3;x.stroke();$('waveInfo').textContent=`${waveData.state||'RECORDED'} · ${wave.length} states · ${s.acr} · MV ${mv.toFixed(3)} · SP ${sp.toFixed(3)} · SD ${sd.toFixed(3)} · WF ${wf.toFixed(3)}`;
- }
- const shown=nodes.length?nodes:anchors();for(const e of edges){const p=point(e.a),q=point(e.b);line(p,q,e.kind==='facet'?'rgba(66,120,210,.15)':'rgba(110,169,247,.40)',e.kind==='facet'?.6:1)}
- for(const n of shown){const p=point(n),pulse=1+.07*Math.sin(clock*1.3+hash(n.id)%40),r=Math.max(1.7,n.r*Math.sqrt(zoom)*pulse);if(p.x< -80||p.x>W+80||p.y< -80||p.y>H+80)continue;
- if(n.kind==='facet'){const halo=x.createRadialGradient(p.x,p.y,0,p.x,p.y,Math.max(32,48*zoom));halo.addColorStop(0,'rgba(46,111,230,.23)');halo.addColorStop(1,'rgba(10,35,83,0)');x.fillStyle=halo;x.beginPath();x.arc(p.x,p.y,Math.max(32,48*zoom),0,Math.PI*2);x.fill();x.strokeStyle='#508de5';x.lineWidth=1.1;x.beginPath();for(let k=0;k<5;k++){const a=k*2*Math.PI/5+clock*.06,px=p.x+Math.cos(a)*r,py=p.y+Math.sin(a)*r;if(!k)x.moveTo(px,py);else x.lineTo(px,py)}x.closePath();x.stroke();x.fillStyle='#1a4b92';x.fill();if(showLabels)label(n.label,p.x+14,p.y-16,11,'#a9c9fa')}
- else{x.fillStyle=n.kind==='pending'?'#e6a85e':'#d8eaff';x.shadowColor=n.kind==='pending'?'#e6a85e':'#468eff';x.shadowBlur=8;x.beginPath();x.arc(p.x,p.y,r,0,Math.PI*2);x.fill();x.shadowBlur=0;if(showLabels&&zoom>1.15)label(n.meta.h||n.id,p.x+8,p.y-7,10)}
- if(selected&&selected.id===n.id){x.strokeStyle='#ffffff';x.lineWidth=1.4;x.beginPath();x.arc(p.x,p.y,r+7,0,Math.PI*2);x.stroke()}}
- $('scaleText').textContent=zoom.toFixed(2)+'× · '+(field?'FIELD loaded':'temporal / awaiting FIELD');requestAnimationFrame(draw)}rebuild();draw();
-function inspect(n){selected=n;$('detail').hidden=false;$('detailTitle').textContent=n.label;const body=$('detailBody');body.replaceChildren();const kv=(key,value)=>{if(value==null||value==='')return;const box=document.createElement('div');box.className='kv';const k=document.createElement('small');k.textContent=key;const v=document.createElement('div');v.textContent=typeof value==='string'?value:JSON.stringify(value,null,2);box.append(k,v);body.append(box)};
- kv('TYPE',n.kind==='facet'?'FIELD facet':n.kind==='accepted'?'REG accepted':'AtGOV · not accepted');kv('IDENTITY',n.id);
- if(n.kind==='facet'){const matches=nodes.filter(q=>q.facets&&q.facets.includes(facets.indexOf(n.facet)));kv('ASSIGNED EMERGIONS',matches.length);kv('NOTE','Facet placement is a visualization of existing classification.');return}
- const em=n.em,meta=n.meta;kv('ARCHONYM',meta.h);kv('TOPOLOGY',meta.y);kv('CAPTURED AT',meta.t);kv('AI INTEGRATED',meta.a);kv('PROMPT SCHEMA',meta.p);kv('FACETS',meta.f);kv('CAPABILITIES',em.c);kv('EVIDENCE / SOURCE',em.m);kv('VALIDATION',em.v);kv('RELATIONSHIPS',em.r);kv('BUILD NODES',meta.n);kv('BUILD EDGES',meta.e);kv('MONETIZATION',meta.o);kv('FIELD OBSERVATIONS',meta.b);kv('STATE',em.s)}
-function nearest(px,py){let best=null,d=26;for(const n of nodes.length?nodes:anchors()){const p=point(n),dd=Math.hypot(p.x-px,p.y-py);if(dd<d){d=dd;best=n}}return best}
-const touches=new Map();c.addEventListener('pointerdown',e=>{c.setPointerCapture(e.pointerId);touches.set(e.pointerId,{x:e.clientX,y:e.clientY});if(touches.size===1)drag={x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY,moved:false};else if(touches.size===2){const a=[...touches.values()];pinchDistance=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)}});
-c.addEventListener('pointermove',e=>{if(!touches.has(e.pointerId))return;const old=touches.get(e.pointerId);touches.set(e.pointerId,{x:e.clientX,y:e.clientY});if(touches.size===2){const a=[...touches.values()],dist=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);if(pinchDistance)zoom=Math.max(.22,Math.min(4,zoom*dist/pinchDistance));pinchDistance=dist;if(drag)drag.moved=true}else if(drag){panX+=(e.clientX-old.x)/zoom;panY+=(e.clientY-old.y)/zoom;if(Math.hypot(e.clientX-drag.startX,e.clientY-drag.startY)>6)drag.moved=true}});
-c.addEventListener('pointerup',e=>{if(drag&&!drag.moved&&touches.size===1){const n=nearest(e.clientX,e.clientY);if(n)inspect(n)}touches.delete(e.pointerId);if(!touches.size){drag=null;pinchDistance=0}});c.addEventListener('pointercancel',e=>{touches.delete(e.pointerId);drag=null;pinchDistance=0});c.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.22,Math.min(4,zoom*Math.exp(-e.deltaY*.001)))},{passive:false});
+let W=innerWidth,H=innerHeight,dpr=1,view={z:1,ox:W/2,oy:H/2},userMoved=false,tween=null;
+let field=null,waveData=null,wave=[],nodes=[],edges=[],byID=new Map(),selected=null,showGov=false,showLabels=true;
+let mist=null,stars=null,sprites={},glayer=document.createElement('canvas'),gx=glayer.getContext('2d'),gkey='',dataVer=0,accNodes=[],govNodes=[],pendEdges=[],pendShown=0;
+
+function hash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+function rnd(s){let h=hash(s);h^=h>>>16;h=Math.imul(h,0x85ebca6b);h^=h>>>13;h=Math.imul(h,0xc2b2ae35);h^=h>>>16;return (h>>>0)/4294967296}
+function facetIndex(s){const z=String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');return facets.findIndex((f,i)=>f.replace(/_/g,'')===z||facetLabels[i].toUpperCase().replace(/[^A-Z0-9]/g,'')===z)}
+const fmt=n=>Number(n).toLocaleString('en-US');
+
+/* ---------- sprites & backdrop (pre-rendered once; cheap per frame) ---------- */
+function sprite(size,stops){const s=document.createElement('canvas');s.width=s.height=size;const g=s.getContext('2d'),gr=g.createRadialGradient(size/2,size/2,0,size/2,size/2,size/2);for(const [o,col] of stops)gr.addColorStop(o,col);g.fillStyle=gr;g.fillRect(0,0,size,size);return s}
+function buildSprites(){
+ sprites.acc=sprite(64,[[0,'rgba(255,255,255,1)'],[.12,'rgba(225,238,255,1)'],[.22,'rgba(120,175,255,.55)'],[.5,'rgba(70,130,255,.12)'],[1,'rgba(40,90,220,0)']]);
+ sprites.gov=sprite(48,[[0,'rgba(255,210,150,.55)'],[.35,'rgba(240,169,90,.18)'],[1,'rgba(240,169,90,0)']]);
+ sprites.mist=facetColors.map(col=>{const r=parseInt(col.slice(1,3),16),g=parseInt(col.slice(3,5),16),b=parseInt(col.slice(5,7),16);return sprite(256,[[0,`rgba(${r},${g},${b},.20)`],[.45,`rgba(${r},${g},${b},.07)`],[1,`rgba(${r},${g},${b},0)`]])});
+}
+function buildStars(){stars=document.createElement('canvas');stars.width=c.width;stars.height=c.height;const g=stars.getContext('2d');g.scale(dpr,dpr);
+ const bg=g.createRadialGradient(W*.5,H*.45,0,W*.5,H*.45,Math.max(W,H)*.8);bg.addColorStop(0,'#071a3a');bg.addColorStop(.55,'#040e24');bg.addColorStop(1,'#020814');g.fillStyle=bg;g.fillRect(0,0,W,H);
+ let seed=0x9e3779b9;const pr=()=>{seed|=0;seed=seed+0x6D2B79F5|0;let q=Math.imul(seed^seed>>>15,1|seed);q=q+Math.imul(q^q>>>7,61|q)^q;return((q^q>>>14)>>>0)/4294967296};
+ const n=Math.round(W*H/2600);for(let i=0;i<n;i++){const sx=pr()*W,sy=pr()*H,b=pr();g.fillStyle=`rgba(${150+60*b|0},${185+50*b|0},255,${.15+.55*b*b})`;const s=b>.93?1.6:1;g.fillRect(sx,sy,s,s)}}
+function resize(){W=innerWidth;H=innerHeight;dpr=Math.min(devicePixelRatio||1,2);c.width=Math.round(W*dpr);c.height=Math.round(H*dpr);x.setTransform(dpr,0,0,dpr,0,0);buildStars();glayer.width=c.width;glayer.height=c.height;gkey='';if(aspect()!==EY)rebuild();if(!userMoved)fit(false);want()}
+
+/* ---------- layout: 12 facets on a ring, EmergIONs clustered by home facet ---------- */
+const RING=430;let EY=1;
+function aspect(){const h=$('hdr').getBoundingClientRect(),f=$('foot').getBoundingClientRect();const wide=W>=900,fh=f.top-(wide?16:h.bottom)-20,fw=W-(wide?h.right+10:0)-20;return Math.max(.8,Math.min(1.5,Math.round((fh/fw)*10)/10))}
+function anchors(){return facets.map((f,i)=>{const a=-Math.PI/2+i*Math.PI*2/12;return {id:'facet:'+f,label:facetLabels[i],kind:'facet',fi:i,x:Math.cos(a)*RING,y:Math.sin(a)*RING*EY,ang:a,color:facetColors[i]}})}
+function rebuild(){
+ EY=aspect();const A=anchors(),links=new Set();nodes=A.slice();edges=[];byID=new Map();
+ const groups=[['Accepted','accepted']];if(showGov)groups.push(['AtGOV','pending']);
+ for(const [key,kind] of groups){const recs=field&&field[key];if(!recs||typeof recs!=='object')continue;
+  for(const [id,em] of Object.entries(recs)){if(!em||typeof em!=='object')continue;
+   const meta=(em.e&&em.e.m)||{},fs=Array.isArray(meta.f)?meta.f:[],fi=fs.map(facetIndex).filter(i=>i>=0),home=fi.length?fi[0]:hash(id)%12,root=A[home];
+   let px,py;
+   if(kind==='accepted'){const rr=26+120*Math.sqrt(rnd(id+'r')),t=rnd(id+'a')*Math.PI*2;px=root.x+Math.cos(t)*rr;py=root.y+Math.sin(t)*rr*.9}
+   else{const spread=(rnd(id+'a')-.5)*.42,rr=RING+140+240*Math.sqrt(rnd(id+'r'));px=Math.cos(root.ang+spread)*rr;py=Math.sin(root.ang+spread)*rr*EY}
+   const n={id,label:meta.h||id,kind,em,meta,facets:fi,home,color:facetColors[home],x:px,y:py,tw:rnd(id+'tw')*6.28};nodes.push(n);byID.set(id,n)}}
+ const addEdge=(u,v,k)=>{const a=byID.get(u),b=byID.get(v);if(!a||!b||a===b)return;const key=u+'|'+v+'|'+k;if(links.has(key))return;links.add(key);edges.push({a,b,k,verified:a.kind==='accepted'&&b.kind==='accepted'})};
+ for(const n of nodes){if(!n.em)continue;const r=n.em.r||{};
+  for(const k of ['kin_emergion','parent_emergion','transition_emergion','origin','COMPOSITION_KIN'])if(typeof r[k]==='string')addEdge(n.id,r[k],k==='parent_emergion'?'kin_emergion':k);
+  if(typeof r.capability_providers==='string')for(const m of r.capability_providers.matchAll(/E-[A-Fa-f0-9]+/g))addEdge(n.id,m[0],'capability_provider');
+  const g=n.meta.e;if(Array.isArray(g))for(const e of g)if(e&&typeof e==='object')addEdge(e.f,e.t,e.k||'build_edge')}
+ accNodes=nodes.filter(n=>n.kind==='accepted');govNodes=nodes.filter(n=>n.kind==='pending');pendEdges=edges.filter(e=>!e.verified);
+ for(const n of nodes)n.adj=[];for(const e of edges){e.a.adj.push(e);e.b.adj.push(e)}dataVer++;
+ // Counts: verified = both ends REG-accepted; pending = touches an AtGOV record.
+ const acc=field&&field.Accepted?Object.keys(field.Accepted).length:null,ver=edges.filter(e=>e.verified).length,pend=edges.length-ver;
+ $('nAcc').textContent=acc==null?'—':fmt(acc);subLine.v=[acc,ver,showGov?nGovAll():null];subLine();$('nRef').textContent=field?fmt(ver):'—';
+ const nGov=field&&field.AtGOV?Object.keys(field.AtGOV).length:0;$('nGov').textContent=fmt(nGov);$('nGovRef').textContent=fmt(pend);
+ for(const id of ['cGov','cGovRef','lgGov','lgGovRef'])$(id).hidden=!showGov;
+ if(selected){const s=selected.kind==='facet'?nodes.find(n=>n.id===selected.id):byID.get(selected.id);if(s){selected=s;inspect(s)}else closeSheet()}
+ buildTimeline();want()
+}
+
+/* ---------- view ---------- */
+function nGovAll(){return field&&field.AtGOV?Object.keys(field.AtGOV).length:0}
+function subLine(){const v=subLine.v||[];$('sub').textContent=$('hdr').classList.contains('compact')&&v[0]!=null?`${fmt(v[0])} accepted · ${fmt(v[1])} verified references`+(v[2]!=null?` · ${fmt(v[2])} AtGOV pending`:''):'UNIFUSION · governed spatial projection'}
+function freeRect(){const h=$('hdr').getBoundingClientRect(),f=$('foot').getBoundingClientRect(),wide=W>=900;let top=wide?16:h.bottom+10,bot=f.top-10,left=wide?h.right+10:10,right=W-10;const so=$('sheet').classList.contains('open');if(so&&W>=900)right=W-410;else if(so)bot=H-$('sheet').offsetHeight-18;if(bot-top<160){top=10;bot=H-10}return {left,right,top,bot}}
+function fit(animate=true){const pts=nodes.length?nodes:anchors();let a=1e9,b=1e9,cc=-1e9,d=-1e9;for(const n of pts){a=Math.min(a,n.x);b=Math.min(b,n.y);cc=Math.max(cc,n.x);d=Math.max(d,n.y)}
+ const pad=60;a-=pad;b-=pad;cc+=pad;d+=pad;const r=freeRect(),z=Math.max(.08,Math.min(3,Math.min((r.right-r.left)/(cc-a),(r.bot-r.top)/(d-b))));
+ const tgt={z,ox:(r.left+r.right)/2-(a+cc)/2*z,oy:(r.top+r.bot)/2-(b+d)/2*z};userMoved=false;
+ if(animate&&!reduced.matches){tween={from:{...view},to:tgt,t0:performance.now(),dur:480}}else{view=tgt;tween=null}want()}
+function zoomAt(sx,sy,f){const z=Math.max(.06,Math.min(8,view.z*f)),wx=(sx-view.ox)/view.z,wy=(sy-view.oy)/view.z;view.z=z;view.ox=sx-wx*z;view.oy=sy-wy*z;userMoved=true;tween=null;want()}
+const S=n=>({x:view.ox+n.x*view.z,y:view.oy+n.y*view.z});
+
+/* ---------- render loop: on-demand, frame-capped, paused when hidden ---------- */
+let dirty=true,raf=0,timer=0,lastDraw=0,lastInput=0,t0=performance.now();
+function want(){dirty=true;if(!raf){clearTimeout(timer);timer=0;raf=requestAnimationFrame(tick)}}
+function tick(now){raf=0;if(tween){const k=Math.min(1,(now-tween.t0)/tween.dur),e=1-Math.pow(1-k,3);view={z:tween.from.z+(tween.to.z-tween.from.z)*e,ox:tween.from.ox+(tween.to.ox-tween.from.ox)*e,oy:tween.from.oy+(tween.to.oy-tween.from.oy)*e};if(k>=1)tween=null;dirty=true}
+ const ambient=!reduced.matches&&!document.hidden,fps=now-lastInput<1500?30:12;
+ if(dirty||(ambient&&now-lastDraw>=1000/fps-2)){draw(now);lastDraw=now;dirty=false}
+ if(tween||dirty)raf=requestAnimationFrame(tick);else if(ambient&&!timer)timer=setTimeout(()=>{timer=0;if(!raf)raf=requestAnimationFrame(tick)},Math.max(4,1000/fps-(performance.now()-lastDraw)))}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){want();refreshField()}});
+reduced.addEventListener&&reduced.addEventListener('change',want);
+
+function draw(now){const t=reduced.matches?0:(now-t0)/1000,z=view.z;x.setTransform(dpr,0,0,dpr,0,0);x.globalAlpha=1;x.globalCompositeOperation='source-over';x.drawImage(stars,0,0,W,H);
+ // particle mist: soft facet-tinted fog drifting slowly around each cluster
+ x.globalCompositeOperation='lighter';const A=anchors();
+ for(const f of A){const p=S(f);for(let k=0;k<3;k++){const ph=t*.05+k*2.1+f.fi,s=(300+90*k)*z+60,dx=Math.cos(ph)*40*z,dy=Math.sin(ph*1.3)*30*z;x.globalAlpha=.75-k*.18;x.drawImage(sprites.mist[f.fi],p.x+dx-s/2,p.y+dy-s/2,s,s)}}
+ const core=S({x:0,y:0}),cs=RING*1.5*z;x.globalAlpha=.55;x.drawImage(sprites.mist[1],core.x-cs/2,core.y-cs/2,cs,cs);
+ // recorded temporal wave: a faint orbiting droplet ring around the core (independent visual signal)
+ const s=wave.length?wave[Math.floor(t/4)%wave.length]:null;
+ if(s){const mv=+s.MV||0,sp=+s.SP||0,wf=+s.WF||0;x.globalAlpha=.5;x.fillStyle='rgba(120,190,255,.55)';x.beginPath();for(let k=0;k<120;k++){const a=k*2.39996323+t*(.04+mv*.2),r=(RING*.25+Math.sqrt(k)*RING*.06*(1+sp))*z*(1+.04*Math.sin(t*.7+k)*wf),px=core.x+Math.cos(a)*r,py=core.y+Math.sin(a)*r;x.moveTo(px+1.2,py);x.arc(px,py,1.1+wf*1.5,0,6.283)}x.fill()}
+ x.globalCompositeOperation='source-over';x.globalAlpha=1;
+ // the graph itself is cached in its own layer and only redrawn when the view or data changes
+ const moving=ptr.size>0||!!tween;const key=[moving,z.toFixed(4),view.ox.toFixed(1),view.oy.toFixed(1),selected?selected.id:'',showGov,showLabels,dataVer,W,H].join('|');
+ if(key!==gkey){drawGraph(gx,A,moving);gkey=key}
+ x.drawImage(glayer,0,0,W,H);
+ if(selected){const p=S(selected),zr=Math.max(.75,Math.min(2.2,Math.sqrt(z*1.6))),r=selected.kind==='facet'?20:9*zr;x.strokeStyle='rgba(255,255,255,.35)';x.lineWidth=1.5;x.beginPath();x.arc(p.x,p.y,r+5+2*Math.sin(t*3),0,6.283);x.stroke()}
+ $('zoomv').textContent=z.toFixed(2)+'×'}
+const onScreen=(p,m)=>p.x>-m&&p.x<W+m&&p.y>-m&&p.y<H+m;
+function drawGraph(g,A,moving){const z=view.z;g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);g.globalAlpha=1;g.globalCompositeOperation='source-over';
+ g.strokeStyle='rgba(120,170,255,.10)';g.lineWidth=1;g.beginPath();A.forEach((f,i)=>{const p=S(f);i?g.lineTo(p.x,p.y):g.moveTo(p.x,p.y)});g.closePath();g.stroke();
+ const sel=selected,focus=sel?new Set([sel.id]):null;if(sel&&sel.adj)for(const e of sel.adj){focus.add(e.a.id);focus.add(e.b.id)}
+ const dimA=sel?.35:1,zr=Math.max(.75,Math.min(2.2,Math.sqrt(z*1.6)));
+ // facet membership (accepted only; AtGOV records already sit beside their facet)
+ g.lineWidth=.7;g.strokeStyle=`rgba(90,140,230,${.10*dimA})`;g.beginPath();for(const n of accNodes){const p=S(n);for(const fi of n.facets){const q=S(A[fi]);g.moveTo(p.x,p.y);g.lineTo(q.x,q.y)}}g.stroke();
+ // pending references: density-capped and faint, so 19k links never become a hairball
+ pendShown=0;if(showGov&&pendEdges.length){const cap=moving?300:(W<700?1200:2500),zoomed=z>.9;g.lineWidth=.6;g.strokeStyle=`rgba(240,169,90,${(zoomed?.16:.09)*dimA})`;g.beginPath();
+  if(zoomed){for(const e of pendEdges){if(pendShown>=cap)break;const p=S(e.a),q=S(e.b);if(!onScreen(p,0)&&!onScreen(q,0))continue;g.moveTo(p.x,p.y);g.lineTo(q.x,q.y);pendShown++}}
+  else{const step=Math.max(1,Math.ceil(pendEdges.length/cap));for(let i=0;i<pendEdges.length;i+=step){const e=pendEdges[i],p=S(e.a),q=S(e.b);g.moveTo(p.x,p.y);g.lineTo(q.x,q.y);pendShown++}}
+  g.stroke()}
+ const sampled=showGov&&pendShown<pendEdges.length;$('lgGovRefT').textContent=sampled?`Pending reference · ${fmt(pendShown)} of ${fmt(pendEdges.length)} drawn`:'Pending reference';
+ g.lineWidth=1.1;g.strokeStyle=`rgba(143,192,255,${.42*dimA})`;g.beginPath();for(const e of edges){if(!e.verified)continue;const p=S(e.a),q=S(e.b);g.moveTo(p.x,p.y);g.lineTo(q.x,q.y)}g.stroke();
+ if(sel&&sel.adj){g.lineWidth=1.8;g.beginPath();for(const e of sel.adj){const p=S(e.a),q=S(e.b);g.moveTo(p.x,p.y);g.lineTo(q.x,q.y)}g.strokeStyle=sel.kind==='pending'?'rgba(255,214,160,.9)':'rgba(200,230,255,.9)';g.stroke()}
+ // AtGOV nodes: one batched path; halos only when few are on screen
+ if(showGov){let vis=0;const pts=[];for(const n of govNodes){const p=S(n);if(onScreen(p,10)){pts.push(p);vis++}}
+  const r=Math.max(1.3,1.9*zr);if(vis<900){g.globalCompositeOperation='lighter';g.globalAlpha=.45*dimA;const sz=12*zr;for(const p of pts)g.drawImage(sprites.gov,p.x-sz/2,p.y-sz/2,sz,sz);g.globalCompositeOperation='source-over';g.globalAlpha=1}
+  g.beginPath();if(moving&&vis>=900)for(const p of pts)g.rect(p.x-r,p.y-r,r*2,r*2);else for(const p of pts){g.moveTo(p.x+r,p.y);g.arc(p.x,p.y,r,0,6.283)}
+  if(vis<900){g.strokeStyle=`rgba(240,169,90,${.75*dimA})`;g.lineWidth=1;g.stroke()}else{g.fillStyle=`rgba(240,169,90,${.55*dimA})`;g.fill()}}
+ // accepted nodes
+ g.globalCompositeOperation='lighter';for(const n of accNodes){const p=S(n);if(!onScreen(p,30))continue;const sz=22*zr;g.globalAlpha=focus&&!focus.has(n.id)?.3:1;g.drawImage(sprites.acc,p.x-sz/2,p.y-sz/2,sz,sz)}
+ g.globalCompositeOperation='source-over';
+ for(const n of accNodes){const p=S(n);if(!onScreen(p,20))continue;g.fillStyle=n.color;g.globalAlpha=focus&&!focus.has(n.id)?.3:.9;g.beginPath();g.arc(p.x,p.y,1.6*zr,0,6.283);g.fill()}
+ g.globalAlpha=1;
+ if(focus)for(const id of focus){const n=byID.get(id);if(!n||n.kind!=='pending')continue;const p=S(n);g.fillStyle='#ffd7aa';g.beginPath();g.arc(p.x,p.y,2.6*zr,0,6.283);g.fill()}
+ for(const f of A){const p=S(f),r=Math.max(7,Math.min(16,11*Math.sqrt(z*1.5)));g.save();g.translate(p.x,p.y);g.rotate(Math.PI/4);g.fillStyle='rgba(8,18,40,.9)';g.strokeStyle=f.color;g.lineWidth=1.6;g.shadowColor=f.color;g.shadowBlur=12;g.beginPath();g.rect(-r/1.5,-r/1.5,r*1.33,r*1.33);g.fill();g.stroke();g.shadowBlur=0;g.fillStyle=f.color;g.fillRect(-r/4,-r/4,r/2,r/2);g.restore()}
+ if(sel){const p=S(sel),r=sel.kind==='facet'?20:9*zr;g.strokeStyle='#fff';g.lineWidth=1.5;g.beginPath();g.arc(p.x,p.y,r,0,6.283);g.stroke()}
+ // labels: facets first, then the selection and its kin, then accepted names only when zoomed in and sparse; never overlapping
+ if(!showLabels)return;placed=[];g.textBaseline='middle';const fs=W<600?11:12;g.font=`600 ${fs}px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif`;
+ for(const f of A){const p=S(f);if(W<700){g.textAlign='center';label(g,(RING*z<170?facetShort[f.fi]:f.label).toUpperCase(),p.x,p.y-(f.y>RING*.5?-18:18),'#dbe8ff',f.color,true);continue}const out=f.x>=-1?1:-1,lx=p.x+out*14,ly=p.y-(Math.abs(f.y)>RING*.9?(f.y<0?16:-16):0);g.textAlign=Math.abs(f.x)<5?'center':(out>0?'left':'right');label(g,f.label.toUpperCase(),Math.abs(f.x)<5?p.x:lx,Math.abs(f.x)<5?(f.y<0?p.y-18:p.y+18):ly,'#dbe8ff',f.color,true)}
+ g.font=`${W<600?10:11}px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif`;g.textAlign='left';
+ const nameOf=n=>{const s=String(n.label);return /^E-[0-9A-F]{12,}$/i.test(s)?s.slice(0,6)+'…'+s.slice(-4):s.slice(0,30)};
+ if(sel&&sel.kind!=='facet'){const p=S(sel);label(g,nameOf(sel),p.x+10,p.y-10,sel.kind==='pending'?'#ffe2bf':'#ffffff',null,true)}
+ if(focus){let k=0;for(const id of focus){if(k>=24)break;const n=byID.get(id);if(!n||n===sel)continue;const p=S(n);if(!onScreen(p,0))continue;if(label(g,nameOf(n),p.x+8,p.y-8,n.kind==='pending'?'#ffd7aa':'#cfe0ff'))k++}}
+ if(z>1.1){const vis=accNodes.filter(n=>onScreen(S(n),0));if(vis.length<=150){let k=0;for(const n of vis){if(k>=60)break;if(focus&&focus.has(n.id))continue;const p=S(n);if(label(g,nameOf(n),p.x+8,p.y-8,'#cfe0ff'))k++}}}}
+let placed=[];
+function label(g,text,px,py,col,accent,force){const w=g.measureText(text).width;let ax=g.textAlign==='right'?px-w-5:g.textAlign==='center'?px-w/2-5:px-5;const cl=Math.max(4,Math.min(W-w-14,ax));px+=cl-ax;ax=cl;const R={x:ax,y:py-9,w:w+10,h:18};
+ if(!force&&placed.some(q=>R.x<q.x+q.w+2&&q.x<R.x+R.w+2&&R.y<q.y+q.h+1&&q.y<R.y+R.h+1))return false;placed.push(R);
+ g.fillStyle='rgba(3,10,26,.72)';g.beginPath();g.roundRect?g.roundRect(ax,py-9,w+10,18,5):g.rect(ax,py-9,w+10,18);g.fill();if(accent){g.fillStyle=accent;g.fillRect(ax,py-9,2,18)}g.fillStyle=col;g.fillText(text,px,py);return true}
+
+/* ---------- data ---------- */
+function setField(d,origin){if(!d||typeof d!=='object'||!d.Accepted||typeof d.Accepted!=='object'||Array.isArray(d.Accepted))throw Error('Not a FIELD state with an Accepted map');const first=!field;field=d;rebuild();if(first&&!userMoved)fit(false);
+ const at=new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});$('statusText').textContent=`FIELD loaded · ${origin} · ${fmt(Object.keys(d.Accepted).length)} accepted · ${d.Events!=null?fmt(d.Events):'unknown'} events · live · ${at}`;$('liveDot').className='live';$('status').className='mono'}
+let loading=false;async function refreshField(){if(loading||document.hidden)return;loading=true;try{const r=await fetch('/field.json',{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);setField(await r.json(),'/field.json')}catch(e){$('statusText').textContent='FIELD unavailable: '+e.message+' · retrying automatically';$('liveDot').className='live off';$('status').className='mono err'}finally{loading=false}}
+refreshField();setInterval(refreshField,120000);
+fetch('real_temporal_wave.json').then(r=>{if(!r.ok)throw Error('wave unavailable');return r.json()}).then(d=>{waveData=d;wave=Array.isArray(d.compressed_wave)?d.compressed_wave:[];$('nWave').textContent=fmt(wave.length);$('waveInfo').textContent=`Temporal wave: ${d.state||'RECORDED'} · ${wave.length} recorded states · ${Math.round((1-(d.compression_ratio||0))*100)}% reduction`;want()}).catch(()=>{$('nWave').textContent='—';$('waveInfo').textContent='Temporal wave unavailable · FIELD projection still operational'});
+
+function buildTimeline(){const tl=$('tl');tl.replaceChildren();const acc=nodes.filter(n=>n.kind==='accepted'&&n.meta.t).sort((a,b)=>String(b.meta.t).localeCompare(String(a.meta.t))).slice(0,12);
+ $('timeline').hidden=!acc.length;$('tlMeta').textContent=acc.length?`${acc.length} most recent`:'';
+ for(const n of acc){const b=document.createElement('button');b.className='ev';b.style.setProperty('--c',n.color);const i=document.createElement('i'),s=document.createElement('span'),sm=document.createElement('small');s.textContent=n.label;const d=new Date(n.meta.t);sm.textContent=isNaN(d)?'':d.toLocaleDateString([], {month:'short',day:'numeric'});b.append(i,s,sm);b.onclick=()=>{inspect(n);center(n)};tl.append(b)}
+ requestAnimationFrame(()=>{if(!userMoved)fit(false)})}
+function center(n,zoomIn=true){const r=freeRect(),z=zoomIn?Math.max(view.z,1.3):view.z;const tgt={z,ox:(r.left+r.right)/2-n.x*z,oy:(r.top+r.bot)/2-n.y*z};userMoved=true;if(reduced.matches)view=tgt;else tween={from:{...view},to:tgt,t0:performance.now(),dur:420};want()}
+
+/* ---------- detail sheet ---------- */
+function closeSheet(){$('sheet').classList.remove('open');document.body.classList.remove('sheeting');selected=null;want()}
+const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e};
+const IDN_RE=/E-[A-Fa-f0-9]{6,}/g;
+const shortHash=h=>{h=String(h);return h.length>20?h.slice(0,10)+'…'+h.slice(-6):h};
+const human=k=>String(k).replace(/_/g,' ').replace(/^./,c=>c.toUpperCase());
+// Readable labels for recorded REL keys (kin keys are handled separately and shown with kin words).
+const REL_LABELS={capability_composition:'Capability composition',capability_resolution:'Capability resolution',governed_state:'Governed state',protector:'Protector',protector_gate:'Protector gate',required_capability:'Required capability',source_name:'Source name',source_kind:'Source kind',requirement_basis:'Requirement basis',target_state:'Target state',target_emergion:'Target EmergION',selected_realization:'Selected realization',runners_up:'Runners-up',target_thing:'Target',authorization_event:'Authorization event'};
+function copyText(text,btn){const done=()=>{const o=btn.textContent;btn.textContent='Copied';setTimeout(()=>btn.textContent=o,1200)};
+ if(navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(text).then(done,()=>fallback());else fallback();
+ function fallback(){const ta=el('textarea');ta.value=text;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.opacity='0';document.body.append(ta);ta.select();try{document.execCommand('copy');done()}catch(e){}ta.remove()}}
+function copyBtn(text){const b=el('button','copy','Copy');b.type='button';b.setAttribute('aria-label','Copy full value');b.onclick=ev=>{ev.stopPropagation();copyText(text,b)};return b}
+function idChip(id,prefix){const n=byID.get(id),b=el('button','idchip'+(n?(n.kind==='pending'?' gov':' acc'):' out'));b.type='button';
+ if(prefix)b.append(el('span','cap',prefix));b.append(el('span','mono',id.length>14?id.slice(0,10)+'…'+id.slice(-4):id));if(n&&n.label!==id)b.append(el('span','nm',String(n.label).slice(0,26)));
+ b.title=n?(n.kind==='pending'?'AtGOV · not accepted · ':'REG accepted · ')+id:id+' · not in view'+(field&&field.AtGOV&&field.AtGOV[id]&&!showGov?' (AtGOV hidden)':'');
+ if(n)b.onclick=()=>{inspect(n);center(n,false)};else b.disabled=true;return b}
+// Turns any recorded text into text + tappable IDN chips.
+function richValue(v){const d=el('div','rich');const s=typeof v==='string'?v:JSON.stringify(v);let last=0;for(const m of s.matchAll(IDN_RE)){if(m.index>last)d.append(el('span',null,s.slice(last,m.index)));d.append(idChip(m[0]));last=m.index+m[0].length}if(last<s.length)d.append(el('span',null,s.slice(last)));return d}
+function inspect(n){selected=n;const body=$('sBody');body.replaceChildren();const sh=$('sheet');sh.style.bottom=W>=900?Math.round(H-$('foot').getBoundingClientRect().top+10)+'px':'';document.body.classList.add('sheeting');sh.classList.add('open');sh.classList.toggle('isgov',n.kind==='pending');$('sTitle').textContent=n.label;
+ const bd=$('sBadge');bd.className='badge '+(n.kind==='facet'?'fac':n.kind==='accepted'?'acc':'gov');bd.textContent=n.kind==='facet'?'Field facet':n.kind==='accepted'?'REG accepted':'AtGOV · not accepted';
+ const row=(k,v,opt={})=>{if(v==null||v===''||(Array.isArray(v)&&!v.length))return;const r=el('div','kv');r.append(el('small',null,k));let d;
+  if(v instanceof Node)d=v;else if(opt.chips){d=el('div','fchips');for(const t of v)d.append(el('span','tchip'+(opt.cls?' '+opt.cls:''),String(t)))}else d=el('div',opt.mono?'mono':null,String(v));
+  if(opt.copy){const w=el('div','wcopy');w.append(d,copyBtn(opt.copy));d=w}r.append(d);body.append(r)};
+ const sec=t=>body.append(el('div','sec',t));
+ if(n.kind==='facet'){const fi=n.fi,acc=accNodes.filter(q=>q.facets.includes(fi)),gov=govNodes.filter(q=>q.facets.includes(fi));row('Facet',facets[fi],{mono:true});row('Accepted',fmt(acc.length));if(showGov)row('AtGOV',fmt(gov.length)+' · not accepted');
+  if(acc.length){sec(`Accepted EmergIONs · ${acc.length}`);const w=el('div','chipwrap');for(const q of acc.slice(0,40))w.append(idChip(q.id,'PROJECTION_KIN'));body.append(w)}
+  body.append(el('div','note','Facet placement visualizes existing classification. It is not canonical geometry.'));want();return}
+ const em=n.em||{},m=n.meta||{},src=em.m||{},val=em.v||{},rel=em.r&&typeof em.r==='object'?em.r:{};
+ if(n.kind==='pending'){const g=el('div','govnote');g.append(el('b',null,'AtGOV · not accepted'),el('span',null,' Awaiting HUMAN_FINAL. Not verified and not counted in verified references. REG has not accepted this record.'));body.append(g)}
+ sec('Identity');
+ row('IDN',el('div','mono',em.i||n.id),{copy:em.i||n.id});
+ row('STA',(em.s||'—')+(STA[em.s]?' · '+STA[em.s]:''),{mono:true});
+ row('Topology',m.y,{mono:true});
+ if(m.t){const d=new Date(m.t);row('Captured at',isNaN(d)?String(m.t):d.toLocaleString())}
+ if(n.facets.length){const fc=el('div','fchips');for(const fi of n.facets){const f=el('span','fchip',facetLabels[fi]);f.style.setProperty('--c',facetColors[fi]);fc.append(f)}row('Facets',fc)}
+ if(Array.isArray(em.c))row('Capabilities',em.c,{chips:true});
+ if(typeof m.a==='boolean')row('AI integrated',m.a?'yes':'no');row('Prompt schema',m.p,{mono:true});
+ sec('Evidence · source');
+ if(src.h)row('Source hash',el('div','mono',shortHash(src.h)),{copy:src.h});
+ row('Codec',src.z,{mono:true});
+ if(src.b!=null){const b=+src.b,q=+src.q;row('Size',fmt(b)+' bytes'+(q?` → ${fmt(q)} stored`+(b?` (${Math.round(q/b*100)}%)`:''):''))}
+ row('Summary',src.s);row('Provenance',src.p,{mono:true});
+ sec('Validation');
+ {const f=el('div','flags');const flag=(ok,t)=>f.append(el('span','flag '+(ok?'ok':'no'),(ok?'✓ ':'✗ ')+t));if('c' in val)flag(!!val.c,'Recoil');if('w' in val)flag(!!val.w,'WVC');if(val.r)f.append(el('span','flag info','Risk: '+val.r));if(val.a)f.append(el('span','flag info','proposer: '+String(val.a)));if(f.childNodes.length)row('Checks',f)}
+ if(val.v){const s=String(val.v);if(s.length>44){const dt=el('details','ver');dt.append(el('summary',null,s.slice(0,40)+'…'),el('div','mono',s));row('Proposer version',dt)}else row('Proposer version',s,{mono:true})}
+ if(Array.isArray(val.f))row('Facts',val.f,{chips:true});if(Array.isArray(val.x))row('Differences',val.x,{chips:true});if(Array.isArray(val.g))row('Gaps',val.g,{chips:true,cls:'warn'});
+ // kin relations: outgoing from REL, incoming from other records in view
+ const out=[];for(const k of Object.keys(KIN_KEYS)){const v=rel[k];if(typeof v!=='string'||!v)continue;
+  if(k==='capability_providers'){for(const part of v.split(',')){const mm=part.match(/^\s*([^:]*?)\s*:\s*(E-[A-Fa-f0-9]+)\s*$/);if(mm)out.push(['CAPABILITY_KIN',mm[2],mm[1]]);else for(const q of part.matchAll(IDN_RE))out.push(['CAPABILITY_KIN',q[0],''])}}
+  else for(const q of (v.match(IDN_RE)||[v]))out.push([KIN_KEYS[k],q,''])}
+ const inc=(n.adj||[]).filter(e=>e.b===n&&e.a!==n);
+ sec(`Kin relations · ${out.length+inc.length}`);
+ if(!out.length&&!inc.length)body.append(el('div','note','No kin relations recorded.'));
+ for(const [w,id,cap] of out){const r=el('div','kinrow');r.append(el('span','w',w),el('span','dir','→'));if(cap)r.append(el('span','tchip',cap));r.append(idChip(id));body.append(r)}
+ const INC=30;for(const e of inc.slice(0,INC)){const r=el('div','kinrow');r.append(el('span','w',kinWord(e.k)),el('span','dir','←'),idChip(e.a.id));body.append(r)}
+ if(inc.length>INC)body.append(el('div','note',`and ${fmt(inc.length-INC)} more incoming kin references`));
+ // proposed capability links "A->B,C->D": AtGOV proposals, never accepted links
+ const prop=rel.capability_provider_edge_proposal;
+ if(typeof prop==='string'&&prop.trim()){const pairs=prop.split(',').map(p=>p.split(/\s*->\s*/)).filter(p=>p.length===2);sec(`Proposed CAPABILITY_KIN · ${pairs.length}`);
+  for(const [a,b] of pairs){const r=el('div','kinrow prop');const side=s=>{s=s.trim();return /^E-[A-Fa-f0-9]{6,}$/.test(s)?idChip(s):el('span','tchip',s)};r.append(side(a),el('span','dir','→'),side(b));body.append(r)}
+  body.append(el('div','note','Proposal only. A proposed link becomes kin only after HUMAN_FINAL and REG acceptance.'))}
+ const other=Object.keys(rel).filter(k=>!(k in KIN_KEYS)&&k!=='capability_provider_edge_proposal').sort();
+ if(other.length){sec('Relationships');for(const k of other)row(REL_LABELS[k]||human(k),richValue(rel[k]))}
+ if(Array.isArray(m.b)&&m.b.length){sec('Field observations');const w=el('div','fchips');for(const o of m.b)w.append(el('span','tchip obs',String(o)));body.append(w)}
+ if(Array.isArray(m.n)&&m.n.length||Array.isArray(m.e)&&m.e.length){sec('Build graph');row('Build nodes',fmt((m.n||[]).length));row('Build edges',fmt((m.e||[]).length))}
+ if(m.o&&typeof m.o==='object'){sec('Monetization');row('Model',m.o.m);row('Customer',m.o.c);row('Value',m.o.v);row('Revenue path',m.o.r)}
+ body.append(el('div','note',n.kind==='accepted'?'Read-only view of a REG-accepted record. Decisions happen only through HUMAN_FINAL.':'Read-only. AtGOV records are awaiting HUMAN_FINAL; this view cannot decide or accept them.'));
+ body.scrollTop=0;want()}
+
+/* ---------- controls & input ---------- */
+$('more').onclick=()=>{const ex=$('extra'),o=ex.hidden;ex.hidden=!o;$('more').setAttribute('aria-expanded',o);$('more').textContent=o?'Less ▴':'Details ▾';if(!userMoved)fit()};
+$('fit').onclick=()=>fit();
+$('min').onclick=()=>{const h=$('hdr'),on=!h.classList.contains('compact');h.classList.toggle('compact',on);$('min').setAttribute('aria-pressed',on);$('min').textContent=on?'▾':'▴';$('min').setAttribute('aria-label',on?'Show stats':'Hide stats');subLine();rebuild();if(!userMoved)fit()};
+$('gov').onclick=()=>{showGov=!showGov;$('gov').setAttribute('aria-pressed',showGov);rebuild();if(!userMoved)fit()};
+$('labels').onclick=()=>{showLabels=!showLabels;$('labels').setAttribute('aria-pressed',showLabels);want()};
+$('sClose').onclick=closeSheet;
+addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet();else if((e.key==='f'||e.key==='F')&&!e.metaKey&&!e.ctrlKey)fit()});
+function nearest(px,py){let best=null,d=W<600?24:18;for(const n of nodes){if(n.kind==='pending'&&!showGov)continue;const p=S(n),dd=Math.hypot(p.x-px,p.y-py)-(n.kind==='facet'?8:0);if(dd<d){d=dd;best=n}}return best}
+const ptr=new Map();let drag=null,pinch=0;
+c.addEventListener('pointerdown',e=>{c.setPointerCapture(e.pointerId);ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});lastInput=performance.now();tween=null;want();if(ptr.size===1)drag={sx:e.clientX,sy:e.clientY,moved:false};else if(ptr.size===2){const a=[...ptr.values()];pinch=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);if(drag)drag.moved=true}c.classList.add('grabbing')});
+c.addEventListener('pointermove',e=>{if(!ptr.has(e.pointerId))return;const o=ptr.get(e.pointerId);ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});lastInput=performance.now();
+ if(ptr.size===2){const a=[...ptr.values()],d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);if(pinch)zoomAt((a[0].x+a[1].x)/2,(a[0].y+a[1].y)/2,d/pinch);pinch=d}
+ else if(drag){view.ox+=e.clientX-o.x;view.oy+=e.clientY-o.y;if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>6){drag.moved=true;userMoved=true}want()}});
+function up(e){if(drag&&!drag.moved&&ptr.size===1&&e.type==='pointerup'){const n=nearest(e.clientX,e.clientY);if(n){inspect(n);const p=S(n),r=freeRect();if(p.y<r.top+10||p.y>r.bot-10||p.x<r.left+10||p.x>r.right-10)center(n,false)}else if(selected)closeSheet()}ptr.delete(e.pointerId);if(!ptr.size){drag=null;pinch=0;c.classList.remove('grabbing');want()}}
+c.addEventListener('pointerup',up);c.addEventListener('pointercancel',up);
+c.addEventListener('wheel',e=>{e.preventDefault();lastInput=performance.now();zoomAt(e.clientX,e.clientY,Math.exp(-e.deltaY*.0015))},{passive:false});
+c.addEventListener('dblclick',e=>zoomAt(e.clientX,e.clientY,1.8));
+addEventListener('resize',resize);
+if(innerWidth>=900){$('extra').hidden=false;$('more').setAttribute('aria-expanded','true');$('more').textContent='Less ▴'}
+buildSprites();resize();rebuild();fit(false);
 </script></body></html>
