@@ -110,7 +110,7 @@ func (s *Store) InspectEvidence(hash string) (Evidence, error) {
 func (s *Store) ReadEvidence(hash string) ([]byte, error) {
 	f, err := os.Open(s.objectPath(hash))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("missing evidence hash=%s: %w", hash, err)
 	}
 	defer f.Close()
 	gz, err := gzip.NewReader(f)
@@ -123,7 +123,7 @@ func (s *Store) ReadEvidence(hash string) ([]byte, error) {
 		return nil, err
 	}
 	if Hash(b) != hash {
-		return nil, fmt.Errorf("evidence hash mismatch")
+		return nil, fmt.Errorf("evidence hash mismatch hash=%s", hash)
 	}
 	return b, nil
 }
@@ -149,7 +149,13 @@ func (s *Store) Events() ([]core.Event, error) {
 			return nil, fmt.Errorf("line %d: %w", line, err)
 		}
 		if e.PrevHash != prev {
-			return nil, fmt.Errorf("line %d: chain mismatch", line)
+			return nil, fmt.Errorf(
+				"line %d: chain mismatch%s prev_claimed=%s prev_expected=%s",
+				line,
+				eventIdentityLabel(e),
+				e.PrevHash,
+				prev,
+			)
 		}
 		prev = e.SelfHash
 		out = append(out, e)
@@ -398,15 +404,59 @@ func (s *Store) VerifyEvidence() (int, error) {
 	}
 	seen := map[string]bool{}
 	count := 0
-	for _, e := range events {
+	for i, e := range events {
 		if e.EmergION == nil || seen[e.EmergION.MEM.SourceHash] {
 			continue
 		}
 		if _, err := s.ReadEvidence(e.EmergION.MEM.SourceHash); err != nil {
-			return count, err
+			return count, fmt.Errorf(
+				"line %d: evidence%s: %w",
+				i+1,
+				eventIdentityLabel(e),
+				err,
+			)
 		}
 		seen[e.EmergION.MEM.SourceHash] = true
 		count++
 	}
 	return count, nil
+}
+
+func eventRecordIDN(e core.Event) string {
+	if e.EmergION != nil && e.EmergION.IDN != "" {
+		return e.EmergION.IDN
+	}
+	if e.REG != nil && e.REG.EmergIONID != "" {
+		return e.REG.EmergIONID
+	}
+	if e.Decision != nil && e.Decision.EmergIONID != "" {
+		return e.Decision.EmergIONID
+	}
+	if e.ActionAuthorization != nil && e.ActionAuthorization.EmergIONID != "" {
+		return e.ActionAuthorization.EmergIONID
+	}
+	return ""
+}
+
+// eventIdentityLabel names the record identities derivable from a decoded
+// event line. It does not change hashing, wire format, or what verify
+// accepts or rejects.
+func eventIdentityLabel(e core.Event) string {
+	var parts []string
+	if idn := eventRecordIDN(e); idn != "" {
+		parts = append(parts, "IDN="+idn)
+	}
+	if e.ID != "" {
+		parts = append(parts, "event="+e.ID)
+	}
+	if e.SelfHash != "" {
+		parts = append(parts, "hash="+e.SelfHash)
+	}
+	if e.EmergION != nil && e.EmergION.MEM.SourceHash != "" {
+		parts = append(parts, "evidence="+e.EmergION.MEM.SourceHash)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return " " + strings.Join(parts, " ")
 }

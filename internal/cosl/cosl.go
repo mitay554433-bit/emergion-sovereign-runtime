@@ -1339,7 +1339,7 @@ func decodeTransitional(line string) (core.Event, error) {
 		return core.Event{}, err
 	}
 	if claimed == "" || claimed != sealed.SelfHash {
-		return core.Event{}, fmt.Errorf("event hash mismatch")
+		return core.Event{}, eventHashMismatchError(e)
 	}
 
 	return e, nil
@@ -1360,7 +1360,7 @@ func Decode(line string) (core.Event, error) {
 			return core.Event{}, err
 		}
 		if claimed == "" || claimed != sealed.SelfHash {
-			return core.Event{}, fmt.Errorf("event hash mismatch")
+			return core.Event{}, eventHashMismatchError(e)
 		}
 
 		return e, nil
@@ -1385,11 +1385,53 @@ func Decode(line string) (core.Event, error) {
 			return core.Event{}, err
 		}
 		if claimed == "" || claimed != sealed.SelfHash {
-			return core.Event{}, fmt.Errorf("event hash mismatch")
+			return core.Event{}, eventHashMismatchError(e)
 		}
 
 		return e, nil
 	}
 
 	return core.Event{}, fmt.Errorf("invalid COSL prefix")
+}
+
+func eventRecordIDN(e core.Event) string {
+	if e.EmergION != nil && e.EmergION.IDN != "" {
+		return e.EmergION.IDN
+	}
+	if e.REG != nil && e.REG.EmergIONID != "" {
+		return e.REG.EmergIONID
+	}
+	if e.Decision != nil && e.Decision.EmergIONID != "" {
+		return e.Decision.EmergIONID
+	}
+	if e.ActionAuthorization != nil && e.ActionAuthorization.EmergIONID != "" {
+		return e.ActionAuthorization.EmergIONID
+	}
+	return ""
+}
+
+// eventIdentityLabel names the record identities derivable from a decoded
+// event line. It does not change hashing or admission.
+func eventIdentityLabel(e core.Event) string {
+	var parts []string
+	if idn := eventRecordIDN(e); idn != "" {
+		parts = append(parts, "IDN="+idn)
+	}
+	if e.ID != "" {
+		parts = append(parts, "event="+e.ID)
+	}
+	if e.SelfHash != "" {
+		parts = append(parts, "hash="+e.SelfHash)
+	}
+	if e.EmergION != nil && e.EmergION.MEM.SourceHash != "" {
+		parts = append(parts, "evidence="+e.EmergION.MEM.SourceHash)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return " " + strings.Join(parts, " ")
+}
+
+func eventHashMismatchError(e core.Event) error {
+	return fmt.Errorf("event hash mismatch%s", eventIdentityLabel(e))
 }

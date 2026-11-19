@@ -346,8 +346,7 @@ func TestVerifyFailsOnTamperedAcceptedRegistry(t *testing.T) {
 	})
 }
 
-func TestVerifyLocalizationFindings(t *testing.T) {
-	skipUnlessEnv(t, stressFindingsEnv)
+func TestVerifyLocalizesRecordInErrors(t *testing.T) {
 	names := []string{"alpha.txt", "beta.txt", "gamma.txt", "delta.txt"}
 
 	t.Run("delete-middle-event-names-the-record", func(t *testing.T) {
@@ -365,6 +364,9 @@ func TestVerifyLocalizationFindings(t *testing.T) {
 				break
 			}
 		}
+		if line == 0 {
+			t.Fatal("no middle candidate event to delete")
+		}
 		lines := ledgerLines(t, s)
 		writeLedger(t, s, append(lines[:line-1], lines[line:]...))
 		_, err = fieldVerify(s)
@@ -373,7 +375,8 @@ func TestVerifyLocalizationFindings(t *testing.T) {
 		}
 		// After deletion the successor occupies the old index, so a
 		// "line N" report is not a name for the missing record. Only
-		// the deleted event's IDN or hash counts.
+		// the deleted event's IDN or hash counts. The successor's
+		// claimed prev hash is the deleted event's SelfHash.
 		msg := err.Error()
 		named := ev.EmergION != nil && ev.EmergION.IDN != "" && strings.Contains(msg, ev.EmergION.IDN)
 		if ev.SelfHash != "" && strings.Contains(msg, ev.SelfHash) {
@@ -388,20 +391,8 @@ func TestVerifyLocalizationFindings(t *testing.T) {
 		if !named {
 			t.Fatalf("verify failed but did not name deleted event %s IDN %s hash %s: %v", ev.ID, ev.EmergION.IDN, ev.SelfHash, err)
 		}
-	})
-
-	t.Run("delete-tip-event-is-detected", func(t *testing.T) {
-		s := capturedAcceptedRegistry(t, names)
-		events, err := s.Events()
-		if err != nil {
-			t.Fatal(err)
-		}
-		tip := events[len(events)-1]
-		lines := ledgerLines(t, s)
-		writeLedger(t, s, lines[:len(lines)-1])
-		_, err = fieldVerify(s)
-		if err == nil {
-			t.Fatalf("verify passed after deleting the tip event %s (type %s); the chain still reads as complete", tip.ID, tip.Type)
+		if !strings.Contains(msg, fmt.Sprintf("line %d", line)) {
+			t.Fatalf("verify error dropped the line number %d: %v", line, err)
 		}
 	})
 
@@ -429,6 +420,99 @@ func TestVerifyLocalizationFindings(t *testing.T) {
 		msg := err.Error()
 		if !strings.Contains(msg, target.IDN) && !strings.Contains(msg, target.MEM.SourceHash) {
 			t.Fatalf("verify failed but did not name IDN %s or hash %s: %v", target.IDN, target.MEM.SourceHash, err)
+		}
+	})
+
+	t.Run("missing-evidence-names-the-record", func(t *testing.T) {
+		s := capturedAcceptedRegistry(t, names)
+		st := rebuildState(t, s)
+		var target core.EmergION
+		for _, em := range st.Accepted {
+			target = em
+			break
+		}
+		path := filepath.Join(s.Root, "o", target.MEM.SourceHash+".gz")
+		if err := os.Remove(path); err != nil {
+			t.Fatal(err)
+		}
+		_, err := fieldVerify(s)
+		if err == nil {
+			t.Fatal("verify passed after evidence was deleted")
+		}
+		msg := err.Error()
+		// The object path already contains the hash, so only an explicit
+		// IDN proves the error named the record rather than the file path.
+		if !strings.Contains(msg, target.IDN) {
+			t.Fatalf("verify failed but did not name IDN %s: %v", target.IDN, err)
+		}
+	})
+
+	t.Run("flipped-event-byte-names-the-record", func(t *testing.T) {
+		s := capturedAcceptedRegistry(t, names)
+		events, err := s.Events()
+		if err != nil {
+			t.Fatal(err)
+		}
+		line := 0
+		var ev core.Event
+		for i, e := range events {
+			if e.Type == "C" && i > 0 && i < len(events)-1 {
+				line = i + 1
+				ev = e
+				break
+			}
+		}
+		if line == 0 {
+			t.Fatal("no middle candidate event to flip")
+		}
+		lines := ledgerLines(t, s)
+		raw := []byte(lines[line-1])
+		if len(raw) < 8 {
+			t.Fatalf("line %d too short to flip", line)
+		}
+		raw[len(raw)/2] ^= 0x01
+		lines[line-1] = string(raw)
+		writeLedger(t, s, lines)
+		_, err = fieldVerify(s)
+		if err == nil {
+			t.Fatal("verify passed after flipping a byte in an event")
+		}
+		msg := err.Error()
+		named := ev.EmergION != nil && ev.EmergION.IDN != "" && strings.Contains(msg, ev.EmergION.IDN)
+		if ev.SelfHash != "" && strings.Contains(msg, ev.SelfHash) {
+			named = true
+		}
+		if ev.ID != "" && strings.Contains(msg, ev.ID) {
+			named = true
+		}
+		if ev.EmergION != nil && ev.EmergION.MEM.SourceHash != "" && strings.Contains(msg, ev.EmergION.MEM.SourceHash) {
+			named = true
+		}
+		if !named {
+			t.Fatalf("verify failed but did not name flipped event %s IDN %s hash %s: %v", ev.ID, ev.EmergION.IDN, ev.SelfHash, err)
+		}
+		if !strings.Contains(msg, fmt.Sprintf("line %d", line)) {
+			t.Fatalf("verify error dropped the line number %d: %v", line, err)
+		}
+	})
+}
+
+func TestVerifyLocalizationFindings(t *testing.T) {
+	skipUnlessEnv(t, stressFindingsEnv)
+	names := []string{"alpha.txt", "beta.txt", "gamma.txt", "delta.txt"}
+
+	t.Run("delete-tip-event-is-detected", func(t *testing.T) {
+		s := capturedAcceptedRegistry(t, names)
+		events, err := s.Events()
+		if err != nil {
+			t.Fatal(err)
+		}
+		tip := events[len(events)-1]
+		lines := ledgerLines(t, s)
+		writeLedger(t, s, lines[:len(lines)-1])
+		_, err = fieldVerify(s)
+		if err == nil {
+			t.Fatalf("verify passed after deleting the tip event %s (type %s); the chain still reads as complete", tip.ID, tip.Type)
 		}
 	})
 }
