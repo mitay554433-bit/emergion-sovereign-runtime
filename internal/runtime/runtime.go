@@ -1010,6 +1010,9 @@ func (r Runtime) validateLineage(analysis *reason.Result) error {
 			"capability_provider_edge_proposal",
 			"source_hash",
 			"provenance",
+			// TORQUE linkage is runtime-owned: no runtime path derives a
+			// next probe yet, so no model may claim one.
+			"next_probe",
 		} {
 			if value := strings.TrimSpace(analysis.Relationships[key]); value != "" {
 				return fmt.Errorf(
@@ -1026,6 +1029,15 @@ func (r Runtime) validateLineage(analysis *reason.Result) error {
 		return fmt.Errorf(
 			"lineage rejected: relationship %q is runtime-owned",
 			"requirement_basis",
+		)
+	}
+	// fracture_gap is runtime-owned: only the deterministic fracture probe
+	// generator may link a probe to the gap it answers.
+	if r.Reasoner.Name() != fractureProbeReasonerName &&
+		strings.TrimSpace(analysis.Relationships["fracture_gap"]) != "" {
+		return fmt.Errorf(
+			"lineage rejected: relationship %q is runtime-owned",
+			"fracture_gap",
 		)
 	}
 	returnedID := strings.TrimSpace(r.ReturnedPredecessor)
@@ -1370,7 +1382,7 @@ func (t targetComparisonReasoner) Analyze(ctx context.Context, in reason.Input) 
 	}
 	observed = reason.Calibrate(observed)
 
-	facts := append([]string(nil), observed.Facts...)
+	facts := runtimeOwnedComparisonFacts(observed.Facts)
 	differences := append([]string(nil), observed.Differences...)
 
 	relationships := map[string]string{
@@ -1405,6 +1417,20 @@ func (t targetComparisonReasoner) Analyze(ctx context.Context, in reason.Input) 
 	}, nil
 }
 
+// runtimeOwnedComparisonFacts copies the observer's facts but drops claims
+// only the runtime may make. No runtime path derives a next probe yet, so a
+// model-proposed "next_probe_derived" is never recorded.
+func runtimeOwnedComparisonFacts(observed []string) []string {
+	var out []string
+	for _, fact := range observed {
+		if strings.EqualFold(strings.TrimSpace(fact), "next_probe_derived") {
+			continue
+		}
+		out = append(out, fact)
+	}
+	return out
+}
+
 func (t targetComparisonReasoner) Name() string {
 	return "target-comparison"
 }
@@ -1418,6 +1444,7 @@ func (r Runtime) CaptureTargetComparison(ctx context.Context, target core.EmergI
 		return core.EmergION{}, false, fmt.Errorf("target comparison observer required")
 	}
 
+	reality = withoutFractureProbeEvidence(reality)
 	comparisonEvidence := targetComparisonEvidence(target, reality)
 
 	comparisonRuntime := r
@@ -2143,6 +2170,12 @@ func (r Runtime) ExecuteOneSafeAction(
 
 	for _, id := range ids {
 		em := st.Accepted[id]
+
+		// A program/test patch, including a TORQUE probe, never runs from
+		// the safe-action scan. It needs HUMAN_FINAL and explicit Q.
+		if em.REL["source_kind"] == "PROGRAM_PATCH" {
+			continue
+		}
 
 		var facets []string
 		if em.EVO.Metadata != nil {
