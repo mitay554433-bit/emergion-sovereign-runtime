@@ -27,8 +27,9 @@ func fractureCases() []fractureCase {
 		{
 			name: "facts",
 			reality: func(f differenceFixture) {
+				// OBS only: no REG-accepted VLD provider, so the OBS+VLD
+				// recipe cannot be filled and the remainder is unfillable.
 				f.accept(acceptedProviderFixture("E-00000000000000A0", "fracture-obs-source", "OBS"))
-				f.accept(acceptedProviderFixture("E-00000000000000A2", "fracture-vld-source", "VLD"))
 			},
 			target:   "invoice ledger reconciled",
 			gap:      "BRIDGEGAP:facts",
