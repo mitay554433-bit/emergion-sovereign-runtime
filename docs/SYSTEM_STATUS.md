@@ -1,6 +1,6 @@
 # EmergION Sovereign Runtime — Current System State
 
-**State date:** 2026-10-08
+**State date:** 2026-10-08 (sections 19–22 add 2026-11-14 and 2026-11-19 records)
 
 **Branch:** `governed-demand-v1`
 
@@ -385,3 +385,36 @@ ok      emergion-sovereign-runtime/pkg/fieldapi     455.454s
 - The completed test passed its circulation and safe-work assertions after both inference invocations. This **supersedes the pending second-inference/test-outcome status in section 20**, without changing its historical observation.
 
 **Verification boundary:** This is a passing *focused integration test*, not `go test ./...`, a production daemon acceptance test, a regenerated manifest, or evidence of an externally authorized action. The test used its temporary fixture state. The current local Termux changes still need exact revision reconciliation before any GitHub code synchronization. No COSL/REG/HUMAN_FINAL production authority was changed by this documentation update.
+
+## 22. 2026-11-19 merged work (#39–#54)
+
+Recorded from `git log --first-parent governed-demand-v1`; head `8e25ef9`.
+Each line is a merged commit, not a live phone verification.
+
+| Commit | PR | Change |
+|---|---|---|
+| `d49f97e` | #39 | MXPD grammar: capability line must match coverage |
+| `2dde48f` | #40 | Gemma import: JSON source digest, number grounding, governed-state masking |
+| `68f2616` | #41 | Gemma import: facts carry every Source summary value for JSON sources |
+| `c9f6391` | #42 | MXPD grammar tests expect required capability |
+| `45eab29` | #30 | Evidence provider selection, Gemma deadline/budget, FIELD operator view, fieldd wave endpoint |
+| `2ed3163` | #43 | Live Gemma tests need `UNIFUSION_GEMMA_LIVE_TESTS=1` |
+| `aa06338` | #44 | gofmt; facts no longer carry `living_state_projected` |
+| `0889fb9` | #45 | Coverage: every candidate needs at least one source fact |
+| `6d73b56` | #46 | Section 8: deterministic Difference → Requirement for TARGET_COMPARISON |
+| `7a6d3a6` | #47 | Exact Q: referential integrity for execution authorization |
+| `2480e91` | #48 | Section 11: genuine-remainder BRIDGEGAP from Section 8 requirements |
+| `f346565` | #49 | TORQUE as FRACTURE: generated failing probe, stoppage captured as evidence, probes never auto-run |
+| `04d6319` | #50 | Fracture wave: target recompute and bounded wave runner |
+| `cbb05ec` | #51 | Stress fixes: verify localization, batch isolation, optional tip/count receipt, human contradiction marks |
+| `8934a33` | #52 | Source-hash admission: a candidate needs preserved evidence for its source hash |
+| `20ee489` | #53 | fieldd: bearer token for mutating routes, loopback by default |
+| `8e25ef9` | #54 | Skyhook regression: value 84721 survives restart without model weights |
+
+Operator phone evidence on 2026-11-19 (reported in chat): the full suite
+passed at `8e25ef9`, the throwaway tamper demo passed, and a first footprint
+measurement was taken (see `docs/PILOT_DEMO.md`). Battery was not measured.
+
+The section numbering and earlier sections are unchanged. For which documents
+are current, see `docs/DOCS_CENSUS_2026-11-19.md`.
+
