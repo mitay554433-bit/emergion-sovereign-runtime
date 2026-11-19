@@ -1031,6 +1031,15 @@ func (r Runtime) validateLineage(analysis *reason.Result) error {
 			"requirement_basis",
 		)
 	}
+	// fracture_gap is runtime-owned: only the deterministic fracture probe
+	// generator may link a probe to the gap it answers.
+	if r.Reasoner.Name() != fractureProbeReasonerName &&
+		strings.TrimSpace(analysis.Relationships["fracture_gap"]) != "" {
+		return fmt.Errorf(
+			"lineage rejected: relationship %q is runtime-owned",
+			"fracture_gap",
+		)
+	}
 	returnedID := strings.TrimSpace(r.ReturnedPredecessor)
 	if strings.TrimSpace(analysis.Relationships["COMPOSITION_KIN"]) == "" &&
 		returnedID == "" &&
@@ -1435,6 +1444,7 @@ func (r Runtime) CaptureTargetComparison(ctx context.Context, target core.EmergI
 		return core.EmergION{}, false, fmt.Errorf("target comparison observer required")
 	}
 
+	reality = withoutFractureProbeEvidence(reality)
 	comparisonEvidence := targetComparisonEvidence(target, reality)
 
 	comparisonRuntime := r

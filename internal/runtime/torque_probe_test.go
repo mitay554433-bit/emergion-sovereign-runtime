@@ -18,20 +18,8 @@ import (
 
 // TORQUE / next-probe (B_n -> P_n), CHOICE A: a probe is a proposed
 // program/test patch through the existing patch path, approved by
-// HUMAN_FINAL, run only after explicit Q, never automatically.
-//
-// TestTorqueProbePatchPathStoppage is the APProver probe for CHOICE A. From
-// a HUMAN_FINAL / REG-accepted genuine-remainder BRIDGEGAP (the boundary) it
-// asks the existing patch path, ProposeOneProgramPatch, for a proposal and
-// records exactly where the path stops. By default it pins the stoppage and
-// passes, failing loudly the day the path carries a probe. With
-// UNIFUSION_TORQUE_PROBE=1 it fails on purpose and prints the stoppage.
-
-const (
-	torqueStopNotProgramOrigin = "BOUNDARY_NOT_PROGRAM_ORIGIN"
-	torqueStopNoProgramTarget  = "BOUNDARY_HAS_NO_TRACKED_PROGRAM_TARGET"
-	torqueStopNoProposal       = "PATCH_PATH_PROPOSED_NOTHING"
-)
+// HUMAN_FINAL, run only after explicit Q, never automatically. The fracture
+// probe itself is generated and exercised in fracture_probe_test.go.
 
 func acceptBoundaryCandidate(t *testing.T, f differenceFixture, em core.EmergION) {
 	t.Helper()
@@ -69,111 +57,6 @@ func torqueFakeGemma(t *testing.T) reason.GemmaCLI {
 	return reason.GemmaCLI{
 		Binary: binary, Model: model, Threads: 1,
 		Context: 2048, MaxTokens: 64, Timeout: 5 * time.Second,
-	}
-}
-
-func TestTorqueProbePatchPathStoppage(t *testing.T) {
-	symbolic := []string{"TARGET_STATE!=ACCEPTED_REALITY"}
-
-	cases := []struct {
-		name     string
-		reality  func(differenceFixture)
-		target   string
-		gap      string
-		required string
-	}{
-		{
-			name: "facts",
-			reality: func(f differenceFixture) {
-				f.accept(acceptedProviderFixture("E-00000000000000A0", "torque-obs-source", "OBS"))
-				f.accept(acceptedProviderFixture("E-00000000000000A2", "torque-vld-source", "VLD"))
-			},
-			target:   "invoice ledger reconciled",
-			gap:      "BRIDGEGAP:facts",
-			required: "ESTABLISH_FACT",
-		},
-		{
-			name: "relationships",
-			reality: func(f differenceFixture) {
-				f.accept(acceptedProviderFixture("E-00000000000000A1", "torque-a1-source", "OBS"))
-				f.accept(acceptedProviderFixture("E-00000000000000B2", "torque-b2-source", "VLD"))
-			},
-			target:   "E-00000000000000A1 composes with E-00000000000000B2",
-			gap:      "BRIDGEGAP:relationships",
-			required: "DERIVE_RELATIONSHIP",
-		},
-		{
-			name: "capabilities",
-			reality: func(f differenceFixture) {
-				f.accept(acceptedProviderFixture("E-00000000000000A0", "torque-cap-source", "OBS"))
-			},
-			target:   "PROGRAM capability is available",
-			gap:      "BRIDGEGAP:capabilities",
-			required: "DERIVE_CAPABILITY",
-		},
-	}
-
-	gemma := torqueFakeGemma(t)
-	var report []string
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			f := newDifferenceFixture(t)
-			tc.reality(f)
-
-			boundary := captureDifferenceComparison(t, f,
-				fixedDifferenceObserver{result: differenceObserved(symbolic)},
-				tc.target)
-			if len(boundary.VAL.Gaps) != 1 || boundary.VAL.Gaps[0] != tc.gap {
-				t.Fatalf("boundary gaps = %#v want [%q]", boundary.VAL.Gaps, tc.gap)
-			}
-			if boundary.REL["required_capability"] != tc.required {
-				t.Fatalf("required_capability = %q want %q", boundary.REL["required_capability"], tc.required)
-			}
-			acceptBoundaryCandidate(t, f, boundary)
-			st := f.state()
-			accepted, ok := st.Accepted[boundary.IDN]
-			if !ok {
-				t.Fatal("boundary not REG-accepted")
-			}
-
-			// Stop 1: the patch path only starts from an accepted PROGRAM
-			// origin (CAP PROGRAM with an enabled GITHUB:PROGRAM action).
-			// The boundary carries CMP+DIF+PRJ.
-			if acceptedProgramActionEnabled(accepted, true) {
-				t.Fatal("stoppage changed: boundary is now a PROGRAM origin; revisit TORQUE design")
-			}
-			report = append(report, tc.gap+" -> "+torqueStopNotProgramOrigin)
-
-			// Stop 2: the patch path edits one tracked file named by the
-			// origin's source_name. The boundary's evidence is
-			// TARGET_COMPARISON/1, not a repository file, and choosing a
-			// file from prose would preselect the answer.
-			if _, _, err := currentProgramTarget(t.TempDir(), accepted); err == nil {
-				t.Fatal("stoppage changed: boundary now names a program target; revisit TORQUE design")
-			}
-			report = append(report, tc.gap+" -> "+torqueStopNoProgramTarget)
-
-			// Stop 3: so the existing path proposes nothing for the boundary.
-			proposal, proposed, err := (Runtime{Store: f.store}).ProposeOneProgramPatch(
-				context.Background(), gemma, t.TempDir())
-			if err != nil {
-				t.Fatal(err)
-			}
-			if proposed {
-				t.Fatalf("stoppage changed: patch path proposed %s; revisit TORQUE design", proposal.IDN)
-			}
-			for _, em := range f.state().AtGOV {
-				if em.REL["source_kind"] == "PROGRAM_PATCH" {
-					t.Fatalf("unexpected patch proposal %s", em.IDN)
-				}
-			}
-			report = append(report, tc.gap+" -> "+torqueStopNoProposal)
-		})
-	}
-
-	if os.Getenv("UNIFUSION_TORQUE_PROBE") == "1" {
-		t.Fatalf("TORQUE B_n -> P_n stoppage on the patch path (CHOICE A):\n%s",
-			strings.Join(report, "\n"))
 	}
 }
 
