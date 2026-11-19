@@ -37,12 +37,11 @@ func TestCaptureObservedRealizationReorderAdmitsAtGOV(t *testing.T) {
 		{kin: "E-B", succeeded: true},
 	} {
 		request := adapters.ExecutionRequest{
-			EmergIONID:      outcome.kin,
-			SourceHash:      outcome.kin + "-source",
-			AuthorizationID: "EV-Q-" + outcome.kin,
-			Authority:       "HUMAN_FINAL",
-			Adapter:         "LOCAL_GEMMA",
-			Action:          "ANALYZE",
+			EmergIONID: outcome.kin,
+			SourceHash: outcome.kin + "-source",
+			Authority:  "HUMAN_FINAL",
+			Adapter:    "LOCAL_GEMMA",
+			Action:     "ANALYZE",
 		}
 		request.TransitionEmergIONID = adapters.ExecutionTransitionID(request)
 		result := adapters.BindExecutionResult(

@@ -1490,12 +1490,11 @@ func TestHumanFinalApprovalRenderCurrentPublishesVerifiedDeliverable(t *testing.
 	}
 
 	request := adapters.ExecutionRequest{
-		EmergIONID:      "E-FIELDAPI-DELIVERABLE-SOURCE",
-		SourceHash:      "SOURCE-FIELDAPI-DELIVERABLE-PROOF",
-		AuthorizationID: "EV-Q-FIELDAPI-DELIVERABLE",
-		Authority:       "HUMAN_FINAL",
-		Adapter:         "LOCAL_GEMMA",
-		Action:          "ANALYZE",
+		EmergIONID: "E-FIELDAPI-DELIVERABLE-SOURCE",
+		SourceHash: "SOURCE-FIELDAPI-DELIVERABLE-PROOF",
+		Authority:  "HUMAN_FINAL",
+		Adapter:    "LOCAL_GEMMA",
+		Action:     "ANALYZE",
 	}
 	request.TransitionEmergIONID = adapters.ExecutionTransitionID(request)
 
@@ -1727,12 +1726,11 @@ func TestGovernedCyclePendingReorderAllowsIndependentSafeWork(t *testing.T) {
 
 	captureResult := func(kin string, succeeded bool) {
 		request := adapters.ExecutionRequest{
-			EmergIONID:      kin,
-			SourceHash:      kin + "-source",
-			AuthorizationID: "EV-Q-" + kin,
-			Authority:       "HUMAN_FINAL",
-			Adapter:         "LOCAL_GEMMA",
-			Action:          "ANALYZE",
+			EmergIONID: kin,
+			SourceHash: kin + "-source",
+			Authority:  "HUMAN_FINAL",
+			Adapter:    "LOCAL_GEMMA",
+			Action:     "ANALYZE",
 		}
 		request.TransitionEmergIONID = adapters.ExecutionTransitionID(request)
 		result := adapters.BindExecutionResult(request, adapters.ExecutionResult{
