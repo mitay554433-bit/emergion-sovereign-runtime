@@ -17,8 +17,10 @@ SOURCE
 ## Canonical documentation
 
 - `docs/ARCHITECTURE.md` — canonical architecture and invariants.
-- `docs/SYSTEM_STATUS.md` — current verified state, operational AI boundary, projections, build state, and explicit unverified boundaries.
-- `REPOSITORY_MANIFEST.json` — repository/build manifest; regenerate it after source or documentation changes before treating its hashes as current.
+- `docs/SYSTEM_STATUS.md` — verified state, operational AI boundary, projections, build state, and explicit unverified boundaries (section 22 lists merges through #54).
+- `docs/DOCS_CENSUS_2026-11-19.md` — which documents are current, historical, or stale.
+- `docs/PILOT_DEMO.md` — throwaway pilot walkthrough (`scripts/pilot-demo.sh`) and the footprint method.
+- `REPOSITORY_MANIFEST.json` — stale (generated 2026-08-05 for 29 files); regenerate it before treating its hashes as current.
 
 ## Current operating surface
 
