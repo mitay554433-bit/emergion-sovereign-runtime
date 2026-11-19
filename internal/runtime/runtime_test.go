@@ -5343,6 +5343,11 @@ func TestTargetComparisonReasonerPreservesTypedDifference(t *testing.T) {
 				"target_state": "persistent governed target",
 			},
 		},
+		// Section 8 re-grounds the Difference against the exact
+		// TARGET_COMPARISON/1 evidence, which needs non-empty reality.
+		reality: map[string]core.EmergION{
+			"REALITY-A": {IDN: "REALITY-A"},
+		},
 	}
 
 	got, err := wrapper.Analyze(
@@ -5366,6 +5371,9 @@ func TestTargetComparisonReasonerPreservesTypedDifference(t *testing.T) {
 
 	if got.Relationships["required_capability"] != "ESTABLISH_FACT" {
 		t.Fatalf("required_capability = %q want ESTABLISH_FACT", got.Relationships["required_capability"])
+	}
+	if got.Relationships["requirement_basis"] != "FACT:target_not_in_accepted_facts" {
+		t.Fatalf("requirement_basis = %q", got.Relationships["requirement_basis"])
 	}
 
 	if len(got.Gaps) != 0 {

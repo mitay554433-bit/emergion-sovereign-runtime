@@ -1019,6 +1019,15 @@ func (r Runtime) validateLineage(analysis *reason.Result) error {
 			}
 		}
 	}
+	// requirement_basis is runtime-owned: only the deterministic Section 8
+	// step inside the target-comparison capture may write it.
+	if r.Reasoner.Name() != "target-comparison" &&
+		strings.TrimSpace(analysis.Relationships["requirement_basis"]) != "" {
+		return fmt.Errorf(
+			"lineage rejected: relationship %q is runtime-owned",
+			"requirement_basis",
+		)
+	}
 	returnedID := strings.TrimSpace(r.ReturnedPredecessor)
 	if strings.TrimSpace(analysis.Relationships["COMPOSITION_KIN"]) == "" &&
 		returnedID == "" &&
@@ -1339,6 +1348,7 @@ func targetComparisonEvidence(target core.EmergION, reality map[string]core.Emer
 type targetComparisonReasoner struct {
 	observer reason.Reasoner
 	target   core.EmergION
+	reality  map[string]core.EmergION
 }
 
 func (t targetComparisonReasoner) Analyze(ctx context.Context, in reason.Input) (reason.Result, error) {
@@ -1369,8 +1379,13 @@ func (t targetComparisonReasoner) Analyze(ctx context.Context, in reason.Input) 
 		"target_state":     strings.TrimSpace(t.target.REL["target_state"]),
 		"comparison_state": "UNRESOLVED",
 	}
-	if len(differences) > 0 && len(observed.Requirements) == 1 {
-		relationships["required_capability"] = observed.Requirements[0]
+	// Section 8: the requirement is decided deterministically from the target
+	// and accepted reality; the model's R| line is only a vote. No BRIDGEGAP
+	// is written and comparison_state stays UNRESOLVED.
+	required, basis := deriveDifferenceRequirement(t.target, t.reality, observed)
+	relationships["requirement_basis"] = basis
+	if required != "" {
+		relationships["required_capability"] = required
 	}
 
 	return reason.Result{
@@ -1402,6 +1417,7 @@ func (r Runtime) CaptureTargetComparison(ctx context.Context, target core.EmergI
 	comparisonRuntime.Reasoner = targetComparisonReasoner{
 		observer: r.Reasoner,
 		target:   target,
+		reality:  reality,
 	}
 
 	return comparisonRuntime.CaptureBytes(
