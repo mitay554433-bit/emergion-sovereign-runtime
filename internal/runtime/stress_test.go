@@ -760,21 +760,55 @@ func TestMalformedBatchIsolationFindings(t *testing.T) {
 }
 
 func TestCoverageDoesNotCheckHashCorrespondenceFinding(t *testing.T) {
-	skipUnlessEnv(t, stressFindingsEnv)
-	em := core.EmergION{
+	s, err := store.Open(filepath.Join(t.TempDir(), "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fakeHash := "not-the-hash-of-any-preserved-object"
+	fake := core.EmergION{
 		IDN: "E-BAD-HASH",
+		STA: core.StateAtGOV,
 		MEM: core.Memory{
-			SourceHash: "not-the-hash-of-any-preserved-object",
+			SourceHash: fakeHash,
 			Bytes:      10,
 			Stored:     10,
 			Summary:    "summary",
 		},
 		REL: map[string]string{"source_name": "bad-hash.txt"},
 		CAP: []string{"OBS"},
-		VAL: core.Validation{Facts: []string{"source_preserved"}},
+		VAL: core.Validation{
+			Facts:  []string{"source_preserved"},
+			Recoil: true,
+			WVC:    true,
+		},
+		EVO: core.Evolution{Version: 1},
 	}
-	if err := coverage(&em, ""); err == nil {
-		t.Fatal("coverage accepted a candidate whose source hash cannot correspond to preserved evidence")
+	// coverage() stays unchanged: a non-empty hash still passes there.
+	if err := coverage(&fake, ""); err != nil {
+		t.Fatalf("coverage() changed and rejected a non-empty hash: %v", err)
+	}
+	_, err = s.SaveCandidate(fake)
+	if err == nil {
+		t.Fatal("admission accepted a candidate whose source hash has no preserved evidence")
+	}
+	t.Logf("fake hash stopped at admission: %v", err)
+	if !strings.Contains(err.Error(), fakeHash) {
+		t.Fatalf("admission error did not name the hash %s: %v", fakeHash, err)
+	}
+
+	ev, err := s.Preserve([]byte("real source for hash correspondence\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	real := fake
+	real.IDN = "E-REAL-HASH"
+	real.MEM.SourceHash = ev.Hash
+	real.MEM.Codec = ev.Codec
+	real.MEM.Bytes = ev.Bytes
+	real.MEM.Stored = ev.Stored
+	if _, err := s.SaveCandidate(real); err != nil {
+		t.Fatalf("admission rejected a candidate whose source hash is preserved: %v", err)
 	}
 }
 
@@ -814,6 +848,7 @@ func TestVerifyScaleGrowth(t *testing.T) {
 				},
 				EVO: core.Evolution{Version: 1},
 			}
+			attachPreservedSource(t, s, &em)
 			if _, err := s.SaveCandidate(em); err != nil {
 				t.Fatal(err)
 			}

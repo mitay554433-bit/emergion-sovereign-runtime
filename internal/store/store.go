@@ -270,7 +270,23 @@ func (s *Store) SaveCandidate(em core.EmergION) (string, error) {
 	if err := em.EVO.Metadata.Validate(); err != nil {
 		return "", fmt.Errorf("candidate metadata invalid: %w", err)
 	}
+	if err := s.requirePreservedSource(em.MEM.SourceHash); err != nil {
+		return "", err
+	}
 	return s.append("C", em.IDN, &em, nil, nil, nil)
+}
+
+// requirePreservedSource is the GOV-admission check that a source hash
+// corresponds to a preserved evidence object. coverage() is unchanged.
+func (s *Store) requirePreservedSource(hash string) error {
+	hash = strings.TrimSpace(hash)
+	if hash == "" {
+		return fmt.Errorf("candidate source hash has no preserved evidence hash=%q", hash)
+	}
+	if _, err := s.ReadEvidence(hash); err != nil {
+		return fmt.Errorf("candidate source hash has no preserved evidence hash=%s: %w", hash, err)
+	}
+	return nil
 }
 
 // AppendInterpretationRevisionAtTip atomically appends an interpretation revision
@@ -333,6 +349,10 @@ func (s *Store) AppendInterpretationRevisionAtTip(em core.EmergION, expectedTip 
 		em.MEM.Codec != existing.MEM.Codec ||
 		em.MEM.Provenance != existing.MEM.Provenance {
 		return "", fmt.Errorf("interpretation revision changed evidence identity")
+	}
+
+	if err := s.requirePreservedSource(em.MEM.SourceHash); err != nil {
+		return "", err
 	}
 
 	return s.appendLocked("I", em.IDN, &em, nil, nil, nil)
