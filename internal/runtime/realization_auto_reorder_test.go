@@ -53,12 +53,11 @@ func captureAcceptedAutoReorderResult(
 ) {
 	t.Helper()
 	request := adapters.ExecutionRequest{
-		EmergIONID:      kin,
-		SourceHash:      kin + "-source",
-		AuthorizationID: "EV-Q-" + kin,
-		Authority:       "HUMAN_FINAL",
-		Adapter:         "LOCAL_GEMMA",
-		Action:          "ANALYZE",
+		EmergIONID: kin,
+		SourceHash: kin + "-source",
+		Authority:  "HUMAN_FINAL",
+		Adapter:    "LOCAL_GEMMA",
+		Action:     "ANALYZE",
 	}
 	request.TransitionEmergIONID = adapters.ExecutionTransitionID(request)
 	result := adapters.BindExecutionResult(

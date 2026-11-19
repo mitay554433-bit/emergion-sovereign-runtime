@@ -67,12 +67,11 @@ func TestPublishAcceptedDeliverablesMaterializesAcceptedExecutionResult(t *testi
 	}
 
 	request := adapters.ExecutionRequest{
-		EmergIONID:      "E-PUBLISH-SOURCE",
-		SourceHash:      "SOURCE-PUBLISH-PROOF",
-		AuthorizationID: "EV-Q-PUBLISH",
-		Authority:       "HUMAN_FINAL",
-		Adapter:         "LOCAL_GEMMA",
-		Action:          "ANALYZE",
+		EmergIONID: "E-PUBLISH-SOURCE",
+		SourceHash: "SOURCE-PUBLISH-PROOF",
+		Authority:  "HUMAN_FINAL",
+		Adapter:    "LOCAL_GEMMA",
+		Action:     "ANALYZE",
 	}
 	request.TransitionEmergIONID = adapters.ExecutionTransitionID(request)
 
