@@ -1071,6 +1071,8 @@ func (r Runtime) validateLineage(analysis *reason.Result) error {
 			// TORQUE linkage is runtime-owned: no runtime path derives a
 			// next probe yet, so no model may claim one.
 			"next_probe",
+			// The originating question is derived by the runtime only.
+			originatedFromQuestionKey,
 		} {
 			if value := strings.TrimSpace(analysis.Relationships[key]); value != "" {
 				return lineageRejected(
@@ -1682,6 +1684,11 @@ func (r Runtime) admitAnalyzedCandidate(
 
 	if runtimeOrigin != "" {
 		em.REL["origin"] = runtimeOrigin
+	}
+
+	delete(em.REL, originatedFromQuestionKey)
+	if question := originatedFromQuestion(em, provenance, name, boundary, r.knownEmergION(boundary)); question != "" {
+		em.REL[originatedFromQuestionKey] = question
 	}
 
 	if strings.TrimSpace(governedState) != "" {
