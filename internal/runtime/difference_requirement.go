@@ -253,7 +253,11 @@ func acceptedEmergIONsLinked(ids []string, reality map[string]core.EmergION) boo
 		named[id] = true
 	}
 	for _, id := range ids {
-		for _, value := range reality[id].REL {
+		for key, value := range reality[id].REL {
+			// Shared provenance is not a KIN relationship.
+			if key == originatedFromQuestionKey {
+				continue
+			}
 			value = strings.TrimSpace(value)
 			if value != id && named[value] {
 				return true
