@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -645,7 +646,27 @@ func main() {
 			"projection": receipt,
 		})
 	case "verify":
-		if _, err := s.Events(); err != nil {
+		fs := flag.NewFlagSet("verify", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		expectTip := fs.String("expect-tip", "", "optional expected tip event hash from an earlier receipt")
+		expectCount := fs.String("expect-count", "", "optional expected event count from an earlier receipt")
+		if err := fs.Parse(args[1:]); err != nil {
+			fail(err)
+		}
+
+		events, err := s.Events()
+		if err != nil {
+			fail(err)
+		}
+		var countPtr *int
+		if strings.TrimSpace(*expectCount) != "" {
+			n, err := strconv.Atoi(strings.TrimSpace(*expectCount))
+			if err != nil || n < 0 {
+				fail(fmt.Errorf("invalid -expect-count %q", *expectCount))
+			}
+			countPtr = &n
+		}
+		if err := store.CheckExpectedTip(events, *expectTip, countPtr); err != nil {
 			fail(err)
 		}
 		n, err := s.VerifyEvidence()
@@ -656,7 +677,14 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		printJSON(map[string]any{"status": "PASS", "evidence_verified": n, "orphans_removed": removed})
+		tip, count := store.LedgerTip(events)
+		printJSON(map[string]any{
+			"status":            "PASS",
+			"evidence_verified": n,
+			"orphans_removed":   removed,
+			"tip_hash":          tip,
+			"events":            count,
+		})
 	case "export-lineage":
 		destination := "."
 		if len(args) > 1 {
@@ -671,6 +699,36 @@ func main() {
 		printJSON(adapters.Catalog(gemma.Validate() == nil))
 	case "daemon":
 		handleDaemonCommand(args, *state)
+	case "contradict":
+		if len(args) != 3 {
+			fail(fmt.Errorf("contradict <accepted-id> <accepted-id>"))
+		}
+		rt := fieldruntime.Runtime{Store: s}
+		em, duplicate, err := rt.CaptureContradictionMark(
+			context.Background(),
+			args[1],
+			args[2],
+		)
+		if err != nil {
+			fail(err)
+		}
+		receipt := renderField(s, *output)
+		if duplicate {
+			fmt.Println(em.IDN, em.STA, "DUPLICATE_SOURCE", "PROJECTION_TIP", receipt.TipHash)
+		} else {
+			fmt.Println(em.IDN, "AT_GOV", "CONTRADICTION_MARK", "PROJECTION_TIP", receipt.TipHash)
+		}
+	case "contradictions":
+		st := loadState(s)
+		marks := fieldruntime.ListAcceptedContradictionMarks(st)
+		items := make([]map[string]any, 0, len(marks))
+		for _, mark := range marks {
+			items = append(items, map[string]any{
+				"mark":    mark.MarkIDN,
+				"records": []string{mark.Left, mark.Right},
+			})
+		}
+		printJSON(map[string]any{"contradictions": items})
 	case "axioms":
 		printJSON(axiom.Dictionary)
 	default:
@@ -707,10 +765,16 @@ Commands:
   fracture-next                propose the next fracture wave round (probe or target recompute); proposal only
   materialize <accepted-execution-result-id>  read verified output from a REG-accepted successful execution result
   render [directory]           static JSON and HTML FIELD projection
-  verify                       verify chain/evidence and remove orphan objects
+  verify [-expect-tip HASH] [-expect-count N]
+                               verify chain/evidence and remove orphan objects;
+                               prints tip_hash and events to save as a receipt;
+                               optional flags fail if the ledger tip or count differs
   export-lineage [directory]   create and verify a complete named Git bundle for transfer
   adapters                     show bounded capability adapters
   axioms                       show immutable semantic axioms
+  contradict <accepted-id> <accepted-id>
+                               propose a contradiction mark between two REG-accepted records; stops at GOV
+  contradictions               list REG-accepted contradiction marks only
   daemon <start|status|stop>   manage background runtime daemon via IPC
 
 Environment:

@@ -36,6 +36,41 @@ func (e *RecaptureError) Unwrap() error {
 	return e.Cause
 }
 
+// errEmptySource is a per-file capture stoppage: the source bytes are
+// missing, so no candidate can be admitted. Once isolates it instead of
+// aborting the rest of the batch.
+var errEmptySource = errors.New("empty source")
+
+// sourceAnalysisError wraps a reasoner failure for one source, including
+// an MXPD grammar rejection. Once isolates it the same way: that file is
+// skipped and the remaining files continue.
+type sourceAnalysisError struct {
+	Name string
+	Err  error
+}
+
+func (e *sourceAnalysisError) Error() string {
+	if e == nil || e.Err == nil {
+		return "source analysis failed"
+	}
+	return e.Err.Error()
+}
+
+func (e *sourceAnalysisError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
+
+func isolatableBatchFileError(err error) bool {
+	if errors.Is(err, errEmptySource) {
+		return true
+	}
+	var analysis *sourceAnalysisError
+	return errors.As(err, &analysis)
+}
+
 type Runtime struct {
 	Store               *store.Store
 	Reasoner            reason.Reasoner
@@ -1500,7 +1535,7 @@ func (r Runtime) captureBytes(
 		return core.EmergION{}, false, fmt.Errorf("runtime not configured")
 	}
 	if len(b) == 0 {
-		return core.EmergION{}, false, fmt.Errorf("empty source")
+		return core.EmergION{}, false, errEmptySource
 	}
 
 	h := store.Hash(b)
@@ -1524,7 +1559,7 @@ func (r Runtime) captureBytes(
 		GovernedState: governedState,
 	})
 	if err != nil {
-		return core.EmergION{}, false, err
+		return core.EmergION{}, false, &sourceAnalysisError{Name: name, Err: err}
 	}
 
 	return r.admitAnalyzedCandidate(
@@ -2308,6 +2343,12 @@ func (r Runtime) Once(ctx context.Context, dropzone string) ([]string, error) {
 		if err != nil {
 			var recaptured *RecaptureError
 			if !errors.As(err, &recaptured) {
+				// Empty source and reasoner/grammar failures are
+				// per-file stoppages. Leave the file in the dropzone
+				// as the report and continue with the rest of the batch.
+				if isolatableBatchFileError(err) {
+					continue
+				}
 				return ids, fmt.Errorf("%s: %w", ent.Name(), err)
 			}
 
