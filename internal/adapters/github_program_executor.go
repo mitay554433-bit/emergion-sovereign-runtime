@@ -199,3 +199,23 @@ func boundedExecutionOutput(output []byte) string {
 	}
 	return string(output[len(output)-programExecutionOutputLimit:])
 }
+
+// RollbackGitHubProgramPatch reverse-applies an already applied patch in the
+// given working directory. It is used to return a dedicated probe worktree to
+// a clean state after a passing fracture probe, so no probe file is left
+// behind. The patch evidence is unchanged.
+func RollbackGitHubProgramPatch(workDir string, patch []byte) error {
+	workDir = strings.TrimSpace(workDir)
+	if workDir == "" {
+		workDir = "."
+	}
+	rootBytes, err := exec.Command("git", "-C", workDir, "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return fmt.Errorf("GITHUB:PROGRAM rollback directory is not a git repository: %w", err)
+	}
+	root := strings.TrimSpace(string(rootBytes))
+	if output, err := runPatchCommand(root, patch, "apply", "-R", "--whitespace=nowarn", "-"); err != nil {
+		return fmt.Errorf("GITHUB:PROGRAM rollback failed: %s", boundedExecutionOutput(output))
+	}
+	return nil
+}

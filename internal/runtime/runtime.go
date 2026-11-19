@@ -40,6 +40,10 @@ type Runtime struct {
 	Store               *store.Store
 	Reasoner            reason.Reasoner
 	ReturnedPredecessor string
+	// ProbeWorkDir is the dedicated clean git worktree where fracture probes
+	// are checked, applied and run, so the operator's own worktree (and any
+	// untracked files in it) is never touched by a probe.
+	ProbeWorkDir string
 }
 
 func (r Runtime) governedStateContext() (core.State, string, error) {
@@ -1031,14 +1035,18 @@ func (r Runtime) validateLineage(analysis *reason.Result) error {
 			"requirement_basis",
 		)
 	}
-	// fracture_gap is runtime-owned: only the deterministic fracture probe
-	// generator may link a probe to the gap it answers.
-	if r.Reasoner.Name() != fractureProbeReasonerName &&
-		strings.TrimSpace(analysis.Relationships["fracture_gap"]) != "" {
-		return fmt.Errorf(
-			"lineage rejected: relationship %q is runtime-owned",
-			"fracture_gap",
-		)
+	// Fracture probe linkage is runtime-owned: only the deterministic
+	// fracture probe generator may link a probe to the gap it answers, its
+	// ladder level and the stoppage evidence it was derived from.
+	if r.Reasoner.Name() != fractureProbeReasonerName {
+		for _, key := range []string{"fracture_gap", "fracture_level", "fracture_evidence"} {
+			if strings.TrimSpace(analysis.Relationships[key]) != "" {
+				return fmt.Errorf(
+					"lineage rejected: relationship %q is runtime-owned",
+					key,
+				)
+			}
+		}
 	}
 	returnedID := strings.TrimSpace(r.ReturnedPredecessor)
 	if strings.TrimSpace(analysis.Relationships["COMPOSITION_KIN"]) == "" &&
@@ -2025,6 +2033,8 @@ func (r Runtime) ExecuteAction(
 		}
 	}
 
+	fractureProbe := strings.TrimSpace(st.Accepted[request.EmergIONID].REL["fracture_gap"]) != ""
+
 	var execute func() (adapters.ExecutionResult, error)
 
 	switch request.Adapter {
@@ -2037,12 +2047,34 @@ func (r Runtime) ExecuteAction(
 			return executor.Execute(ctx, request)
 		}
 	case "GITHUB":
+		workDir := "."
+		if fractureProbe {
+			if strings.TrimSpace(r.ProbeWorkDir) == "" {
+				return request, adapters.ExecutionResult{}, core.EmergION{}, false, fmt.Errorf(
+					"fracture probe %s requires a dedicated probe worktree",
+					request.EmergIONID,
+				)
+			}
+			workDir = r.ProbeWorkDir
+		}
 		executor := adapters.GitHubProgramExecutor{
 			Store:   r.Store,
-			WorkDir: ".",
+			WorkDir: workDir,
 		}
 		execute = func() (adapters.ExecutionResult, error) {
-			return executor.Execute(request)
+			result, err := executor.Execute(request)
+			// A passing probe is reverse-applied so the probe worktree
+			// stays clean; its resulting source is already preserved.
+			if fractureProbe && err == nil && result.Succeeded {
+				patch, readErr := r.Store.ReadEvidence(request.SourceHash)
+				if readErr != nil {
+					return result, readErr
+				}
+				if rollbackErr := adapters.RollbackGitHubProgramPatch(workDir, patch); rollbackErr != nil {
+					return result, rollbackErr
+				}
+			}
+			return result, err
 		}
 	default:
 		return request, adapters.ExecutionResult{}, core.EmergION{}, false, fmt.Errorf(

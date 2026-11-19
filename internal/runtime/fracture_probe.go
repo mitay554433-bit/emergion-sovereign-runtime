@@ -172,42 +172,8 @@ func (r Runtime) ProposeOneFractureProbe(
 		if err != nil {
 			return core.EmergION{}, false, err
 		}
-		path := fractureProbePath(boundary.IDN)
-		patch := fractureProbePatch(path, content)
-		if _, err := adapters.CheckGitHubProgramPatch(workDir, patch); err != nil {
-			return core.EmergION{}, false, fmt.Errorf("fracture probe patch rejected: %w", err)
-		}
-
-		analysis := reason.Result{
-			Summary: "TORQUE fracture probe proposal for " + boundary.IDN,
-			Relationships: map[string]string{
-				"source_name":    path,
-				"source_kind":    "PROGRAM_PATCH",
-				"program_target": path,
-				"fracture_gap":   gap,
-			},
-			Capabilities: []string{"PROGRAM"},
-			Facts:        []string{"fracture probe proposal preserved"},
-			Risk:         "H",
-			Facets:       []string{"PROGRAM_FORGE"},
-		}
-
-		probeRuntime := r
-		probeRuntime.Reasoner = fixedReasoner{
-			name:    fractureProbeReasonerName,
-			version: "v1",
-			result:  analysis,
-		}
-		em, duplicate, err := probeRuntime.admitAnalyzedCandidate(
-			ctx,
-			path,
-			patch,
-			"torque_fracture_probe",
-			boundaryState,
-			governedState,
-			boundary.IDN,
-			analysis,
-		)
+		em, duplicate, err := r.admitFractureProbe(ctx, boundary, gap,
+			fractureProbePath(boundary.IDN), content, nil, workDir, boundaryState, governedState)
 		if err != nil {
 			return em, false, err
 		}
@@ -217,6 +183,67 @@ func (r Runtime) ProposeOneFractureProbe(
 		return em, true, nil
 	}
 	return core.EmergION{}, false, nil
+}
+
+// admitFractureProbe checks the probe as a single new-file patch in workDir
+// and admits it as a PROGRAM_PATCH candidate kin-linked (origin) to the
+// boundary. extra carries further runtime-owned probe linkage.
+func (r Runtime) admitFractureProbe(
+	ctx context.Context,
+	boundary core.EmergION,
+	gap string,
+	path string,
+	content []byte,
+	extra map[string]string,
+	workDir string,
+	boundaryState core.State,
+	governedState string,
+) (core.EmergION, bool, error) {
+	patch := fractureProbePatch(path, content)
+	if _, err := adapters.CheckGitHubProgramPatch(workDir, patch); err != nil {
+		return core.EmergION{}, false, fmt.Errorf("fracture probe patch rejected: %w", err)
+	}
+
+	relationships := map[string]string{
+		"source_name":    path,
+		"source_kind":    "PROGRAM_PATCH",
+		"program_target": path,
+		"fracture_gap":   gap,
+	}
+	keys := make([]string, 0, len(extra))
+	for key := range extra {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		relationships[key] = extra[key]
+	}
+
+	analysis := reason.Result{
+		Summary:       "TORQUE fracture probe proposal for " + boundary.IDN,
+		Relationships: relationships,
+		Capabilities:  []string{"PROGRAM"},
+		Facts:         []string{"fracture probe proposal preserved"},
+		Risk:          "H",
+		Facets:        []string{"PROGRAM_FORGE"},
+	}
+
+	probeRuntime := r
+	probeRuntime.Reasoner = fixedReasoner{
+		name:    fractureProbeReasonerName,
+		version: "v1",
+		result:  analysis,
+	}
+	return probeRuntime.admitAnalyzedCandidate(
+		ctx,
+		path,
+		patch,
+		"torque_fracture_probe",
+		boundaryState,
+		governedState,
+		boundary.IDN,
+		analysis,
+	)
 }
 
 // withoutFractureProbeEvidence removes fracture probes and the execution
