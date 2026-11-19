@@ -346,6 +346,75 @@ func TestVerifyFailsOnTamperedAcceptedRegistry(t *testing.T) {
 	})
 }
 
+func fieldVerifyExpecting(s *store.Store, expectTip string, expectCount *int) (int, error) {
+	events, err := s.Events()
+	if err != nil {
+		return 0, err
+	}
+	if err := store.CheckExpectedTip(events, expectTip, expectCount); err != nil {
+		return 0, err
+	}
+	return s.VerifyEvidence()
+}
+
+func TestVerifyDetectsTipDeletionWhenExpectedTipSupplied(t *testing.T) {
+	s := capturedAcceptedRegistry(t, []string{"alpha.txt", "beta.txt", "gamma.txt", "delta.txt"})
+	events, err := s.Events()
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectTip, expectCount := store.LedgerTip(events)
+	if expectTip == "" || expectCount == 0 {
+		t.Fatal("untampered ledger has no tip to save as a receipt")
+	}
+
+	// Matching receipt still passes.
+	if _, err := fieldVerifyExpecting(s, expectTip, &expectCount); err != nil {
+		t.Fatalf("verify failed against the current receipt: %v", err)
+	}
+
+	lines := ledgerLines(t, s)
+	writeLedger(t, s, lines[:len(lines)-1])
+
+	_, err = fieldVerifyExpecting(s, expectTip, &expectCount)
+	if err == nil {
+		t.Fatal("verify passed after the tip event was deleted even though an earlier receipt was supplied")
+	}
+	t.Logf("tip deletion with receipt: %v", err)
+	msg := err.Error()
+	if !strings.Contains(msg, "expected tip "+expectTip) {
+		t.Fatalf("error did not name the expected tip %s: %v", expectTip, err)
+	}
+	if !strings.Contains(msg, fmt.Sprintf("expected count %d", expectCount)) {
+		t.Fatalf("error did not name the expected count %d: %v", expectCount, err)
+	}
+	if !strings.Contains(msg, "actual ") {
+		t.Fatalf("error did not name the actual tip or count: %v", err)
+	}
+}
+
+func TestVerifyWithoutExpectedTipStillPassesAfterTipDeletion(t *testing.T) {
+	s := capturedAcceptedRegistry(t, []string{"alpha.txt", "beta.txt", "gamma.txt", "delta.txt"})
+	events, err := s.Events()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) == 0 {
+		t.Fatal("empty ledger")
+	}
+	lines := ledgerLines(t, s)
+	writeLedger(t, s, lines[:len(lines)-1])
+
+	// CHOICE B: without an operator-supplied receipt, tip deletion is
+	// still invisible to verify. That is today's behavior, kept on purpose.
+	if _, err := fieldVerify(s); err != nil {
+		t.Fatalf("verify without an expected tip should still pass after tip deletion: %v", err)
+	}
+	if _, err := fieldVerifyExpecting(s, "", nil); err != nil {
+		t.Fatalf("empty expectation should match no-flag verify: %v", err)
+	}
+}
+
 func TestVerifyLocalizesRecordInErrors(t *testing.T) {
 	names := []string{"alpha.txt", "beta.txt", "gamma.txt", "delta.txt"}
 
@@ -493,26 +562,6 @@ func TestVerifyLocalizesRecordInErrors(t *testing.T) {
 		}
 		if !strings.Contains(msg, fmt.Sprintf("line %d", line)) {
 			t.Fatalf("verify error dropped the line number %d: %v", line, err)
-		}
-	})
-}
-
-func TestVerifyLocalizationFindings(t *testing.T) {
-	skipUnlessEnv(t, stressFindingsEnv)
-	names := []string{"alpha.txt", "beta.txt", "gamma.txt", "delta.txt"}
-
-	t.Run("delete-tip-event-is-detected", func(t *testing.T) {
-		s := capturedAcceptedRegistry(t, names)
-		events, err := s.Events()
-		if err != nil {
-			t.Fatal(err)
-		}
-		tip := events[len(events)-1]
-		lines := ledgerLines(t, s)
-		writeLedger(t, s, lines[:len(lines)-1])
-		_, err = fieldVerify(s)
-		if err == nil {
-			t.Fatalf("verify passed after deleting the tip event %s (type %s); the chain still reads as complete", tip.ID, tip.Type)
 		}
 	})
 }
