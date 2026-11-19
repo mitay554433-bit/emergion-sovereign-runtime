@@ -60,11 +60,11 @@ abspath() {
 
 path_is_under() {
   # true if $1 is $2 or a path under $2
-  local child parent
-  child=${1%/}
-  parent=${2%/}
-  case "$child" in
-    "$parent"|"$parent"/*) return 0 ;;
+  local inner outer
+  inner=${1%/}
+  outer=${2%/}
+  case "$inner" in
+    "$outer"|"$outer"/*) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -110,7 +110,7 @@ REQUIRED_COMMIT=$(git -C "$REPO" rev-parse "${UNIFUSION_DEMO_COMMIT:-HEAD}^{comm
 REQUIRED_SHORT=${REQUIRED_COMMIT:0:7}
 
 TARGET=${UNIFUSION_TAMPER_DEMO_DIR:-"$TMPDIR/unifusion-pilot-demo"}
-# If a relative path was given, resolve it only after existence check? Resolve parent.
+# A relative target is resolved against the current directory; its containing directory is resolved below.
 case "$TARGET" in
   /*) ;;
   *) TARGET="$PWD/$TARGET" ;;
@@ -119,8 +119,8 @@ esac
 if [ -e "$TARGET" ]; then
   die "refusing to use an existing target directory: $TARGET"
 fi
-PARENT=$(cd "$(dirname "$TARGET")" && pwd) || die "cannot enter parent of target: $TARGET"
-TARGET="$PARENT/$(basename "$TARGET")"
+CONTAINER=$(cd "$(dirname "$TARGET")" && pwd) || die "cannot enter the directory containing target: $TARGET"
+TARGET="$CONTAINER/$(basename "$TARGET")"
 path_is_under "$TARGET" "$TMPDIR" || die "target must be under TMPDIR ($TMPDIR), not: $TARGET"
 looks_like_axm "$TARGET" && die "target must not be under AXM: $TARGET"
 path_is_under "$TARGET" "$REPO" && die "target must not be inside the source repo: $TARGET"
