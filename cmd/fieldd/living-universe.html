@@ -45,7 +45,7 @@ h1{margin:1px 0 0;font-size:17px;letter-spacing:.16em;font-weight:700;color:#cfe
 .sw.gov{border:2px solid var(--gov);background:transparent;width:10px;height:10px}
 .sw.fac{width:9px;height:9px;border-radius:2px;transform:rotate(45deg);background:linear-gradient(135deg,#7fd1ff,#a98bff)}
 .sw.ln{width:16px;height:2px;border-radius:2px;background:#8fc0ff}
-.sw.pl{width:16px;height:0;border-top:2px dashed var(--gov);border-radius:0}
+.sw.pl{width:16px;height:0;border-top:2px solid rgba(240,169,90,.6);border-radius:0}
 .lg[hidden]{display:none}
 #dock{display:flex;gap:6px;padding:6px}
 #dock button{padding:6px 10px;font-size:12.5px}
@@ -80,6 +80,24 @@ h1{margin:1px 0 0;font-size:17px;letter-spacing:.16em;font-weight:700;color:#cfe
 .fchip{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--c);color:#e8f0ff;background:color-mix(in srgb,var(--c) 18%,transparent)}
 details summary{cursor:pointer;color:var(--muted);font-size:11px;letter-spacing:.08em;margin-top:10px}
 .note{color:var(--muted);font-size:11.5px;margin-top:10px}
+.idchip{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:4px 8px;min-height:30px;margin:2px 4px 2px 0;border-radius:8px;font-size:11.5px;background:rgba(14,34,70,.8);border:1px solid rgba(120,170,255,.35);vertical-align:middle}
+.idchip.gov{border-color:rgba(240,169,90,.5);background:rgba(60,36,10,.55)}.idchip.out{opacity:.55;cursor:default}
+.idchip .nm{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px}.idchip .cap{font-size:9.5px;letter-spacing:.06em;color:#9fd0ff;font-weight:700}
+.tchip{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;background:rgba(90,140,230,.14);border:1px solid rgba(120,170,255,.3);color:#d8e6ff;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.tchip.obs{background:rgba(120,210,255,.08)}.tchip.warn{border-color:rgba(255,160,120,.5);color:#ffd0bd}
+.chipwrap{display:flex;flex-wrap:wrap}
+.kinrow{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:4px 0;border-top:1px solid rgba(110,160,235,.10)}
+.kinrow .w{font-size:10px;letter-spacing:.08em;font-weight:700;color:#9fd0ff;padding:2px 6px;border-radius:5px;background:rgba(80,140,240,.16)}
+.kinrow .dir{color:var(--dim)}.kinrow.prop .idchip{margin:0}
+.rich{display:flex;flex-wrap:wrap;align-items:center;gap:2px 4px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px}
+.wcopy{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.copy{padding:3px 9px;min-height:28px;font-size:11px}
+.flags{display:flex;flex-wrap:wrap;gap:5px}.flag{font-size:11px;padding:2px 8px;border-radius:6px;font-weight:600}
+.flag.ok{background:rgba(95,224,178,.14);color:#9ff0d0;border:1px solid rgba(95,224,178,.4)}.flag.no{background:rgba(255,120,100,.12);color:#ffb3a3;border:1px solid rgba(255,120,100,.4)}.flag.info{background:rgba(120,170,255,.12);color:#cfe0ff;border:1px solid rgba(120,170,255,.3)}
+.govnote{margin:2px 0 6px;padding:9px 11px;border-radius:10px;background:rgba(240,169,90,.12);border:1px solid rgba(240,169,90,.45);color:#ffe0bd;font-size:12px}.govnote b{color:#ffc98a;letter-spacing:.06em}
+@media(max-width:899px){body.sheeting #hdr .chips,body.sheeting #extra{display:none}}
+#sheet.isgov{border-color:rgba(240,169,90,.5)}
+details.ver summary{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#dbe8ff;font-size:11px;letter-spacing:0}
 @media(min-width:900px){
  #hdr{right:auto;width:330px;left:16px;top:16px}
  #hdr .chips{grid-template-columns:1fr 1fr}
@@ -114,7 +132,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:11px;letter-spacing:
 <div id="foot">
  <section id="timeline" class="glass" aria-label="Recent accepted EmergIONs"><div class="tl-h"><span>Recent accepted · by capture time</span><span id="tlMeta"></span></div><div id="tl"></div></section>
  <div class="bar">
-  <div id="legend" class="glass" aria-label="Legend"><span class="lg"><i class="sw acc"></i>Accepted (REG)</span><span class="lg"><i class="sw fac"></i>Facet</span><span class="lg"><i class="sw ln"></i>Kin reference</span><span class="lg" id="lgGov" hidden><i class="sw gov"></i>AtGOV · pending</span><span class="lg" id="lgGovRef" hidden><i class="sw pl"></i>Pending reference</span></div>
+  <div id="legend" class="glass" aria-label="Legend"><span class="lg"><i class="sw acc"></i>Accepted (REG)</span><span class="lg"><i class="sw fac"></i>Facet</span><span class="lg"><i class="sw ln"></i>Kin reference</span><span class="lg" id="lgGov" hidden><i class="sw gov"></i>AtGOV · pending</span><span class="lg" id="lgGovRef" hidden><i class="sw pl"></i><span id="lgGovRefT">Pending reference</span></span></div>
   <div id="dock" class="glass"><button id="fit" title="Fit and centre (F)">Fit</button><button id="gov" aria-pressed="false" title="Show records awaiting HUMAN_FINAL">AtGOV</button><button id="labels" aria-pressed="true">Labels</button></div>
  </div>
  <div id="banner" class="glass"><i class="shield"></i><span><b>COSL + REG remain authoritative</b> · visualization only · read-only</span><span id="zoomv" class="mono">1.00×</span></div>
@@ -144,7 +162,7 @@ const kinWord=k=>KIN_KEYS[k]||(k==='capability_provider'?'CAPABILITY_KIN':'PROJE
 
 let W=innerWidth,H=innerHeight,dpr=1,view={z:1,ox:W/2,oy:H/2},userMoved=false,tween=null;
 let field=null,waveData=null,wave=[],nodes=[],edges=[],byID=new Map(),selected=null,showGov=false,showLabels=true;
-let mist=null,stars=null,sprites={};
+let mist=null,stars=null,sprites={},glayer=document.createElement('canvas'),gx=glayer.getContext('2d'),gkey='',dataVer=0,accNodes=[],govNodes=[],pendEdges=[],pendShown=0;
 
 function hash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
 function rnd(s){let h=hash(s);h^=h>>>16;h=Math.imul(h,0x85ebca6b);h^=h>>>13;h=Math.imul(h,0xc2b2ae35);h^=h>>>16;return (h>>>0)/4294967296}
@@ -162,7 +180,7 @@ function buildStars(){stars=document.createElement('canvas');stars.width=c.width
  const bg=g.createRadialGradient(W*.5,H*.45,0,W*.5,H*.45,Math.max(W,H)*.8);bg.addColorStop(0,'#071a3a');bg.addColorStop(.55,'#040e24');bg.addColorStop(1,'#020814');g.fillStyle=bg;g.fillRect(0,0,W,H);
  let seed=0x9e3779b9;const pr=()=>{seed|=0;seed=seed+0x6D2B79F5|0;let q=Math.imul(seed^seed>>>15,1|seed);q=q+Math.imul(q^q>>>7,61|q)^q;return((q^q>>>14)>>>0)/4294967296};
  const n=Math.round(W*H/2600);for(let i=0;i<n;i++){const sx=pr()*W,sy=pr()*H,b=pr();g.fillStyle=`rgba(${150+60*b|0},${185+50*b|0},255,${.15+.55*b*b})`;const s=b>.93?1.6:1;g.fillRect(sx,sy,s,s)}}
-function resize(){W=innerWidth;H=innerHeight;dpr=Math.min(devicePixelRatio||1,2);c.width=Math.round(W*dpr);c.height=Math.round(H*dpr);x.setTransform(dpr,0,0,dpr,0,0);buildStars();if(aspect()!==EY)rebuild();if(!userMoved)fit(false);want()}
+function resize(){W=innerWidth;H=innerHeight;dpr=Math.min(devicePixelRatio||1,2);c.width=Math.round(W*dpr);c.height=Math.round(H*dpr);x.setTransform(dpr,0,0,dpr,0,0);buildStars();glayer.width=c.width;glayer.height=c.height;gkey='';if(aspect()!==EY)rebuild();if(!userMoved)fit(false);want()}
 
 /* ---------- layout: 12 facets on a ring, EmergIONs clustered by home facet ---------- */
 const RING=430;let EY=1;
@@ -183,6 +201,8 @@ function rebuild(){
   for(const k of ['kin_emergion','parent_emergion','transition_emergion','origin','COMPOSITION_KIN'])if(typeof r[k]==='string')addEdge(n.id,r[k],k==='parent_emergion'?'kin_emergion':k);
   if(typeof r.capability_providers==='string')for(const m of r.capability_providers.matchAll(/E-[A-Fa-f0-9]+/g))addEdge(n.id,m[0],'capability_provider');
   const g=n.meta.e;if(Array.isArray(g))for(const e of g)if(e&&typeof e==='object')addEdge(e.f,e.t,e.k||'build_edge')}
+ accNodes=nodes.filter(n=>n.kind==='accepted');govNodes=nodes.filter(n=>n.kind==='pending');pendEdges=edges.filter(e=>!e.verified);
+ for(const n of nodes)n.adj=[];for(const e of edges){e.a.adj.push(e);e.b.adj.push(e)}dataVer++;
  // Counts: verified = both ends REG-accepted; pending = touches an AtGOV record.
  const acc=field&&field.Accepted?Object.keys(field.Accepted).length:null,ver=edges.filter(e=>e.verified).length,pend=edges.length-ver;
  $('nAcc').textContent=acc==null?'—':fmt(acc);subLine.v=[acc,ver,showGov?nGovAll():null];subLine();$('nRef').textContent=field?fmt(ver):'—';
@@ -195,7 +215,7 @@ function rebuild(){
 /* ---------- view ---------- */
 function nGovAll(){return field&&field.AtGOV?Object.keys(field.AtGOV).length:0}
 function subLine(){const v=subLine.v||[];$('sub').textContent=$('hdr').classList.contains('compact')&&v[0]!=null?`${fmt(v[0])} accepted · ${fmt(v[1])} verified references`+(v[2]!=null?` · ${fmt(v[2])} AtGOV pending`:''):'UNIFUSION · governed spatial projection'}
-function freeRect(){const h=$('hdr').getBoundingClientRect(),f=$('foot').getBoundingClientRect(),wide=W>=900;let top=wide?16:h.bottom+10,bot=f.top-10,left=wide?h.right+10:10,right=W-10;const so=$('sheet').classList.contains('open');if(so&&W>=900)right=W-410;else if(so)bot=$('sheet').getBoundingClientRect().top-10;if(bot-top<160){top=10;bot=H-10}return {left,right,top,bot}}
+function freeRect(){const h=$('hdr').getBoundingClientRect(),f=$('foot').getBoundingClientRect(),wide=W>=900;let top=wide?16:h.bottom+10,bot=f.top-10,left=wide?h.right+10:10,right=W-10;const so=$('sheet').classList.contains('open');if(so&&W>=900)right=W-410;else if(so)bot=H-$('sheet').offsetHeight-18;if(bot-top<160){top=10;bot=H-10}return {left,right,top,bot}}
 function fit(animate=true){const pts=nodes.length?nodes:anchors();let a=1e9,b=1e9,cc=-1e9,d=-1e9;for(const n of pts){a=Math.min(a,n.x);b=Math.min(b,n.y);cc=Math.max(cc,n.x);d=Math.max(d,n.y)}
  const pad=60;a-=pad;b-=pad;cc+=pad;d+=pad;const r=freeRect(),z=Math.max(.08,Math.min(3,Math.min((r.right-r.left)/(cc-a),(r.bot-r.top)/(d-b))));
  const tgt={z,ox:(r.left+r.right)/2-(a+cc)/2*z,oy:(r.top+r.bot)/2-(b+d)/2*z};userMoved=false;
@@ -222,33 +242,52 @@ function draw(now){const t=reduced.matches?0:(now-t0)/1000,z=view.z;x.setTransfo
  const s=wave.length?wave[Math.floor(t/4)%wave.length]:null;
  if(s){const mv=+s.MV||0,sp=+s.SP||0,wf=+s.WF||0;x.globalAlpha=.5;x.fillStyle='rgba(120,190,255,.55)';x.beginPath();for(let k=0;k<120;k++){const a=k*2.39996323+t*(.04+mv*.2),r=(RING*.25+Math.sqrt(k)*RING*.06*(1+sp))*z*(1+.04*Math.sin(t*.7+k)*wf),px=core.x+Math.cos(a)*r,py=core.y+Math.sin(a)*r;x.moveTo(px+1.2,py);x.arc(px,py,1.1+wf*1.5,0,6.283)}x.fill()}
  x.globalCompositeOperation='source-over';x.globalAlpha=1;
- // dodecagon frame
- x.strokeStyle='rgba(120,170,255,.10)';x.lineWidth=1;x.beginPath();A.forEach((f,i)=>{const p=S(f);i?x.lineTo(p.x,p.y):x.moveTo(p.x,p.y)});x.closePath();x.stroke();
- const sel=selected,focus=sel?new Set([sel.id]):null;if(sel)for(const e of edges)if(e.a===sel||e.b===sel){focus.add(e.a.id);focus.add(e.b.id)}
- const dimA=sel?.35:1;
- // edges batched by style
- x.lineWidth=.7;x.strokeStyle=`rgba(90,140,230,${.10*dimA})`;x.beginPath();for(const n of nodes){if(n.kind==='facet')continue;const p=S(n);for(const fi of n.facets){const q=S(A[fi]);x.moveTo(p.x,p.y);x.lineTo(q.x,q.y)}}x.stroke();
- if(showGov){x.setLineDash([3,4]);x.lineWidth=.6;x.strokeStyle=`rgba(240,169,90,${.16*dimA})`;x.beginPath();for(const e of edges){if(e.verified)continue;const p=S(e.a),q=S(e.b);x.moveTo(p.x,p.y);x.lineTo(q.x,q.y)}x.stroke();x.setLineDash([])}
- x.lineWidth=1.1;x.strokeStyle=`rgba(143,192,255,${.42*dimA})`;x.beginPath();for(const e of edges){if(!e.verified)continue;const p=S(e.a),q=S(e.b);x.moveTo(p.x,p.y);x.lineTo(q.x,q.y)}x.stroke();
- if(sel){x.lineWidth=2;x.strokeStyle='rgba(200,230,255,.9)';x.beginPath();for(const e of edges){if(e.a!==sel&&e.b!==sel)continue;const p=S(e.a),q=S(e.b);x.moveTo(p.x,p.y);x.lineTo(q.x,q.y)}x.stroke()}
- // nodes
- const zr=Math.max(.75,Math.min(2.2,Math.sqrt(z*1.6)));x.globalCompositeOperation='lighter';
- for(const n of nodes){if(n.kind==='facet')continue;const p=S(n);if(p.x<-30||p.x>W+30||p.y<-30||p.y>H+30)continue;const al=focus&&!focus.has(n.id)?.3:1,tw=1+.12*Math.sin(t*1.4+n.tw);
-  if(n.kind==='accepted'){const sz=22*zr*tw;x.globalAlpha=al;x.drawImage(sprites.acc,p.x-sz/2,p.y-sz/2,sz,sz)}else{const sz=14*zr;x.globalAlpha=.55*al;x.drawImage(sprites.gov,p.x-sz/2,p.y-sz/2,sz,sz)}}
- x.globalCompositeOperation='source-over';x.globalAlpha=1;
- if(showGov){x.strokeStyle='rgba(240,169,90,.7)';x.lineWidth=1;x.beginPath();for(const n of nodes){if(n.kind!=='pending')continue;const p=S(n);if(p.x<-20||p.x>W+20||p.y<-20||p.y>H+20)continue;const r=2*zr;x.moveTo(p.x+r,p.y);x.arc(p.x,p.y,r,0,6.283)}x.stroke()}
- for(const n of nodes){if(n.kind!=='accepted')continue;const p=S(n);if(p.x<-20||p.x>W+20||p.y<-20||p.y>H+20)continue;x.fillStyle=n.color;x.globalAlpha=focus&&!focus.has(n.id)?.3:.9;x.beginPath();x.arc(p.x,p.y,1.6*zr,0,6.283);x.fill()}
- x.globalAlpha=1;
- // facet glyphs
- for(const f of A){const p=S(f),r=Math.max(7,Math.min(16,11*Math.sqrt(z*1.5)));x.save();x.translate(p.x,p.y);x.rotate(Math.PI/4);x.fillStyle='rgba(8,18,40,.9)';x.strokeStyle=f.color;x.lineWidth=1.6;x.shadowColor=f.color;x.shadowBlur=12;x.beginPath();x.rect(-r/1.5,-r/1.5,r*1.33,r*1.33);x.fill();x.stroke();x.shadowBlur=0;x.fillStyle=f.color;x.fillRect(-r/4,-r/4,r/2,r/2);x.restore()}
- // labels
- if(showLabels){x.textBaseline='middle';const fs=W<600?11:12;x.font=`600 ${fs}px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif`;
-  for(const f of A){const p=S(f);if(W<700){x.textAlign='center';label((RING*z<170?facetShort[f.fi]:f.label).toUpperCase(),p.x,p.y-(f.y>RING*.5?-18:18),'#dbe8ff',f.color);continue}const out=f.x>=-1?1:-1,lx=p.x+out*14,ly=p.y-(Math.abs(f.y)>RING*.9?(f.y<0?16:-16):0);x.textAlign=Math.abs(f.x)<5?'center':(out>0?'left':'right');label(f.label.toUpperCase(),Math.abs(f.x)<5?p.x:lx,Math.abs(f.x)<5?(f.y<0?p.y-18:p.y+18):ly,'#dbe8ff',f.color)}
-  x.font=`${W<600?10:11}px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif`;x.textAlign='left';
-  if(z>1.1||sel)for(const n of nodes){if(n.kind==='facet')continue;if(!(z>1.1&&n.kind==='accepted')&&!(focus&&focus.has(n.id)))continue;const p=S(n);if(p.x<0||p.x>W||p.y<0||p.y>H)continue;label(String(n.label).slice(0,32),p.x+8,p.y-8,n.kind==='pending'?'#ffd7aa':'#cfe0ff')}}
- if(sel){const p=S(sel),r=sel.kind==='facet'?20:9*zr;x.strokeStyle='#fff';x.lineWidth=1.5;x.beginPath();x.arc(p.x,p.y,r,0,6.283);x.stroke();x.strokeStyle='rgba(255,255,255,.35)';x.beginPath();x.arc(p.x,p.y,r+5+2*Math.sin(t*3),0,6.283);x.stroke()}
+ // the graph itself is cached in its own layer and only redrawn when the view or data changes
+ const moving=ptr.size>0||!!tween;const key=[moving,z.toFixed(4),view.ox.toFixed(1),view.oy.toFixed(1),selected?selected.id:'',showGov,showLabels,dataVer,W,H].join('|');
+ if(key!==gkey){drawGraph(gx,A,moving);gkey=key}
+ x.drawImage(glayer,0,0,W,H);
+ if(selected){const p=S(selected),zr=Math.max(.75,Math.min(2.2,Math.sqrt(z*1.6))),r=selected.kind==='facet'?20:9*zr;x.strokeStyle='rgba(255,255,255,.35)';x.lineWidth=1.5;x.beginPath();x.arc(p.x,p.y,r+5+2*Math.sin(t*3),0,6.283);x.stroke()}
  $('zoomv').textContent=z.toFixed(2)+'×'}
-function label(text,px,py,col,accent){const w=x.measureText(text).width;x.fillStyle='rgba(3,10,26,.62)';let ax=x.textAlign==='right'?px-w-5:x.textAlign==='center'?px-w/2-5:px-5;const cl=Math.max(4,Math.min(W-w-14,ax));px+=cl-ax;ax=cl;x.beginPath();x.roundRect?x.roundRect(ax,py-9,w+10,18,5):x.rect(ax,py-9,w+10,18);x.fill();if(accent){x.fillStyle=accent;x.fillRect(ax,py-9,2,18)}x.fillStyle=col;x.fillText(text,px,py)}
+const onScreen=(p,m)=>p.x>-m&&p.x<W+m&&p.y>-m&&p.y<H+m;
+function drawGraph(g,A,moving){const z=view.z;g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);g.globalAlpha=1;g.globalCompositeOperation='source-over';
+ g.strokeStyle='rgba(120,170,255,.10)';g.lineWidth=1;g.beginPath();A.forEach((f,i)=>{const p=S(f);i?g.lineTo(p.x,p.y):g.moveTo(p.x,p.y)});g.closePath();g.stroke();
+ const sel=selected,focus=sel?new Set([sel.id]):null;if(sel&&sel.adj)for(const e of sel.adj){focus.add(e.a.id);focus.add(e.b.id)}
+ const dimA=sel?.35:1,zr=Math.max(.75,Math.min(2.2,Math.sqrt(z*1.6)));
+ // facet membership (accepted only; AtGOV records already sit beside their facet)
+ g.lineWidth=.7;g.strokeStyle=`rgba(90,140,230,${.10*dimA})`;g.beginPath();for(const n of accNodes){const p=S(n);for(const fi of n.facets){const q=S(A[fi]);g.moveTo(p.x,p.y);g.lineTo(q.x,q.y)}}g.stroke();
+ // pending references: density-capped and faint, so 19k links never become a hairball
+ pendShown=0;if(showGov&&pendEdges.length){const cap=moving?300:(W<700?1200:2500),zoomed=z>.9;g.lineWidth=.6;g.strokeStyle=`rgba(240,169,90,${(zoomed?.16:.09)*dimA})`;g.beginPath();
+  if(zoomed){for(const e of pendEdges){if(pendShown>=cap)break;const p=S(e.a),q=S(e.b);if(!onScreen(p,0)&&!onScreen(q,0))continue;g.moveTo(p.x,p.y);g.lineTo(q.x,q.y);pendShown++}}
+  else{const step=Math.max(1,Math.ceil(pendEdges.length/cap));for(let i=0;i<pendEdges.length;i+=step){const e=pendEdges[i],p=S(e.a),q=S(e.b);g.moveTo(p.x,p.y);g.lineTo(q.x,q.y);pendShown++}}
+  g.stroke()}
+ const sampled=showGov&&pendShown<pendEdges.length;$('lgGovRefT').textContent=sampled?`Pending reference · ${fmt(pendShown)} of ${fmt(pendEdges.length)} drawn`:'Pending reference';
+ g.lineWidth=1.1;g.strokeStyle=`rgba(143,192,255,${.42*dimA})`;g.beginPath();for(const e of edges){if(!e.verified)continue;const p=S(e.a),q=S(e.b);g.moveTo(p.x,p.y);g.lineTo(q.x,q.y)}g.stroke();
+ if(sel&&sel.adj){g.lineWidth=1.8;g.beginPath();for(const e of sel.adj){const p=S(e.a),q=S(e.b);g.moveTo(p.x,p.y);g.lineTo(q.x,q.y)}g.strokeStyle=sel.kind==='pending'?'rgba(255,214,160,.9)':'rgba(200,230,255,.9)';g.stroke()}
+ // AtGOV nodes: one batched path; halos only when few are on screen
+ if(showGov){let vis=0;const pts=[];for(const n of govNodes){const p=S(n);if(onScreen(p,10)){pts.push(p);vis++}}
+  const r=Math.max(1.3,1.9*zr);if(vis<900){g.globalCompositeOperation='lighter';g.globalAlpha=.45*dimA;const sz=12*zr;for(const p of pts)g.drawImage(sprites.gov,p.x-sz/2,p.y-sz/2,sz,sz);g.globalCompositeOperation='source-over';g.globalAlpha=1}
+  g.beginPath();if(moving&&vis>=900)for(const p of pts)g.rect(p.x-r,p.y-r,r*2,r*2);else for(const p of pts){g.moveTo(p.x+r,p.y);g.arc(p.x,p.y,r,0,6.283)}
+  if(vis<900){g.strokeStyle=`rgba(240,169,90,${.75*dimA})`;g.lineWidth=1;g.stroke()}else{g.fillStyle=`rgba(240,169,90,${.55*dimA})`;g.fill()}}
+ // accepted nodes
+ g.globalCompositeOperation='lighter';for(const n of accNodes){const p=S(n);if(!onScreen(p,30))continue;const sz=22*zr;g.globalAlpha=focus&&!focus.has(n.id)?.3:1;g.drawImage(sprites.acc,p.x-sz/2,p.y-sz/2,sz,sz)}
+ g.globalCompositeOperation='source-over';
+ for(const n of accNodes){const p=S(n);if(!onScreen(p,20))continue;g.fillStyle=n.color;g.globalAlpha=focus&&!focus.has(n.id)?.3:.9;g.beginPath();g.arc(p.x,p.y,1.6*zr,0,6.283);g.fill()}
+ g.globalAlpha=1;
+ if(focus)for(const id of focus){const n=byID.get(id);if(!n||n.kind!=='pending')continue;const p=S(n);g.fillStyle='#ffd7aa';g.beginPath();g.arc(p.x,p.y,2.6*zr,0,6.283);g.fill()}
+ for(const f of A){const p=S(f),r=Math.max(7,Math.min(16,11*Math.sqrt(z*1.5)));g.save();g.translate(p.x,p.y);g.rotate(Math.PI/4);g.fillStyle='rgba(8,18,40,.9)';g.strokeStyle=f.color;g.lineWidth=1.6;g.shadowColor=f.color;g.shadowBlur=12;g.beginPath();g.rect(-r/1.5,-r/1.5,r*1.33,r*1.33);g.fill();g.stroke();g.shadowBlur=0;g.fillStyle=f.color;g.fillRect(-r/4,-r/4,r/2,r/2);g.restore()}
+ if(sel){const p=S(sel),r=sel.kind==='facet'?20:9*zr;g.strokeStyle='#fff';g.lineWidth=1.5;g.beginPath();g.arc(p.x,p.y,r,0,6.283);g.stroke()}
+ // labels: facets first, then the selection and its kin, then accepted names only when zoomed in and sparse; never overlapping
+ if(!showLabels)return;placed=[];g.textBaseline='middle';const fs=W<600?11:12;g.font=`600 ${fs}px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif`;
+ for(const f of A){const p=S(f);if(W<700){g.textAlign='center';label(g,(RING*z<170?facetShort[f.fi]:f.label).toUpperCase(),p.x,p.y-(f.y>RING*.5?-18:18),'#dbe8ff',f.color,true);continue}const out=f.x>=-1?1:-1,lx=p.x+out*14,ly=p.y-(Math.abs(f.y)>RING*.9?(f.y<0?16:-16):0);g.textAlign=Math.abs(f.x)<5?'center':(out>0?'left':'right');label(g,f.label.toUpperCase(),Math.abs(f.x)<5?p.x:lx,Math.abs(f.x)<5?(f.y<0?p.y-18:p.y+18):ly,'#dbe8ff',f.color,true)}
+ g.font=`${W<600?10:11}px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif`;g.textAlign='left';
+ const nameOf=n=>{const s=String(n.label);return /^E-[0-9A-F]{12,}$/i.test(s)?s.slice(0,6)+'…'+s.slice(-4):s.slice(0,30)};
+ if(sel&&sel.kind!=='facet'){const p=S(sel);label(g,nameOf(sel),p.x+10,p.y-10,sel.kind==='pending'?'#ffe2bf':'#ffffff',null,true)}
+ if(focus){let k=0;for(const id of focus){if(k>=24)break;const n=byID.get(id);if(!n||n===sel)continue;const p=S(n);if(!onScreen(p,0))continue;if(label(g,nameOf(n),p.x+8,p.y-8,n.kind==='pending'?'#ffd7aa':'#cfe0ff'))k++}}
+ if(z>1.1){const vis=accNodes.filter(n=>onScreen(S(n),0));if(vis.length<=150){let k=0;for(const n of vis){if(k>=60)break;if(focus&&focus.has(n.id))continue;const p=S(n);if(label(g,nameOf(n),p.x+8,p.y-8,'#cfe0ff'))k++}}}}
+let placed=[];
+function label(g,text,px,py,col,accent,force){const w=g.measureText(text).width;let ax=g.textAlign==='right'?px-w-5:g.textAlign==='center'?px-w/2-5:px-5;const cl=Math.max(4,Math.min(W-w-14,ax));px+=cl-ax;ax=cl;const R={x:ax,y:py-9,w:w+10,h:18};
+ if(!force&&placed.some(q=>R.x<q.x+q.w+2&&q.x<R.x+R.w+2&&R.y<q.y+q.h+1&&q.y<R.y+R.h+1))return false;placed.push(R);
+ g.fillStyle='rgba(3,10,26,.72)';g.beginPath();g.roundRect?g.roundRect(ax,py-9,w+10,18,5):g.rect(ax,py-9,w+10,18);g.fill();if(accent){g.fillStyle=accent;g.fillRect(ax,py-9,2,18)}g.fillStyle=col;g.fillText(text,px,py);return true}
 
 /* ---------- data ---------- */
 function setField(d,origin){if(!d||typeof d!=='object'||!d.Accepted||typeof d.Accepted!=='object'||Array.isArray(d.Accepted))throw Error('Not a FIELD state with an Accepted map');const first=!field;field=d;rebuild();if(first&&!userMoved)fit(false);
@@ -264,27 +303,73 @@ function buildTimeline(){const tl=$('tl');tl.replaceChildren();const acc=nodes.f
 function center(n,zoomIn=true){const r=freeRect(),z=zoomIn?Math.max(view.z,1.3):view.z;const tgt={z,ox:(r.left+r.right)/2-n.x*z,oy:(r.top+r.bot)/2-n.y*z};userMoved=true;if(reduced.matches)view=tgt;else tween={from:{...view},to:tgt,t0:performance.now(),dur:420};want()}
 
 /* ---------- detail sheet ---------- */
-function closeSheet(){$('sheet').classList.remove('open');selected=null;want()}
-function inspect(n){selected=n;const body=$('sBody');body.replaceChildren();const sh=$('sheet');sh.style.bottom=W>=900?Math.round(H-$('foot').getBoundingClientRect().top+10)+'px':'';sh.classList.add('open');$('sTitle').textContent=n.label;
+function closeSheet(){$('sheet').classList.remove('open');document.body.classList.remove('sheeting');selected=null;want()}
+const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e};
+const IDN_RE=/E-[A-Fa-f0-9]{6,}/g;
+const shortHash=h=>{h=String(h);return h.length>20?h.slice(0,10)+'…'+h.slice(-6):h};
+const human=k=>String(k).replace(/_/g,' ').replace(/^./,c=>c.toUpperCase());
+// Readable labels for recorded REL keys (kin keys are handled separately and shown with kin words).
+const REL_LABELS={capability_composition:'Capability composition',capability_resolution:'Capability resolution',governed_state:'Governed state',protector:'Protector',protector_gate:'Protector gate',required_capability:'Required capability',source_name:'Source name',source_kind:'Source kind',requirement_basis:'Requirement basis',target_state:'Target state',target_emergion:'Target EmergION',selected_realization:'Selected realization',runners_up:'Runners-up',target_thing:'Target',authorization_event:'Authorization event'};
+function copyText(text,btn){const done=()=>{const o=btn.textContent;btn.textContent='Copied';setTimeout(()=>btn.textContent=o,1200)};
+ if(navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(text).then(done,()=>fallback());else fallback();
+ function fallback(){const ta=el('textarea');ta.value=text;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.opacity='0';document.body.append(ta);ta.select();try{document.execCommand('copy');done()}catch(e){}ta.remove()}}
+function copyBtn(text){const b=el('button','copy','Copy');b.type='button';b.setAttribute('aria-label','Copy full value');b.onclick=ev=>{ev.stopPropagation();copyText(text,b)};return b}
+function idChip(id,prefix){const n=byID.get(id),b=el('button','idchip'+(n?(n.kind==='pending'?' gov':' acc'):' out'));b.type='button';
+ if(prefix)b.append(el('span','cap',prefix));b.append(el('span','mono',id.length>14?id.slice(0,10)+'…'+id.slice(-4):id));if(n&&n.label!==id)b.append(el('span','nm',String(n.label).slice(0,26)));
+ b.title=n?(n.kind==='pending'?'AtGOV · not accepted · ':'REG accepted · ')+id:id+' · not in view'+(field&&field.AtGOV&&field.AtGOV[id]&&!showGov?' (AtGOV hidden)':'');
+ if(n)b.onclick=()=>{inspect(n);center(n,false)};else b.disabled=true;return b}
+// Turns any recorded text into text + tappable IDN chips.
+function richValue(v){const d=el('div','rich');const s=typeof v==='string'?v:JSON.stringify(v);let last=0;for(const m of s.matchAll(IDN_RE)){if(m.index>last)d.append(el('span',null,s.slice(last,m.index)));d.append(idChip(m[0]));last=m.index+m[0].length}if(last<s.length)d.append(el('span',null,s.slice(last)));return d}
+function inspect(n){selected=n;const body=$('sBody');body.replaceChildren();const sh=$('sheet');sh.style.bottom=W>=900?Math.round(H-$('foot').getBoundingClientRect().top+10)+'px':'';document.body.classList.add('sheeting');sh.classList.add('open');sh.classList.toggle('isgov',n.kind==='pending');$('sTitle').textContent=n.label;
  const bd=$('sBadge');bd.className='badge '+(n.kind==='facet'?'fac':n.kind==='accepted'?'acc':'gov');bd.textContent=n.kind==='facet'?'Field facet':n.kind==='accepted'?'REG accepted':'AtGOV · not accepted';
- const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e};
- const kv=(k,v,mono)=>{if(v==null||v==='')return;const r=el('div','kv');r.append(el('small',null,k));const d=el('div',mono?'mono':null,typeof v==='string'||typeof v==='number'?String(v):JSON.stringify(v));r.append(d);body.append(r)};
- if(n.kind==='facet'){const fi=n.fi,acc=nodes.filter(q=>q.kind==='accepted'&&q.facets.includes(fi)),gov=nodes.filter(q=>q.kind==='pending'&&q.facets.includes(fi));kv('Facet',facets[fi],true);kv('Accepted',fmt(acc.length));if(showGov)kv('AtGOV',fmt(gov.length));
-  if(acc.length){body.append(el('div','sec','Accepted EmergIONs'));for(const q of acc.slice(0,30))body.append(kinBtn('PROJECTION_KIN',q,q.id))}
+ const row=(k,v,opt={})=>{if(v==null||v===''||(Array.isArray(v)&&!v.length))return;const r=el('div','kv');r.append(el('small',null,k));let d;
+  if(v instanceof Node)d=v;else if(opt.chips){d=el('div','fchips');for(const t of v)d.append(el('span','tchip'+(opt.cls?' '+opt.cls:''),String(t)))}else d=el('div',opt.mono?'mono':null,String(v));
+  if(opt.copy){const w=el('div','wcopy');w.append(d,copyBtn(opt.copy));d=w}r.append(d);body.append(r)};
+ const sec=t=>body.append(el('div','sec',t));
+ if(n.kind==='facet'){const fi=n.fi,acc=accNodes.filter(q=>q.facets.includes(fi)),gov=govNodes.filter(q=>q.facets.includes(fi));row('Facet',facets[fi],{mono:true});row('Accepted',fmt(acc.length));if(showGov)row('AtGOV',fmt(gov.length)+' · not accepted');
+  if(acc.length){sec(`Accepted EmergIONs · ${acc.length}`);const w=el('div','chipwrap');for(const q of acc.slice(0,40))w.append(idChip(q.id,'PROJECTION_KIN'));body.append(w)}
   body.append(el('div','note','Facet placement visualizes existing classification. It is not canonical geometry.'));want();return}
- const em=n.em,m=n.meta;kv('IDN',em.i||n.id,true);kv('STA',(em.s||'')+(STA[em.s]?' · '+STA[em.s]:''),true);
- if(n.facets.length){const r=el('div','kv');r.append(el('small',null,'Facets'));const fc=el('div','fchips');for(const fi of n.facets){const f=el('span','fchip',facetLabels[fi]);f.style.setProperty('--c',facetColors[fi]);fc.append(f)}r.append(fc);body.append(r)}
- if(em.m&&em.m.s)kv('Summary',em.m.s);if(m.t)kv('Captured',new Date(m.t).toLocaleString());if(Array.isArray(em.c)&&em.c.length)kv('Capabilities',em.c.join(', '));
- if(em.v)kv('Validation',[em.v.c?'recoil PASS':'recoil —',em.v.w?'WVC PASS':'WVC —',em.v.r?'risk '+em.v.r:''].filter(Boolean).join(' · '));
- if(em.m&&em.m.h)kv('Source hash',em.m.h.slice(0,16)+'…',true);
- // kin relations from REL (outgoing) and from other records (incoming)
- const r=em.r||{},out=[];for(const k of Object.keys(KIN_KEYS)){const v=r[k];if(typeof v!=='string'||!v)continue;const ids=k==='capability_providers'?[...v.matchAll(/E-[A-Fa-f0-9]+/g)].map(a=>a[0]):[v];for(const id of ids)out.push([KIN_KEYS[k],id])}
- const inc=edges.filter(e=>e.b===n&&e.a!==n).map(e=>[kinWord(e.k),e.a.id]);
- body.append(el('div','sec',`Kin relations · ${out.length+inc.length}`));if(!out.length&&!inc.length)body.append(el('div','note','No kin relations recorded.'));
- for(const [w,id] of out)body.append(kinBtn(w,byID.get(id),id,'→'));for(const [w,id] of inc.slice(0,40))body.append(kinBtn(w,byID.get(id),id,'←'));
- const other=Object.keys(r).filter(k=>!(k in KIN_KEYS)).sort();if(other.length){const d=el('details');d.append(el('summary',null,`Recorded REL fields · ${other.length}`));for(const k of other){const row=el('div','kv');row.append(el('small',null,k.replace(/_/g,' ')),el('div','mono',String(r[k])));d.append(row)}body.append(d)}
- body.append(el('div','note',n.kind==='accepted'?'Read-only view of a REG-accepted record. Decisions happen only through HUMAN_FINAL.':'AtGOV: awaiting HUMAN_FINAL. Not verified and not counted in verified references.'));want()}
-function kinBtn(w,target,id,dir){const b=document.createElement('button');b.className='kin'+(target&&target.kind==='pending'?' gov':'')+(target?'':' out');const ws=document.createElement('span');ws.className='w';ws.textContent=w;const ns=document.createElement('span');ns.className='n';ns.textContent=target?target.label:id;const ds=document.createElement('span');ds.className='d mono';ds.textContent=(dir?dir+' ':'')+(target?id.slice(0,12):'not in view');b.append(ws,ns,ds);if(target)b.onclick=()=>{inspect(target);center(target)};else b.disabled=true;return b}
+ const em=n.em||{},m=n.meta||{},src=em.m||{},val=em.v||{},rel=em.r&&typeof em.r==='object'?em.r:{};
+ if(n.kind==='pending'){const g=el('div','govnote');g.append(el('b',null,'AtGOV · not accepted'),el('span',null,' Awaiting HUMAN_FINAL. Not verified and not counted in verified references. REG has not accepted this record.'));body.append(g)}
+ sec('Identity');
+ row('IDN',el('div','mono',em.i||n.id),{copy:em.i||n.id});
+ row('STA',(em.s||'—')+(STA[em.s]?' · '+STA[em.s]:''),{mono:true});
+ row('Topology',m.y,{mono:true});
+ if(m.t){const d=new Date(m.t);row('Captured at',isNaN(d)?String(m.t):d.toLocaleString())}
+ if(n.facets.length){const fc=el('div','fchips');for(const fi of n.facets){const f=el('span','fchip',facetLabels[fi]);f.style.setProperty('--c',facetColors[fi]);fc.append(f)}row('Facets',fc)}
+ if(Array.isArray(em.c))row('Capabilities',em.c,{chips:true});
+ if(typeof m.a==='boolean')row('AI integrated',m.a?'yes':'no');row('Prompt schema',m.p,{mono:true});
+ sec('Evidence · source');
+ if(src.h)row('Source hash',el('div','mono',shortHash(src.h)),{copy:src.h});
+ row('Codec',src.z,{mono:true});
+ if(src.b!=null){const b=+src.b,q=+src.q;row('Size',fmt(b)+' bytes'+(q?` → ${fmt(q)} stored`+(b?` (${Math.round(q/b*100)}%)`:''):''))}
+ row('Summary',src.s);row('Provenance',src.p,{mono:true});
+ sec('Validation');
+ {const f=el('div','flags');const flag=(ok,t)=>f.append(el('span','flag '+(ok?'ok':'no'),(ok?'✓ ':'✗ ')+t));if('c' in val)flag(!!val.c,'Recoil');if('w' in val)flag(!!val.w,'WVC');if(val.r)f.append(el('span','flag info','Risk: '+val.r));if(val.a)f.append(el('span','flag info','proposer: '+String(val.a)));if(f.childNodes.length)row('Checks',f)}
+ if(val.v){const s=String(val.v);if(s.length>44){const dt=el('details','ver');dt.append(el('summary',null,s.slice(0,40)+'…'),el('div','mono',s));row('Proposer version',dt)}else row('Proposer version',s,{mono:true})}
+ if(Array.isArray(val.f))row('Facts',val.f,{chips:true});if(Array.isArray(val.x))row('Differences',val.x,{chips:true});if(Array.isArray(val.g))row('Gaps',val.g,{chips:true,cls:'warn'});
+ // kin relations: outgoing from REL, incoming from other records in view
+ const out=[];for(const k of Object.keys(KIN_KEYS)){const v=rel[k];if(typeof v!=='string'||!v)continue;
+  if(k==='capability_providers'){for(const part of v.split(',')){const mm=part.match(/^\s*([^:]*?)\s*:\s*(E-[A-Fa-f0-9]+)\s*$/);if(mm)out.push(['CAPABILITY_KIN',mm[2],mm[1]]);else for(const q of part.matchAll(IDN_RE))out.push(['CAPABILITY_KIN',q[0],''])}}
+  else for(const q of (v.match(IDN_RE)||[v]))out.push([KIN_KEYS[k],q,''])}
+ const inc=(n.adj||[]).filter(e=>e.b===n&&e.a!==n);
+ sec(`Kin relations · ${out.length+inc.length}`);
+ if(!out.length&&!inc.length)body.append(el('div','note','No kin relations recorded.'));
+ for(const [w,id,cap] of out){const r=el('div','kinrow');r.append(el('span','w',w),el('span','dir','→'));if(cap)r.append(el('span','tchip',cap));r.append(idChip(id));body.append(r)}
+ const INC=30;for(const e of inc.slice(0,INC)){const r=el('div','kinrow');r.append(el('span','w',kinWord(e.k)),el('span','dir','←'),idChip(e.a.id));body.append(r)}
+ if(inc.length>INC)body.append(el('div','note',`and ${fmt(inc.length-INC)} more incoming kin references`));
+ // proposed capability links "A->B,C->D": AtGOV proposals, never accepted links
+ const prop=rel.capability_provider_edge_proposal;
+ if(typeof prop==='string'&&prop.trim()){const pairs=prop.split(',').map(p=>p.split(/\s*->\s*/)).filter(p=>p.length===2);sec(`Proposed CAPABILITY_KIN · ${pairs.length}`);
+  for(const [a,b] of pairs){const r=el('div','kinrow prop');const side=s=>{s=s.trim();return /^E-[A-Fa-f0-9]{6,}$/.test(s)?idChip(s):el('span','tchip',s)};r.append(side(a),el('span','dir','→'),side(b));body.append(r)}
+  body.append(el('div','note','Proposal only. A proposed link becomes kin only after HUMAN_FINAL and REG acceptance.'))}
+ const other=Object.keys(rel).filter(k=>!(k in KIN_KEYS)&&k!=='capability_provider_edge_proposal').sort();
+ if(other.length){sec('Relationships');for(const k of other)row(REL_LABELS[k]||human(k),richValue(rel[k]))}
+ if(Array.isArray(m.b)&&m.b.length){sec('Field observations');const w=el('div','fchips');for(const o of m.b)w.append(el('span','tchip obs',String(o)));body.append(w)}
+ if(Array.isArray(m.n)&&m.n.length||Array.isArray(m.e)&&m.e.length){sec('Build graph');row('Build nodes',fmt((m.n||[]).length));row('Build edges',fmt((m.e||[]).length))}
+ if(m.o&&typeof m.o==='object'){sec('Monetization');row('Model',m.o.m);row('Customer',m.o.c);row('Value',m.o.v);row('Revenue path',m.o.r)}
+ body.append(el('div','note',n.kind==='accepted'?'Read-only view of a REG-accepted record. Decisions happen only through HUMAN_FINAL.':'Read-only. AtGOV records are awaiting HUMAN_FINAL; this view cannot decide or accept them.'));
+ body.scrollTop=0;want()}
 
 /* ---------- controls & input ---------- */
 $('more').onclick=()=>{const ex=$('extra'),o=ex.hidden;ex.hidden=!o;$('more').setAttribute('aria-expanded',o);$('more').textContent=o?'Less ▴':'Details ▾';if(!userMoved)fit()};
@@ -296,11 +381,11 @@ $('sClose').onclick=closeSheet;
 addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet();else if((e.key==='f'||e.key==='F')&&!e.metaKey&&!e.ctrlKey)fit()});
 function nearest(px,py){let best=null,d=W<600?24:18;for(const n of nodes){if(n.kind==='pending'&&!showGov)continue;const p=S(n),dd=Math.hypot(p.x-px,p.y-py)-(n.kind==='facet'?8:0);if(dd<d){d=dd;best=n}}return best}
 const ptr=new Map();let drag=null,pinch=0;
-c.addEventListener('pointerdown',e=>{c.setPointerCapture(e.pointerId);ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});lastInput=performance.now();tween=null;if(ptr.size===1)drag={sx:e.clientX,sy:e.clientY,moved:false};else if(ptr.size===2){const a=[...ptr.values()];pinch=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);if(drag)drag.moved=true}c.classList.add('grabbing')});
+c.addEventListener('pointerdown',e=>{c.setPointerCapture(e.pointerId);ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});lastInput=performance.now();tween=null;want();if(ptr.size===1)drag={sx:e.clientX,sy:e.clientY,moved:false};else if(ptr.size===2){const a=[...ptr.values()];pinch=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);if(drag)drag.moved=true}c.classList.add('grabbing')});
 c.addEventListener('pointermove',e=>{if(!ptr.has(e.pointerId))return;const o=ptr.get(e.pointerId);ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});lastInput=performance.now();
  if(ptr.size===2){const a=[...ptr.values()],d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);if(pinch)zoomAt((a[0].x+a[1].x)/2,(a[0].y+a[1].y)/2,d/pinch);pinch=d}
  else if(drag){view.ox+=e.clientX-o.x;view.oy+=e.clientY-o.y;if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>6){drag.moved=true;userMoved=true}want()}});
-function up(e){if(drag&&!drag.moved&&ptr.size===1&&e.type==='pointerup'){const n=nearest(e.clientX,e.clientY);if(n){inspect(n);if(W<900?e.clientY>$('sheet').getBoundingClientRect().top-20:e.clientX>W-420)center(n,false)}else if(selected)closeSheet()}ptr.delete(e.pointerId);if(!ptr.size){drag=null;pinch=0;c.classList.remove('grabbing')}}
+function up(e){if(drag&&!drag.moved&&ptr.size===1&&e.type==='pointerup'){const n=nearest(e.clientX,e.clientY);if(n){inspect(n);const p=S(n),r=freeRect();if(p.y<r.top+10||p.y>r.bot-10||p.x<r.left+10||p.x>r.right-10)center(n,false)}else if(selected)closeSheet()}ptr.delete(e.pointerId);if(!ptr.size){drag=null;pinch=0;c.classList.remove('grabbing');want()}}
 c.addEventListener('pointerup',up);c.addEventListener('pointercancel',up);
 c.addEventListener('wheel',e=>{e.preventDefault();lastInput=performance.now();zoomAt(e.clientX,e.clientY,Math.exp(-e.deltaY*.0015))},{passive:false});
 c.addEventListener('dblclick',e=>zoomAt(e.clientX,e.clientY,1.8));
