@@ -781,7 +781,11 @@ Environment:
   GEMMA_BIN, GEMMA_MODEL, GEMMA_THREADS, GEMMA_CONTEXT,
   GEMMA_MAX_TOKENS, GEMMA_TIMEOUT_SECONDS, GEMMA_EXTRA_ARGS,
   FIELD_HOME, FIELD_DROPZONE, FIELD_OUTPUT, FIELD_REASONER,
-  FIELD_PROBE_WORKTREE (or -probe-worktree; -max-rounds, default 3)
+  FIELD_PROBE_WORKTREE (or -probe-worktree; -max-rounds, default 3),
+  FIELD_HTTP (default 127.0.0.1:8899; empty disables HTTP),
+  FIELD_SOCKET, FIELD_PID, FIELDD_BIN,
+  FIELDD_TOKEN (bearer token for fieldd mutating routes; otherwise
+  $FIELD_HOME/fieldd.token, mode 0600, created on first loopback start)
 
 Fracture probes run only in a dedicated clean worktree. One-time setup,
 from the repository:

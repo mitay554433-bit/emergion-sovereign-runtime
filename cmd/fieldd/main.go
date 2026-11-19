@@ -20,8 +20,10 @@ import (
 )
 
 type Request struct {
-	Method string          `json:"method"`
-	Params json.RawMessage `json:"params,omitempty"`
+	Method        string          `json:"method"`
+	Params        json.RawMessage `json:"params,omitempty"`
+	Token         string          `json:"token,omitempty"`
+	Authorization string          `json:"authorization,omitempty"`
 }
 
 type Response struct {
@@ -47,7 +49,7 @@ func main() {
 	stateDir := flag.String("state", ".field", "Path to sovereign state directory")
 	socketPath := flag.String("socket", filepath.Join(os.TempDir(), "fieldd.sock"), "Path to Unix domain socket")
 	pidPath := flag.String("pid", filepath.Join(os.TempDir(), "fieldd.pid"), "Path to PID file")
-	httpAddr := flag.String("http", "", "Optional loopback-only HTTP status listener")
+	httpAddr := flag.String("http", "", "HTTP listen address. Empty disables HTTP. Default operator bind is 127.0.0.1:8899 via field daemon start. Non-loopback requires FIELDD_TOKEN or a 0600 fieldd.token in the state directory.")
 	flag.Parse()
 
 	if err := writePIDFile(*pidPath); err != nil {
@@ -58,6 +60,11 @@ func main() {
 	rt, err := fieldapi.Open(*stateDir, reason.GemmaFromEnv())
 	if err != nil {
 		log.Fatalf("Failed to open field runtime state: %v", err)
+	}
+
+	token, loopback, err := resolveListenToken(*stateDir, *httpAddr)
+	if err != nil {
+		log.Fatalf("%v", err)
 	}
 
 	if err := os.RemoveAll(*socketPath); err != nil {
@@ -72,6 +79,7 @@ func main() {
 	defer listener.Close()
 
 	log.Printf("Field Sovereign Daemon listening on %s (PID %d)", *socketPath, os.Getpid())
+	log.Printf("Mutating routes require a bearer token from %s or %s", tokenEnvVar, tokenFilePath(*stateDir))
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -88,142 +96,13 @@ func main() {
 					continue
 				}
 			}
-			go handleConn(rt, conn)
+			go handleConn(rt, conn, token)
 		}
 	}()
 
 	if *httpAddr != "" {
-		host, _, err := net.SplitHostPort(*httpAddr)
-		if err != nil {
-			log.Fatalf("Invalid HTTP listener address %q: %v", *httpAddr, err)
-		}
-		if host != "127.0.0.1" && host != "localhost" {
-			log.Fatalf("HTTP listener must be loopback-only, got %q", host)
-		}
-		mux := http.NewServeMux()
-		mux.HandleFunc("/status", func(w http.ResponseWriter, req *http.Request) {
-			if req.Method != http.MethodGet {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(dispatch(rt, Request{Method: "status"}))
-		})
-
-		mux.HandleFunc("/actions", func(w http.ResponseWriter, req *http.Request) {
-			if req.Method != http.MethodGet {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-
-			emergionID := req.URL.Query().Get("emergion_id")
-			if emergionID == "" {
-				http.Error(w, "missing emergion_id", http.StatusBadRequest)
-				return
-			}
-
-			actionsJSON, err := rt.ActionsJSON(emergionID, true)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(actionsJSON))
-		})
-
-		mux.HandleFunc("/authorize", func(w http.ResponseWriter, req *http.Request) {
-			if req.Method != http.MethodPost {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-
-			var p AuthorizeParams
-			if err := json.NewDecoder(req.Body).Decode(&p); err != nil {
-				http.Error(w, "invalid authorize params", http.StatusBadRequest)
-				return
-			}
-
-			params, err := json.Marshal(p)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-
-			resp := dispatch(rt, Request{Method: "authorize", Params: params})
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(resp)
-		})
-
-		mux.HandleFunc("/decide", func(w http.ResponseWriter, req *http.Request) {
-			if req.Method != http.MethodPost {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			var p DecideParams
-			if err := json.NewDecoder(req.Body).Decode(&p); err != nil {
-				http.Error(w, "invalid decide params", http.StatusBadRequest)
-				return
-			}
-			params, err := json.Marshal(p)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			resp := dispatch(rt, Request{Method: "decide", Params: params})
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(resp)
-		})
-
-		mux.HandleFunc("/field.json", func(w http.ResponseWriter, req *http.Request) {
-			if req.Method != http.MethodGet {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			receipt, err := rt.RenderCurrent("outputs")
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			w.Header().Set("X-Field-Tip", receipt.TipHash)
-			w.Header().Set("Content-Type", "application/json")
-			http.ServeFile(w, req, filepath.Join("outputs", "field.json"))
-		})
-
-		mux.HandleFunc("/real_temporal_wave.json", func(w http.ResponseWriter, req *http.Request) {
-			if req.Method != http.MethodGet {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			http.ServeFile(w, req, filepath.Join("outputs", "real_temporal_wave.json"))
-		})
-
-		mux.HandleFunc("/living-universe", func(w http.ResponseWriter, req *http.Request) {
-			if req.Method != http.MethodGet {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			http.ServeFile(w, req, filepath.Join("cmd", "fieldd", "living-universe.html"))
-		})
-
-		mux.HandleFunc("/field.html", func(w http.ResponseWriter, req *http.Request) {
-			if req.Method != http.MethodGet {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			receipt, err := rt.RenderCurrent("outputs")
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			w.Header().Set("X-Field-Tip", receipt.TipHash)
-			http.ServeFile(w, req, filepath.Join("outputs", "field.html"))
-		})
-
+		mux := newHTTPMux(rt, token, loopback)
 		go func() {
-			mux.Handle("/deliverables/", http.StripPrefix("/deliverables/", http.FileServer(http.Dir(filepath.Join("outputs", "deliverables")))))
 			log.Printf("Field Sovereign HTTP status listening on %s", *httpAddr)
 			if err := http.ListenAndServe(*httpAddr, mux); err != nil {
 				log.Printf("HTTP status listener stopped: %v", err)
@@ -243,7 +122,7 @@ func writePIDFile(path string) error {
 	return os.WriteFile(path, []byte(fmt.Sprintf("%d\n", os.Getpid())), 0644)
 }
 
-func handleConn(rt *fieldapi.Runtime, conn net.Conn) {
+func handleConn(rt *fieldapi.Runtime, conn net.Conn, token string) {
 	defer conn.Close()
 	decoder := json.NewDecoder(conn)
 	encoder := json.NewEncoder(conn)
@@ -256,6 +135,14 @@ func handleConn(rt *fieldapi.Runtime, conn net.Conn) {
 			}
 			encoder.Encode(Response{Error: fmt.Sprintf("invalid request payload: %v", err)})
 			return
+		}
+
+		if isMutatingIPCMethod(req.Method) && !tokenEqual(requestToken(req), token) {
+			if err := encoder.Encode(Response{Error: "unauthorized"}); err != nil {
+				log.Printf("Failed to encode response: %v", err)
+				return
+			}
+			continue
 		}
 
 		resp := dispatch(rt, req)
