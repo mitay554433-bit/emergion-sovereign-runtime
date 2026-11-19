@@ -919,7 +919,6 @@ func TestAcceptedContradictionGoesUndetected(t *testing.T) {
 }
 
 func TestAcceptedContradictionListingFinding(t *testing.T) {
-	skipUnlessEnv(t, stressFindingsEnv)
 	root := t.TempDir()
 	s, err := store.Open(filepath.Join(root, "state"))
 	if err != nil {
@@ -941,26 +940,58 @@ func TestAcceptedContradictionListingFinding(t *testing.T) {
 			}, nil
 		}},
 	}
+
+	var accepted []core.EmergION
 	for _, name := range []string{"door-open.txt", "door-closed.txt"} {
 		em, _, err := r.CaptureBytes(context.Background(), name, []byte("source for "+name+"\n"), "stress_contradiction")
 		if err != nil {
 			t.Fatal(err)
 		}
 		acceptAtGOV(t, s, em, "accept possibly conflicting observation")
+		accepted = append(accepted, em)
 	}
-	st := rebuildState(t, s)
-	pairs := listConflictingAcceptedFacts(st)
-	if len(pairs) == 0 {
-		t.Fatal("no read-only listing of conflicting accepted fact pairs exists, and two accepted records about chamber-door hold opposite facts")
+	if len(accepted) != 2 {
+		t.Fatalf("accepted fixtures = %d want 2", len(accepted))
 	}
-}
 
-// listConflictingAcceptedFacts is a placeholder so the finding test
-// compiles. It does not invent a conflict rule: without a canon decision
-// on what makes two accepted facts contradict, it returns nothing.
-func listConflictingAcceptedFacts(st core.State) []string {
-	_ = st
-	return nil
+	st := rebuildState(t, s)
+	if len(ListAcceptedContradictionMarks(st)) != 0 {
+		t.Fatalf("two accepted opposite records were auto-flagged without a human mark: %#v", ListAcceptedContradictionMarks(st))
+	}
+
+	mark, _, err := r.CaptureContradictionMark(context.Background(), accepted[0].IDN, accepted[1].IDN)
+	if err != nil {
+		t.Fatalf("CaptureContradictionMark: %v", err)
+	}
+	if mark.STA != core.StateAtGOV {
+		t.Fatalf("unapproved mark is not at GOV: %s", mark.STA)
+	}
+	if mark.REL["contradicts"] == "" {
+		t.Fatalf("mark is missing the contradicts REL: %#v", mark.REL)
+	}
+
+	st = rebuildState(t, s)
+	if _, ok := st.AtGOV[mark.IDN]; !ok {
+		t.Fatalf("unapproved mark %s is not waiting at GOV", mark.IDN)
+	}
+	if len(ListAcceptedContradictionMarks(st)) != 0 {
+		t.Fatalf("unapproved mark was listed: %#v", ListAcceptedContradictionMarks(st))
+	}
+
+	acceptAtGOV(t, s, mark, "HUMAN_FINAL accepts the contradiction mark")
+	st = rebuildState(t, s)
+	pairs := ListAcceptedContradictionMarks(st)
+	if len(pairs) != 1 {
+		t.Fatalf("accepted marks = %d want 1: %#v", len(pairs), pairs)
+	}
+	got := map[string]bool{pairs[0].Left: true, pairs[0].Right: true}
+	if !got[accepted[0].IDN] || !got[accepted[1].IDN] {
+		t.Fatalf("listed pair %#v does not name the two accepted records %s and %s", pairs[0], accepted[0].IDN, accepted[1].IDN)
+	}
+	if pairs[0].MarkIDN != mark.IDN {
+		t.Fatalf("listed mark %s want %s", pairs[0].MarkIDN, mark.IDN)
+	}
+	t.Logf("accepted contradiction mark %s records=%s,%s", pairs[0].MarkIDN, pairs[0].Left, pairs[0].Right)
 }
 
 func TestFieldVerifyRejectsNothingWhenUntampered(t *testing.T) {

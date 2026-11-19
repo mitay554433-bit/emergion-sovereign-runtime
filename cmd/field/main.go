@@ -699,6 +699,36 @@ func main() {
 		printJSON(adapters.Catalog(gemma.Validate() == nil))
 	case "daemon":
 		handleDaemonCommand(args, *state)
+	case "contradict":
+		if len(args) != 3 {
+			fail(fmt.Errorf("contradict <accepted-id> <accepted-id>"))
+		}
+		rt := fieldruntime.Runtime{Store: s}
+		em, duplicate, err := rt.CaptureContradictionMark(
+			context.Background(),
+			args[1],
+			args[2],
+		)
+		if err != nil {
+			fail(err)
+		}
+		receipt := renderField(s, *output)
+		if duplicate {
+			fmt.Println(em.IDN, em.STA, "DUPLICATE_SOURCE", "PROJECTION_TIP", receipt.TipHash)
+		} else {
+			fmt.Println(em.IDN, "AT_GOV", "CONTRADICTION_MARK", "PROJECTION_TIP", receipt.TipHash)
+		}
+	case "contradictions":
+		st := loadState(s)
+		marks := fieldruntime.ListAcceptedContradictionMarks(st)
+		items := make([]map[string]any, 0, len(marks))
+		for _, mark := range marks {
+			items = append(items, map[string]any{
+				"mark":    mark.MarkIDN,
+				"records": []string{mark.Left, mark.Right},
+			})
+		}
+		printJSON(map[string]any{"contradictions": items})
 	case "axioms":
 		printJSON(axiom.Dictionary)
 	default:
@@ -742,6 +772,9 @@ Commands:
   export-lineage [directory]   create and verify a complete named Git bundle for transfer
   adapters                     show bounded capability adapters
   axioms                       show immutable semantic axioms
+  contradict <accepted-id> <accepted-id>
+                               propose a contradiction mark between two REG-accepted records; stops at GOV
+  contradictions               list REG-accepted contradiction marks only
   daemon <start|status|stop>   manage background runtime daemon via IPC
 
 Environment:
