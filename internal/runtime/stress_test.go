@@ -619,9 +619,7 @@ func TestMalformedBatchCoverageStopsOnlyBadCandidates(t *testing.T) {
 }
 
 func TestMalformedBatchIsolationFindings(t *testing.T) {
-	skipUnlessEnv(t, stressFindingsEnv)
-
-	runBatch := func(t *testing.T, files map[string]string, analyze func(string) (reason.Result, error)) ([]string, error) {
+	runBatch := func(t *testing.T, files map[string]string, analyze func(string) (reason.Result, error)) ([]string, string, error) {
 		t.Helper()
 		root := t.TempDir()
 		s, err := store.Open(filepath.Join(root, "state"))
@@ -643,11 +641,25 @@ func TestMalformedBatchIsolationFindings(t *testing.T) {
 				return analyze(name)
 			}},
 		}
-		return r.Once(context.Background(), dropzone)
+		ids, err := r.Once(context.Background(), dropzone)
+		return ids, dropzone, err
 	}
 
 	complete := func(name string) (reason.Result, error) {
 		return completeResult(name), nil
+	}
+
+	remaining := func(t *testing.T, dropzone string) []string {
+		t.Helper()
+		ents, err := os.ReadDir(dropzone)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var names []string
+		for _, ent := range ents {
+			names = append(names, ent.Name())
+		}
+		return names
 	}
 
 	t.Run("grammar-error-must-not-stop-the-rest", func(t *testing.T) {
@@ -658,7 +670,7 @@ func TestMalformedBatchIsolationFindings(t *testing.T) {
 			"04-ok.txt":          "ok 4\n",
 			"05-ok.txt":          "ok 5\n",
 		}
-		ids, err := runBatch(t, files, func(name string) (reason.Result, error) {
+		ids, dropzone, err := runBatch(t, files, func(name string) (reason.Result, error) {
 			if name == "02-bad-grammar.txt" {
 				return reason.Result{}, fmt.Errorf("MXPD grammar rejected")
 			}
@@ -670,6 +682,10 @@ func TestMalformedBatchIsolationFindings(t *testing.T) {
 		if len(ids) != 4 {
 			t.Fatalf("Once ids = %d want 4 remaining well-formed candidates plus no grammar candidate: %#v", len(ids), ids)
 		}
+		left := remaining(t, dropzone)
+		if len(left) != 1 || left[0] != "02-bad-grammar.txt" {
+			t.Fatalf("dropzone leftover = %#v, want only the grammar-error file", left)
+		}
 	})
 
 	t.Run("empty-source-must-not-stop-the-rest", func(t *testing.T) {
@@ -680,12 +696,16 @@ func TestMalformedBatchIsolationFindings(t *testing.T) {
 			"04-ok.txt":             "ok 4\n",
 			"05-ok.txt":             "ok 5\n",
 		}
-		ids, err := runBatch(t, files, complete)
+		ids, dropzone, err := runBatch(t, files, complete)
 		if err != nil {
 			t.Fatalf("Once aborted the batch on an empty source instead of stopping only that candidate: %v (processed %d)", err, len(ids))
 		}
 		if len(ids) != 4 {
 			t.Fatalf("Once ids = %d want 4 well-formed candidates: %#v", len(ids), ids)
+		}
+		left := remaining(t, dropzone)
+		if len(left) != 1 || left[0] != "02-missing-source.txt" {
+			t.Fatalf("dropzone leftover = %#v, want only the empty source file", left)
 		}
 	})
 }
