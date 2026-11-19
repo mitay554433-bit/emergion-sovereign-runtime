@@ -115,8 +115,57 @@ Stop the same governed daemon with:
 ./dist/field daemon stop
 ```
 
-The listener remains loopback-only. Set `FIELD_HTTP` to another loopback
-address when required, or set it to the empty string to disable HTTP.
+The operator HTTP listener binds to `127.0.0.1:8899` by default. Set
+`FIELD_HTTP` to another loopback address when required, or set it to the
+empty string to disable HTTP. Non-loopback binds are refused unless a
+bearer token is already available.
+
+Mutating HTTP routes (`POST /decide`, `POST /authorize`, and any other
+non-GET route) require `Authorization: Bearer <token>`. The token is read
+from `FIELDD_TOKEN`, or from a `0600` `fieldd.token` file in the state
+directory (default `.field/fieldd.token`, created on first loopback
+start). Read-only projection routes may be called without a token on
+loopback. `field decide` and `field authorize` talk to the local store
+directly and do not use these HTTP routes. `cmd/fieldandroid` also
+embeds `pkg/fieldapi` in-process and does not call fieldd HTTP.
+
+Phone / Termux setup (from the repository root):
+
+```sh
+mkdir -p dist
+go build -o dist/field ./cmd/field
+go build -o dist/fieldd ./cmd/fieldd
+./dist/field init
+./dist/field daemon start
+ls -l .field/fieldd.token
+# -rw-------  fieldd.token
+
+# read-only (no token needed on loopback)
+curl -sS http://127.0.0.1:8899/status
+
+# mutating routes
+TOKEN=$(cat .field/fieldd.token)
+curl -sS -X POST http://127.0.0.1:8899/decide \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"emergion_id":"E-...","decision":"APPROVE","reason":"reason"}'
+curl -sS -X POST http://127.0.0.1:8899/authorize \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"emergion_id":"E-...","adapter":"ADAPTER","action":"ACTION","reason":"reason"}'
+```
+
+To set the token yourself instead of using the generated file:
+
+```sh
+umask 077
+openssl rand -hex 32 > .field/fieldd.token
+export FIELDD_TOKEN=$(cat .field/fieldd.token)
+./dist/field daemon start
+```
+
+A non-loopback bind (for example `FIELD_HTTP=0.0.0.0:8899`) will not
+start unless `FIELDD_TOKEN` or `.field/fieldd.token` already exists.
 `FIELD_SOCKET`, `FIELD_PID`, and `FIELDD_BIN` remain explicit overrides.
 
 For a foreground living FIELD loop rather than the daemon/operator surface:
