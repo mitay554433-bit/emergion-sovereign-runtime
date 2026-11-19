@@ -691,6 +691,7 @@ func TestExecutionCoverageFailureResolvesThroughAcceptedCapabilityProviders(t *t
 			t.Fatal(err)
 		}
 
+		attachPreservedSource(t, s, &provider)
 		if _, err := s.SaveCandidate(provider); err != nil {
 			t.Fatal(err)
 		}
@@ -837,6 +838,7 @@ func TestExecutionCoverageFailureProducesCapabilityProviderEdgeProposal(t *testi
 		if _, err := s.Preserve([]byte(provider.IDN)); err != nil {
 			t.Fatal(err)
 		}
+		attachPreservedSource(t, s, &provider)
 		if _, err := s.SaveCandidate(provider); err != nil {
 			t.Fatal(err)
 		}
@@ -939,6 +941,7 @@ func TestGovernedRecursiveEmergenceTinyLoop(t *testing.T) {
 		},
 	}
 
+	attachPreservedSource(t, s, &target)
 	if _, err := s.SaveCandidate(target); err != nil {
 		t.Fatal(err)
 	}
@@ -1004,6 +1007,7 @@ func TestGovernedRecursiveEmergenceTinyLoop(t *testing.T) {
 		if _, err := s.Preserve([]byte(provider.IDN)); err != nil {
 			t.Fatal(err)
 		}
+		attachPreservedSource(t, s, &provider)
 		if _, err := s.SaveCandidate(provider); err != nil {
 			t.Fatal(err)
 		}

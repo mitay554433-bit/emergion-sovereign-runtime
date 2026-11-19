@@ -111,6 +111,7 @@ func TestCirculateSAWsUsesGovernedCaptureWithoutSelfAcceptance(t *testing.T) {
 	}
 
 	accept := func(em core.EmergION) {
+		attachPreservedSource(t, rt.store, &em)
 		if _, err := rt.store.SaveCandidate(em); err != nil {
 			t.Fatal(err)
 		}
@@ -447,6 +448,7 @@ func TestGovernedCycleCirculatesAndExecutesExistingSafeWork(t *testing.T) {
 	}
 
 	accept := func(em core.EmergION, reasonText string) {
+		attachPreservedSource(t, rt.store, &em)
 		if _, err := rt.store.SaveCandidate(em); err != nil {
 			t.Fatal(err)
 		}
@@ -780,6 +782,7 @@ func TestRunDrivesSuccessiveGovernedCyclesWithoutManualInvocation(t *testing.T) 
 		em.MEM.Bytes = preserved.Bytes
 		em.MEM.Stored = preserved.Stored
 
+		attachPreservedSource(t, s, &em)
 		if _, err := s.SaveCandidate(em); err != nil {
 			t.Fatal(err)
 		}
@@ -1004,6 +1007,7 @@ func TestRunContinuesHumanFinalReturnedBeforeIdleProjection(t *testing.T) {
 		EVO: core.Evolution{Version: 1},
 	}
 
+	attachPreservedSource(t, rt.store, &returned)
 	if _, err := rt.store.SaveCandidate(returned); err != nil {
 		t.Fatal(err)
 	}
@@ -1181,6 +1185,7 @@ func TestGovernedCycleCirculatesSAWBeforeProgramProposalFailure(t *testing.T) {
 	}
 
 	accept := func(em core.EmergION) {
+		attachPreservedSource(t, rt.store, &em)
 		if _, err := rt.store.SaveCandidate(em); err != nil {
 			t.Fatal(err)
 		}
@@ -1299,6 +1304,7 @@ func TestRunRecomparesPersistentTargetWhenAcceptedRealityChanges(t *testing.T) {
 		t.Fatalf("fake Gemma validation failed: %v", err)
 	}
 	accept := func(em core.EmergION) {
+		attachPreservedSource(t, rt.store, &em)
 		if _, err := rt.store.SaveCandidate(em); err != nil {
 			t.Fatal(err)
 		}
@@ -1660,6 +1666,7 @@ func TestGovernedCyclePendingReorderAllowsIndependentSafeWork(t *testing.T) {
 	}
 
 	accept := func(em core.EmergION, why string) {
+		attachPreservedSource(t, rt.store, &em)
 		if _, err := rt.store.SaveCandidate(em); err != nil {
 			t.Fatal(err)
 		}
@@ -1995,6 +2002,7 @@ func TestRunExecutesTwoDistinctSafeWorksAcrossProductiveGovernedCycles(t *testin
 		em.MEM.Bytes = preserved.Bytes
 		em.MEM.Stored = preserved.Stored
 
+		attachPreservedSource(t, s, &em)
 		if _, err := s.SaveCandidate(em); err != nil {
 			t.Fatal(err)
 		}
