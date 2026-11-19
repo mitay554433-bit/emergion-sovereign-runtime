@@ -1380,12 +1380,18 @@ func (t targetComparisonReasoner) Analyze(ctx context.Context, in reason.Input) 
 		"comparison_state": "UNRESOLVED",
 	}
 	// Section 8: the requirement is decided deterministically from the target
-	// and accepted reality; the model's R| line is only a vote. No BRIDGEGAP
-	// is written and comparison_state stays UNRESOLVED.
+	// and accepted reality; the model's R| line is only a vote.
+	// comparison_state stays UNRESOLVED.
 	required, basis := deriveDifferenceRequirement(t.target, t.reality, observed)
 	relationships["requirement_basis"] = basis
 	if required != "" {
 		relationships["required_capability"] = required
+	}
+	// Section 11: only a genuinely unmet requirement is recorded as a
+	// BRIDGEGAP. The model's own G| lines are never forwarded here.
+	var gaps []string
+	if gap := genuineRemainderBridgeGap(required, basis); gap != "" {
+		gaps = []string{gap}
 	}
 
 	return reason.Result{
@@ -1394,6 +1400,7 @@ func (t targetComparisonReasoner) Analyze(ctx context.Context, in reason.Input) 
 		Capabilities:  []string{"CMP", "DIF", "PRJ"},
 		Facts:         facts,
 		Differences:   differences,
+		Gaps:          gaps,
 		Risk:          observed.Risk,
 	}, nil
 }

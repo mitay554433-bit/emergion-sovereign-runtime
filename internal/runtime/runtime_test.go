@@ -5376,7 +5376,10 @@ func TestTargetComparisonReasonerPreservesTypedDifference(t *testing.T) {
 		t.Fatalf("requirement_basis = %q", got.Relationships["requirement_basis"])
 	}
 
-	if len(got.Gaps) != 0 {
+	// Section 11: the genuinely unmet FACT requirement is recorded as the
+	// existing BRIDGEGAP:facts token; the Difference text itself never
+	// enters the BRIDGEGAP carrier.
+	if len(got.Gaps) != 1 || got.Gaps[0] != "BRIDGEGAP:facts" {
 		t.Fatalf(
 			"typed Difference leaked into BRIDGEGAP carrier: %#v",
 			got.Gaps,
@@ -5457,7 +5460,11 @@ func TestCaptureTargetComparison(t *testing.T) {
 		comparison.VAL.Differences[0] != "TARGET_STATE!=ACCEPTED_REALITY" {
 		t.Fatalf("typed Difference missing from captured EmergION: %#v", comparison.VAL.Differences)
 	}
-	if len(comparison.VAL.Gaps) != 0 {
+	// Section 11: the genuinely unmet FACT requirement records exactly the
+	// existing BRIDGEGAP:facts token, even though the estate cannot compose
+	// it (capability_resolution stays UNRESOLVED). The Difference text never
+	// enters Gaps.
+	if len(comparison.VAL.Gaps) != 1 || comparison.VAL.Gaps[0] != "BRIDGEGAP:facts" {
 		t.Fatalf("Difference leaked into Gaps: %#v", comparison.VAL.Gaps)
 	}
 	if len(comparison.EVO.Delta) != 0 {
@@ -5556,7 +5563,7 @@ func TestCaptureTargetComparison(t *testing.T) {
 		active.VAL.Differences[0] != "TARGET_STATE!=ACCEPTED_REALITY" {
 		t.Fatalf("FIELD replay lost typed Difference: %#v", active.VAL.Differences)
 	}
-	if len(active.VAL.Gaps) != 0 {
+	if len(active.VAL.Gaps) != 1 || active.VAL.Gaps[0] != "BRIDGEGAP:facts" {
 		t.Fatalf("FIELD replay moved Difference into Gaps: %#v", active.VAL.Gaps)
 	}
 	if len(active.EVO.Delta) != 0 {
@@ -5599,7 +5606,7 @@ func TestCaptureTargetComparison(t *testing.T) {
 		recoveredComparison.VAL.Differences[0] != "TARGET_STATE!=ACCEPTED_REALITY" {
 		t.Fatalf("disk reopen lost typed Difference: %#v", recoveredComparison.VAL.Differences)
 	}
-	if len(recoveredComparison.VAL.Gaps) != 0 {
+	if len(recoveredComparison.VAL.Gaps) != 1 || recoveredComparison.VAL.Gaps[0] != "BRIDGEGAP:facts" {
 		t.Fatalf("disk reopen moved Difference into Gaps: %#v", recoveredComparison.VAL.Gaps)
 	}
 	if len(recoveredComparison.EVO.Delta) != 0 {
