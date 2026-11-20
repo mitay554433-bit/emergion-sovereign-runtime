@@ -117,6 +117,14 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .pb{min-width:0}.ps,.pt{overflow-wrap:anywhere}
 .qrow{display:flex;gap:8px;align-items:center;min-width:0;border-top:1px solid var(--line2)}.qrow .row{border-top:0;flex:1}
 .acc{font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:7px 10px;border-radius:8px;border:1px solid rgba(59,130,246,.75);background:rgba(29,78,216,.22);color:#fff;min-height:32px;white-space:nowrap}.acc:disabled{opacity:.5}
+.bottom .wide{grid-column:1/-1}
+.bsel{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:6px;min-width:0}
+.bsel select,.bin input{font:inherit;font-size:11px;padding:6px 8px;border-radius:8px;border:1px solid var(--line2);background:#05070d;color:var(--ink);min-width:0;width:100%}
+.bin{display:grid;grid-template-columns:minmax(0,1fr) 92px auto;gap:6px;margin-top:8px;min-width:0}
+@media(max-width:440px){.bin{grid-template-columns:minmax(0,1fr) auto}.bin input:first-child{grid-column:1/-1}}
+.bsum{margin:8px 0 2px;font-size:12px;color:var(--ink)}.bsum b{font-family:var(--mono)}
+.bsam{list-style:none;margin:0;padding:0;font-size:11px}.bsam li{display:flex;gap:8px;padding:3px 0;border-top:1px solid var(--line2);min-width:0}.bsam li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}.bsam code{font-family:var(--mono);color:var(--ink2);flex:0 0 auto}
+.bres{margin-top:8px;font-size:12px;overflow-wrap:anywhere}
 .tok{display:flex;gap:6px;min-width:0}.tok input{flex:1;min-width:0;font:inherit;font-size:11px;padding:6px 8px;border-radius:8px;border:1px solid var(--line2);background:#05070d;color:var(--ink)}
 .row{min-width:0;display:flex;justify-content:space-between;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--line2);font-size:12px;text-align:left;width:100%}
 .row:first-child{border-top:0}
@@ -233,6 +241,7 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
    <section class="panel"><div class="ph"><span class="pt">Live Projection</span><span class="ps">REG state counts</span></div><div class="pb bars" id="bars"></div></section>
    <section class="panel"><div class="ph"><span class="pt">Latest REG Difference</span><span class="pillst" id="ldPill">REG ACCEPTED</span></div><div class="pb" id="latest"><span class="nf">NOT_FOUND_YET</span></div></section>
    <section class="panel"><div class="ph"><span class="pt">Next Governed Step</span><span class="pillst g" id="hfPill">HUMAN_FINAL</span></div><div class="pb" id="hf"><span class="nf">NOT_FOUND_YET</span></div></section>
+   <section class="panel wide" id="hfbP" hidden><div class="ph"><span class="pt">Batch accept <i>• HUMAN_FINAL</i></span><span class="pillst g" id="hfbPill">REVIEW</span></div><div class="pb" id="hfb"></div></section>
   </div>
  </main>
 
@@ -413,13 +422,13 @@ function renderPanels(){
  // wave
  if(wave){const cw=Array.isArray(wave.compressed_wave)?wave.compressed_wave.length:0;setText('sWave',fmt(cw));setText('mWave',fmt(cw));setText('mWaveS',wave.locked?'locked':'recorded');setText('mWaveT',(wave.state||'RECORDED')+(wave.compression_ratio!=null?' · ratio '+wave.compression_ratio:''))}
  else{setText('sWave','NOT_FOUND_YET');setText('mWave','NOT_FOUND_YET');setText('mWaveT','temporal wave unavailable')}
- renderNav();renderCode();renderSaabs();renderReal();renderTimeline();
+ renderNav();renderCode();renderSaabs();renderReal();renderTimeline();renderBatch();
 }
 let hfQ=[],hfPage=0;const HF_PAGE=5;
 function renderQueue(){const L=$('hfList');if(!L)return;const pages=Math.max(1,Math.ceil(hfQ.length/HF_PAGE));hfPage=Math.max(0,Math.min(pages-1,hfPage));L.replaceChildren();
  for(const it of hfQ.slice(hfPage*HF_PAGE,hfPage*HF_PAGE+HF_PAGE)){const n=byID.get(it.id),b=el('button','row'),l=el('span','l'),nm=n?nameOf(n):(it.summary&&it.summary!==it.id?it.summary:'AtGOV record');l.append(el('div',null,nm),el('small',null,it.id));b.title=nm;b.append(l,el('span','r','AtGOV'));if(n)b.onclick=()=>select(n,true);const q=el('div','qrow');q.append(b,acceptButton(it.id));L.append(q)}
  const a=hfPage*HF_PAGE+1,z=Math.min(hfQ.length,a+HF_PAGE-1);setText('hfPage',`${fmt(a)}–${fmt(z)} of ${fmt(hfQ.length)}`);$('hfPrev').disabled=hfPage===0;$('hfNext').disabled=hfPage>=pages-1}
-function renderNav(){const nav=$('nav');nav.replaceChildren();
+function renderNav(){if($('bKind'))renderBatch();const nav=$('nav');nav.replaceChildren();
  const groups=proj&&Array.isArray(proj.facet_groups)?proj.facet_groups.map(g=>({key:g.facet,n:(g.members||[]).length})):facetOrder.map(f=>({key:f,n:nodes.filter(x=>x.kind==='accepted'&&x.facets.includes(f)).length}));
  const govN=f=>nodes.filter(x=>x.kind==='pending'&&x.facets.includes(f)).length;
  const items=[{key:'ALL',title:'FIELD View',sub:fmt(nodes.filter(n=>n.kind==='accepted').length)+' accepted · all facets'}];
@@ -478,6 +487,58 @@ async function acceptAtGOV(id,btn){const tok=savedToken();if(!tok){alert('Paste 
 function acceptButton(id){const b=el('button','acc','Accept');b.title='Record HUMAN_FINAL APPROVE for '+id+' (reason required)';b.onclick=e=>{e.stopPropagation();acceptAtGOV(id,b)};return b}
 function acceptControls(id){const w=el('div');if(!savedToken()){const f=el('div','tok'),i=el('input');i.type='password';i.placeholder='paste fieldd token once';i.autocomplete='off';const s=el('button','acc','Save');s.onclick=()=>{const v=i.value.trim();if(v){storeToken(v);select(byID.get(id)||selected)}};f.append(i,s);w.append(f)}
  else{const f=el('div','tok');const a=acceptButton(id),fg=el('button','acc','Forget token');fg.style.background='none';fg.onclick=()=>{storeToken('');select(byID.get(id)||selected)};f.append(a,fg);w.append(f)}return w}
+// Batch accept: one human press over many AtGOV records. The human picks a filter, sees the exact
+// count and a sample, types a reason and then types the count. The batch is the first min(N,cap)
+// matching records by IDN; the page sends those exact IDs to POST /decide-batch-human, where each
+// record gets its own gov.Decide(HUMAN_FINAL) + reg.Accept receipts. Nothing is sent without both.
+let batchCap=500,batchCapRead=false,batchBusy=false;const BS={kind:'tap',value:''};
+function batchMatch(em,f){const r=(em&&em.r)||{},m=(em&&em.e&&em.e.m)||{};
+ if(f.kind==='all')return true;
+ if(!f.value)return false;
+ if(f.kind==='facet')return Array.isArray(m.f)&&m.f.includes(f.value);
+ if(f.kind==='class')return String(r.source_kind||'').trim()===f.value;
+ if(f.kind==='target')return String(r.target_emergion||'').trim()===f.value;
+ return false}
+function batchFilter(kind,value,tap){if(kind==='tap')return tap&&tap!=='ALL'?{kind:'facet',value:tap}:{kind:'all',value:''};return {kind,value}}
+function batchSelect(gov,f,cap){const ids=Object.keys(gov||{}).filter(id=>batchMatch(gov[id],f)).sort();return {total:ids.length,ids:ids.slice(0,Math.max(0,cap))}}
+function batchOptions(gov){const o={facet:{},class:{},target:{}},inc=(m,k)=>{if(k)m[k]=(m[k]||0)+1};
+ for(const em of Object.values(gov||{})){const r=(em&&em.r)||{},m=(em&&em.e&&em.e.m)||{};for(const f of (Array.isArray(m.f)?m.f:[]))inc(o.facet,f);inc(o.class,String(r.source_kind||'').trim());inc(o.target,String(r.target_emergion||'').trim())}
+ for(const k of Object.keys(o))o[k]=Object.entries(o[k]).sort((a,b)=>b[1]-a[1]||(a[0]<b[0]?-1:1));return o}
+function batchBody(ids,reason,confirm){return JSON.stringify({emergion_ids:ids,reason:reason,confirm_count:confirm})}
+function batchConfirmed(typed,n){return n>0&&String(typed==null?'':typed).trim()===String(n)}
+function batchTitle(em,id){const m=(em&&em.e&&em.e.m)||{};return m.h||(em&&em.m&&em.m.s)||id}
+async function readBatchCap(){if(batchCapRead)return;try{const r=await fetch('/decide-batch-human');const j=await r.json();if(Number.isFinite(j.cap)&&j.cap>0)batchCap=j.cap;batchCapRead=true}catch(e){}}
+async function batchAccept(ids,reason,typed,out){const tok=savedToken();
+ if(!tok){out.textContent='Paste the fieldd token first (Next Governed Step panel).';return}
+ if(!reason.trim()){out.textContent='A HUMAN_FINAL reason is required.';return}
+ if(!batchConfirmed(typed,ids.length)){out.textContent='Type the exact count ('+ids.length+') to confirm.';return}
+ batchBusy=true;out.textContent='Recording '+ids.length+' HUMAN_FINAL decisions…';
+ try{const r=await fetch('/decide-batch-human',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:batchBody(ids,reason.trim(),Number(String(typed).trim()))});
+  if(r.status===401){storeToken('');out.textContent='Token refused (401). Paste the current fieldd token and retry.';return}
+  const j=await r.json().catch(()=>({error:'HTTP '+r.status}));
+  const done=(j.accepted||0)+' accepted · '+(j.skipped||0)+' already accepted'+(j.batch_id?' · '+j.batch_id:'');
+  out.textContent=j.error?(j.stopped_at?'Stopped at '+j.stopped_at+' after '+done+': '+j.error:'Refused: '+j.error):'Done · '+done;
+  if(!j.error){$('bReason').value='';$('bCount').value=''}}
+ catch(e){out.textContent='Batch result could not be confirmed. Refresh before retrying.'}
+ finally{batchBusy=false;await refresh().catch(()=>{});renderBatch()}}
+function renderBatch(){const P=$('hfbP'),B=$('hfb');if(!P||!B)return;const gov=(field&&field.AtGOV)||{},n=Object.keys(gov).length;P.hidden=!n;if(!n)return;readBatchCap();
+ if(!$('bKind')){const sel=el('div','bsel'),k=el('select'),v=el('select');k.id='bKind';v.id='bVal';k.setAttribute('aria-label','Batch filter');v.setAttribute('aria-label','Batch filter value');
+  for(const [x,t] of [['tap','Current tap filter'],['all','All AtGOV'],['facet','Facet'],['class','Class (source_kind)'],['target','Target emergion']]){const o=el('option',null,t);o.value=x;k.append(o)}
+  k.onchange=()=>{BS.kind=k.value;BS.value='';renderBatch()};v.onchange=()=>{BS.value=v.value;renderBatch()};sel.append(k,v);
+  const sum=el('div','bsum');sum.id='bSum';const sam=el('ul','bsam');sam.id='bSam';
+  const inp=el('div','bin'),rs=el('input'),ct=el('input'),go=el('button','acc','Accept batch');rs.id='bReason';rs.placeholder='HUMAN_FINAL reason (required)';rs.autocomplete='off';ct.id='bCount';ct.placeholder='type count';ct.inputMode='numeric';ct.autocomplete='off';go.id='bGo';
+  const res=el('div','bres');res.id='bRes';
+  go.onclick=()=>{if(batchBusy)return;const g=(field&&field.AtGOV)||{},s=batchSelect(g,batchFilter(BS.kind,BS.value,filter),batchCap);batchAccept(s.ids,rs.value,ct.value,res)};
+  inp.append(rs,ct,go);B.append(sel,sum,sam,inp,res)}
+ const k=$('bKind'),v=$('bVal');k.value=BS.kind;const opts=batchOptions(gov);
+ if(BS.kind==='facet'||BS.kind==='class'||BS.kind==='target'){const list=opts[BS.kind].slice(0,60);if(!BS.value||!list.some(x=>x[0]===BS.value))BS.value=list.length?list[0][0]:'';
+  if(document.activeElement!==v){v.replaceChildren();for(const [x,c] of list){const o=el('option',null,(BS.kind==='facet'&&typeof FACET_LABEL!=='undefined'&&FACET_LABEL[x]||x)+' · '+c);o.value=x;v.append(o)}v.value=BS.value}v.disabled=false}
+ else{v.replaceChildren(el('option',null,BS.kind==='tap'?(filter&&filter!=='ALL'?'facet '+((typeof FACET_LABEL!=='undefined'&&FACET_LABEL[filter])||filter):'no tap filter · all AtGOV'):'every AtGOV record'));v.disabled=true}
+ const f=batchFilter(BS.kind,BS.value,filter),s=batchSelect(gov,f,batchCap),sum=$('bSum');sum.replaceChildren();
+ sum.append(document.createTextNode('This batch: '),el('b',null,fmt(s.ids.length)),document.createTextNode(s.total>s.ids.length?' of '+fmt(s.total)+' matching (cap '+fmt(batchCap)+', first by IDN)':' record'+(s.ids.length===1?'':'s')+' matching'));
+ const sam=$('bSam');sam.replaceChildren();for(const id of s.ids.slice(0,10)){const li=el('li');li.append(el('code',null,id),el('span',null,batchTitle(gov[id],id)));sam.append(li)}
+ if(s.ids.length>10)sam.append(el('li',null,'… and '+fmt(s.ids.length-10)+' more'));
+ $('bGo').disabled=!s.ids.length||batchBusy;setText('hfbPill',fmt(s.ids.length)+' IN BATCH')}
 // </governed-accept>
 
 /* ---------- renderer ---------- */

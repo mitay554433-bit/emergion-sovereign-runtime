@@ -93,8 +93,21 @@ func TestLivingUniversePageIsReadOnlyProjection(t *testing.T) {
 			t.Fatalf("living-universe.html outside governed-accept must not contain %q", banned)
 		}
 	}
-	if strings.Contains(acc, "/authorize") || strings.Count(acc, "fetch(") != 1 || !strings.Contains(acc, "fetch('/decide',{method:'POST'") {
-		t.Fatal("governed-accept must make exactly one fetch: POST /decide")
+	// Three fetches only: POST /decide (one record), POST /decide-batch-human
+	// (a human-confirmed batch) and the read-only GET of the batch cap.
+	if strings.Contains(acc, "/authorize") || strings.Count(acc, "fetch(") != 3 ||
+		!strings.Contains(acc, "fetch('/decide',{method:'POST'") ||
+		!strings.Contains(acc, "fetch('/decide-batch-human',{method:'POST'") ||
+		!strings.Contains(acc, "fetch('/decide-batch-human')") {
+		t.Fatal("governed-accept fetches must be POST /decide, POST /decide-batch-human and GET /decide-batch-human only")
+	}
+	// The batch is sent only from the button, only after a reason and the
+	// human-typed count are checked.
+	if n := strings.Count(src, "batchAccept("); n != 2 || !strings.Contains(acc, "batchAccept(s.ids,rs.value,ct.value,res)") {
+		t.Fatalf("batchAccept( appears %d times; want definition + button handler only", n)
+	}
+	if !strings.Contains(acc, "if(!batchConfirmed(typed,ids.length))") {
+		t.Fatal("batch accept must require the human-typed count")
 	}
 	if !strings.Contains(acc, "decision:'APPROVE'") || !strings.Contains(acc, "'Authorization':'Bearer '+tok") {
 		t.Fatal("governed-accept must post APPROVE with the pasted bearer token")
