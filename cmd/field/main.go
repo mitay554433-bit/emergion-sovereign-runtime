@@ -212,6 +212,42 @@ func main() {
 		} else {
 			fmt.Println(em.IDN, "AT_GOV")
 		}
+	case "ingest":
+		// SOURCE ingest of a sorted-upload manifest. Records land AT_GOV
+		// the normal way; nothing is decided or REG-accepted. Idempotent by
+		// sha256; bad lines are skipped and counted.
+		fs := flag.NewFlagSet("ingest", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		dryRun := fs.Bool("dry-run", false, "print counts only; write nothing")
+		root := fs.String("root", "", "optional directory the manifest paths are relative to; files found there are hashed (read only) and must match")
+		if err := fs.Parse(args[1:]); err != nil {
+			fail(err)
+		}
+		manifestPath := "sources/ingest-manifest.jsonl"
+		if fs.NArg() > 0 {
+			manifestPath = fs.Arg(0)
+		}
+		rt := fieldruntime.Runtime{Store: s}
+		report, err := rt.IngestSourceManifestFile(
+			context.Background(),
+			manifestPath,
+			fieldruntime.SourceIngestOptions{DryRun: *dryRun, Root: *root},
+		)
+		if err != nil {
+			fail(err)
+		}
+		if !*dryRun && report.Created > 0 {
+			renderField(s, *output)
+		}
+		report.CreatedIDs = nil
+		printJSON(report)
+		mode := "INGEST"
+		if *dryRun {
+			mode = "INGEST_DRY_RUN"
+		}
+		fmt.Println(mode, "valid", report.Valid, "bad", report.Bad,
+			"already", report.AlreadyPresent, "would_create", report.WouldCreate,
+			"created", report.Created, "AT_GOV")
 	case "implementation-evidence":
 		if len(args) != 2 {
 			fail(fmt.Errorf("implementation-evidence requires a file"))
@@ -813,6 +849,7 @@ Commands:
   init                         initialize local state and dropzone
   doctor                       verify state, COSL chain, evidence, Gemma runtime and model
   capture <file>               analyze with local Gemma and create one GOV-ready EmergION
+  ingest [-dry-run] [-root DIR] [manifest]  record a sources manifest as SOURCE_UPLOAD records; idempotent by sha256; stops at GOV
   implementation-evidence <file> preserve bounded implementation evidence as one GOV-ready EmergION
   realization-identity <accepted-id> <thing>  assert a REG-accepted EmergION realizes a named THING; stops at GOV
   rework <returned-id> <file>   re-enter a HUMAN_FINAL RETURNED EmergION with corrected source
