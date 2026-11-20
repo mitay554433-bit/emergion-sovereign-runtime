@@ -48,6 +48,22 @@ func (r *Runtime) state() (core.State, error) {
 	}
 	return livefield.Rebuild(ev)
 }
+
+// LinkedProjectionJSON returns the projection engine's linked view
+// (proj.Linked) rebuilt from the event ledger. Read-only: nothing is
+// appended, decided or written to disk.
+func (r *Runtime) LinkedProjectionJSON() (string, error) {
+	st, err := r.state()
+	if err != nil {
+		return "", err
+	}
+	b, err := json.Marshal(proj.Linked(st))
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
 func (r *Runtime) Status() (analytics.Metrics, error) {
 	st, err := r.state()
 	if err != nil {

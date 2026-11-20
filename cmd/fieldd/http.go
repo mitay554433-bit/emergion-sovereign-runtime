@@ -106,6 +106,21 @@ func newHTTPMux(rt *fieldapi.Runtime, token string, loopback bool) *http.ServeMu
 		http.ServeFile(w, req, filepath.Join("outputs", "field.json"))
 	}))
 
+	// Read-only linked projection from the projection engine (proj.Linked).
+	mux.HandleFunc("/projection.json", protect(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		body, err := rt.LinkedProjectionJSON()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	}))
+
 	mux.HandleFunc("/real_temporal_wave.json", protect(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
