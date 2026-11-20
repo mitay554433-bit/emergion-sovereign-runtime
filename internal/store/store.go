@@ -204,14 +204,23 @@ func (s *Store) appendLocked(kind, subject string, em *core.EmergION, d *core.De
 	if len(events) > 0 {
 		prev = events[len(events)-1].SelfHash
 	}
+	id, _, err := s.writeAfter(prev, kind, subject, em, d, r, q)
+	return id, err
+}
+
+// writeAfter seals one event chained to prev and appends it as one fsynced
+// COSL line. It returns the event ID and the sealed self hash so a caller
+// holding the lock can chain the next event without re-reading the ledger.
+func (s *Store) writeAfter(prev, kind, subject string, em *core.EmergION, d *core.DecisionReceipt, r *core.REGReceipt, q *core.ActionAuthorizationReceipt) (string, string, error) {
 	now := time.Now().UTC()
 	seed := []byte(fmt.Sprintf("%d:%s|%d:%s|%d|%d:%s", len(kind), kind, len(subject), subject, now.UnixNano(), len(prev), prev))
 	h := sha256.Sum256(seed)
 	e := core.Event{Type: kind, ID: "EV-" + strings.ToUpper(hex.EncodeToString(h[:8])), At: now, EmergION: em, Decision: d, REG: r, ActionAuthorization: q, PrevHash: prev}
 	line, err := cosl.Encode(e)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
+	selfHash := ""
 	_, err = pivot.Observe(
 		"COSL_APPEND",
 		"ENCODE",
@@ -239,28 +248,29 @@ func (s *Store) appendLocked(kind, subject string, em *core.EmergION, d *core.De
 					e.ID,
 				)
 			}
+			selfHash = decoded.SelfHash
 			return nil
 		},
 	)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	f, err := os.OpenFile(s.logPath(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if _, err = f.WriteString(line + "\n"); err != nil {
 		f.Close()
-		return "", err
+		return "", "", err
 	}
 	if err = f.Sync(); err != nil {
 		f.Close()
-		return "", err
+		return "", "", err
 	}
 	if err = f.Close(); err != nil {
-		return "", err
+		return "", "", err
 	}
-	return e.ID, nil
+	return e.ID, selfHash, nil
 }
 
 func (s *Store) SaveCandidate(em core.EmergION) (string, error) {
@@ -363,6 +373,50 @@ func (s *Store) SaveDecision(r core.DecisionReceipt) (string, error) {
 }
 func (s *Store) SaveAccepted(r core.REGReceipt) (string, error) {
 	return s.append("R", r.EmergIONID, nil, nil, &r, nil)
+}
+
+// BatchWriter appends governance receipts inside one held state lock,
+// chaining each event to the previous one in memory. Lines, event IDs and
+// hashes are produced exactly as SaveDecision/SaveAccepted produce them.
+type BatchWriter struct {
+	s    *Store
+	prev string
+}
+
+func (b *BatchWriter) SaveDecision(r core.DecisionReceipt) (string, error) {
+	id, self, err := b.s.writeAfter(b.prev, "D", r.EmergIONID, nil, &r, nil, nil)
+	if err == nil {
+		b.prev = self
+	}
+	return id, err
+}
+
+func (b *BatchWriter) SaveAccepted(r core.REGReceipt) (string, error) {
+	id, self, err := b.s.writeAfter(b.prev, "R", r.EmergIONID, nil, nil, &r, nil)
+	if err == nil {
+		b.prev = self
+	}
+	return id, err
+}
+
+// Batch holds the state lock once, reads the ledger once, and lets fn append
+// receipts through w. An error from fn stops the batch; every line already
+// written stays (each is a complete, chained, fsynced event).
+func (s *Store) Batch(fn func(events []core.Event, w *BatchWriter) error) error {
+	unlock, err := s.lock()
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	events, err := s.Events()
+	if err != nil {
+		return err
+	}
+	w := &BatchWriter{s: s}
+	if len(events) > 0 {
+		w.prev = events[len(events)-1].SelfHash
+	}
+	return fn(events, w)
 }
 
 func (s *Store) SaveActionAuthorization(r core.ActionAuthorizationReceipt) (string, error) {
