@@ -72,7 +72,11 @@ type Worker struct {
 	Store     *store.Store
 	Insighter reason.Insighter
 	Dir       string // control + checkpoint directory (outside the ledger)
-	mu        sync.Mutex
+	// SourcesRoot (optional) is where source_path files live; the first
+	// TextChars characters of their text go into the insight prompt.
+	SourcesRoot string
+	TextChars   int
+	mu          sync.Mutex
 }
 
 // WorkDir is the default control/checkpoint directory for a state root:
@@ -200,7 +204,8 @@ func Peers(st core.State, src core.EmergION) []core.EmergION {
 	var cs []cand
 	topic := strings.TrimSpace(src.REL["source_topic"])
 	for id, em := range st.Accepted {
-		if id == src.IDN || !isSource(em) {
+		if id == src.IDN || !isSource(em) || policy.LinkNoise(st, src.IDN, id) != "" {
+			// only real documents sharing a real topic (quality rules)
 			continue
 		}
 		score := 0
@@ -271,7 +276,7 @@ func (w *Worker) Step(ctx context.Context, batch int) (StepReport, error) {
 	cp := w.LoadCheckpoint()
 	var todo []string
 	for id, em := range st.Accepted {
-		if isSource(em) && !insights[id] && cp.Failures[id] < MaxFailures {
+		if isSource(em) && !insights[id] && cp.Failures[id] < MaxFailures && policy.SourceNoise(st, id) == "" {
 			todo = append(todo, id)
 		}
 	}
@@ -296,6 +301,11 @@ func (w *Worker) Step(ctx context.Context, batch int) (StepReport, error) {
 			Mime:     src.REL["source_mime"],
 			Related:  related(src),
 		}
+		tc := w.TextChars
+		if tc == 0 {
+			tc = DefaultTextChars
+		}
+		in.Text = ExtractText(ctx, w.SourcesRoot, src.REL["source_path"], src.REL["source_mime"], tc)
 		for i, p := range peers {
 			in.Peers = append(in.Peers, reason.InsightPeer{N: i + 1, ID: p.IDN, Title: p.REL["source_title"], Topic: p.REL["source_topic"]})
 		}
@@ -347,7 +357,7 @@ func (w *Worker) Step(ctx context.Context, batch int) (StepReport, error) {
 			}
 			peer := peers[k.Peer-1]
 			key := pairKey(id, peer.IDN)
-			if pairs[key] {
+			if pairs[key] || policy.LinkNoise(st, id, peer.IDN) != "" {
 				continue
 			}
 			if _, err := w.captureLink(ctx, src, peer, k.Why); err != nil {

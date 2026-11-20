@@ -1,6 +1,8 @@
 package worker
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"errors"
@@ -27,11 +29,20 @@ import (
 type fakeInsighter struct {
 	calls   int
 	failFor string
+	texts   map[string]string
+	peers   map[string][]string
 }
 
 func (f *fakeInsighter) Name() string { return "fake" }
 func (f *fakeInsighter) Insight(_ context.Context, in reason.InsightInput) (reason.Insight, error) {
 	f.calls++
+	if f.texts == nil {
+		f.texts, f.peers = map[string]string{}, map[string][]string{}
+	}
+	f.texts[in.SourceID] = in.Text
+	for _, p := range in.Peers {
+		f.peers[in.SourceID] = append(f.peers[in.SourceID], p.ID)
+	}
 	if in.SourceID == f.failFor {
 		return reason.Insight{}, errors.New("model failed")
 	}
@@ -44,7 +55,7 @@ func (f *fakeInsighter) Insight(_ context.Context, in reason.InsightInput) (reas
 
 func line(seed, topic string) string {
 	h := fmt.Sprintf("%x", sha256.Sum256([]byte(seed)))
-	return fmt.Sprintf(`{"path":"sources/%s/%s.pdf","sha256":"%s","bytes":10,"mime":"application/pdf","topic":"%s","title":"Doc %s","source_kind":"upload","related":["TR-1"]}`, topic, seed, h, topic, seed)
+	return fmt.Sprintf(`{"path":"sources/%s/%s.pdf","sha256":"%s","bytes":10,"mime":"application/pdf","topic":"%s","title":"Helix brief %s","source_kind":"upload","related":["TR-1"]}`, topic, seed, h, topic, seed)
 }
 
 // setup ingests n uploads and HUMAN_FINAL-accepts them.
@@ -58,6 +69,12 @@ func setup(t *testing.T, n int) (*store.Store, []string) {
 	for i := 0; i < n; i++ {
 		lines = append(lines, line(fmt.Sprint("s", i), "inventions-ip"))
 	}
+	return s, acceptLines(t, s, lines)
+}
+
+// acceptLines ingests manifest lines and HUMAN_FINAL-accepts them.
+func acceptLines(t *testing.T, s *store.Store, lines []string) []string {
+	t.Helper()
 	rep, err := (fieldruntime.Runtime{Store: s}).IngestSourceManifest(context.Background(), strings.NewReader(strings.Join(lines, "\n")), fieldruntime.SourceIngestOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -75,7 +92,7 @@ func setup(t *testing.T, n int) (*store.Store, []string) {
 			t.Fatal(err)
 		}
 	}
-	return s, rep.CreatedIDs
+	return rep.CreatedIDs
 }
 
 func state(t *testing.T, s *store.Store) core.State {
@@ -368,5 +385,121 @@ func TestParseInsightWithoutLabels(t *testing.T) {
 	}
 	if _, err := reason.ParseInsight("ok", in); err == nil || !strings.Contains(err.Error(), `"ok"`) {
 		t.Fatalf("error should quote the reply: %v", err)
+	}
+}
+
+func titled(seed, topic, title, path string) string {
+	h := fmt.Sprintf("%x", sha256.Sum256([]byte(seed)))
+	return fmt.Sprintf(`{"path":%q,"sha256":"%s","bytes":10,"mime":"text/plain","topic":"%s","title":%q,"source_kind":"upload","related":["TR-1"]}`, path, h, topic, title)
+}
+
+func TestWorkerSkipsNoiseSourcesAndLinks(t *testing.T) {
+	s, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := acceptLines(t, s, []string{
+		titled("r1", "inventions-ip", "Helix bench protocol", "sources/inventions-ip/r1.txt"),
+		titled("r2", "inventions-ip", "Helix tamper pilot plan", "sources/inventions-ip/r2.txt"),
+		titled("n1", "inventions-ip", "PHONE|Download|scan_0042", "sources/inventions-ip/n1.txt"),
+		titled("n2", "inventions-ip", "Fluid Registry ledger", "sources/inventions-ip/n2.txt"),
+		titled("n3", "inventions-ip", "/PHONE/DCIM/x", "sources/inventions-ip/n3.txt"),
+	})
+	f := &fakeInsighter{}
+	w := &Worker{Store: s, Insighter: f, Dir: t.TempDir()}
+	rep, err := w.Step(context.Background(), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Pending != 2 || rep.Insights != 2 {
+		t.Fatalf("only the 2 real documents are worked: %+v", rep)
+	}
+	for _, id := range ids[2:] {
+		if _, ok := f.texts[id]; ok {
+			t.Fatalf("noise source %s was sent to the model", id)
+		}
+	}
+	for src, ps := range f.peers {
+		for _, p := range ps {
+			if p != ids[0] && p != ids[1] {
+				t.Fatalf("noise peer %s offered for %s", p, src)
+			}
+		}
+	}
+	st := state(t, s)
+	x := policy.BuildIndex(st)
+	links := 0
+	for _, em := range st.AtGOV {
+		if em.REL["source_kind"] != policy.KindKinLink {
+			continue
+		}
+		links++
+		if v := policy.Classify(st, x, em); v.Class != policy.ClassKinLinkWorker {
+			t.Fatalf("link %v: %+v", em.REL, v)
+		}
+	}
+	if links != 1 {
+		t.Fatalf("want one real link, got %d", links)
+	}
+}
+
+func TestWorkerSendsFileText(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "sources", "inventions-ip"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "Helix bench protocol.\n\nStep 1: torque the clamp to 4 Nm. " + strings.Repeat("Measure the strain gauge drift. ", 100)
+	if err := os.WriteFile(filepath.Join(root, "sources", "inventions-ip", "r1.txt"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := acceptLines(t, s, []string{titled("r1", "inventions-ip", "Helix bench protocol", "sources/inventions-ip/r1.txt")})
+	f := &fakeInsighter{}
+	w := &Worker{Store: s, Insighter: f, Dir: t.TempDir(), SourcesRoot: root}
+	if _, err := w.Step(context.Background(), 1); err != nil {
+		t.Fatal(err)
+	}
+	got := f.texts[ids[0]]
+	if !strings.HasPrefix(got, "Helix bench protocol. Step 1: torque the clamp") || len([]rune(got)) != DefaultTextChars {
+		t.Fatalf("text (%d chars): %.80q", len([]rune(got)), got)
+	}
+	p := reason.LocalPrompt(reason.InsightInput{Title: "Helix bench protocol", Topic: "inventions-ip", Text: got})
+	if !strings.Contains(p, "File text (start): Helix bench protocol. Step 1") {
+		t.Fatalf("prompt lacks the file text:\n%s", p)
+	}
+	if args := strings.Join(reason.LocalInsighter{Binary: "llama-completion", Model: "m.gguf"}.Args("p"), " "); !strings.Contains(args, "-c 2048") {
+		t.Fatalf("context must fit the file text: %s", args)
+	}
+	// paths that leave the root are never read
+	if ExtractText(context.Background(), root, "../etc/passwd", "text/plain", 100) != "" || ExtractText(context.Background(), root, "/etc/passwd", "text/plain", 100) != "" {
+		t.Fatal("path escape")
+	}
+}
+
+func TestExtractTextDocx(t *testing.T) {
+	root := t.TempDir()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	fw, _ := zw.Create("word/document.xml")
+	_, _ = fw.Write([]byte(`<?xml version="1.0"?><w:document xmlns:w="x"><w:body><w:p><w:r><w:t>Tamper pilot</w:t></w:r></w:p><w:p><w:r><w:t>for the Helix seal</w:t></w:r></w:p></w:body></w:document>`))
+	_ = zw.Close()
+	if err := os.WriteFile(filepath.Join(root, "a.docx"), buf.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := ExtractText(context.Background(), root, "a.docx", "", 100); got != "Tamper pilot for the Helix seal" {
+		t.Fatalf("docx: %q", got)
+	}
+}
+
+func TestOnlinePromptNeverCarriesFileText(t *testing.T) {
+	in := reason.InsightInput{Title: "Helix bench protocol", Topic: "inventions-ip", Text: "SECRET-BODY torque the clamp"}
+	if strings.Contains(reason.InsightPrompt(in), "SECRET-BODY") {
+		t.Fatal("file text must not leave the phone")
+	}
+	if !strings.Contains(reason.LocalPrompt(in), "SECRET-BODY") {
+		t.Fatal("the on-device prompt must carry the file text")
 	}
 }

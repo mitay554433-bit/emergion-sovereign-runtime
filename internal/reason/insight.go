@@ -49,6 +49,9 @@ type InsightInput struct {
 	Mime     string
 	Related  []string
 	Peers    []InsightPeer
+	// Text is the start of the file's extracted text (local only; may be
+	// empty). It lets the model describe the contents, not the title.
+	Text string
 }
 
 // InsightKin is one proposed link to a listed peer.
@@ -90,8 +93,13 @@ func ValidMode(m string) bool {
 
 const insightPromptTail = "GAP: <one thing missing to make it useful, or none>"
 
-// InsightPrompt is the short prompt both local and online models get.
-func InsightPrompt(in InsightInput) string { return insightPrompt(in, 160, 100, 160, false) }
+// InsightPrompt is the online prompt. It never carries file text: only
+// titles, topics, mime types and tags leave the phone.
+func InsightPrompt(in InsightInput) string { return insightPrompt(in, 160, 100, 160, false, 0) }
+
+// LocalTextChars caps the file text the on-device prompt carries (about 400
+// tokens, inside the 2048-token context with the instructions and peers).
+const LocalTextChars = 1500
 
 // LocalPeers caps the peers a slow on-device model reads per source.
 const LocalPeers = 4
@@ -104,12 +112,12 @@ func LocalPrompt(in InsightInput) string {
 	if len(in.Peers) > LocalPeers {
 		in.Peers = in.Peers[:LocalPeers]
 	}
-	return insightPrompt(in, 80, 50, 60, true)
+	return insightPrompt(in, 80, 50, 60, true, LocalTextChars)
 }
 
 func insightInstructions(b *strings.Builder) {
 	b.WriteString("Reply with exactly 4 lines:\n")
-	b.WriteString("SUMMARY: <one sentence on what this file likely is>\n")
+	b.WriteString("SUMMARY: <one sentence on what this file contains (use the file text when given)>\n")
 	b.WriteString("KIN: <numbers of other files it truly relates to, comma separated, or none>\n")
 	b.WriteString("COMBO: <one useful combination with a listed file, or none>\n")
 	b.WriteString(insightPromptTail + "\n")
@@ -125,7 +133,7 @@ func localTurn(model, prompt string) string {
 	return prompt + "\nSUMMARY:"
 }
 
-func insightPrompt(in InsightInput, titleMax, peerMax, tagMax int, instrFirst bool) string {
+func insightPrompt(in InsightInput, titleMax, peerMax, tagMax int, instrFirst bool, textMax int) string {
 	var b strings.Builder
 	if instrFirst {
 		insightInstructions(&b)
@@ -137,6 +145,9 @@ func insightPrompt(in InsightInput, titleMax, peerMax, tagMax int, instrFirst bo
 	b.WriteString(").\n")
 	if len(in.Related) > 0 {
 		fmt.Fprintf(&b, "Tags: %s\n", oneLineText(strings.Join(in.Related, ", "), tagMax))
+	}
+	if t := oneLineText(in.Text, textMax); t != "" {
+		fmt.Fprintf(&b, "File text (start): %s\n", t)
 	}
 	if len(in.Peers) > 0 {
 		b.WriteString("Other files:\n")
@@ -298,7 +309,7 @@ func (l LocalInsighter) Args(prompt string) []string {
 	if n <= 0 {
 		n = 64
 	}
-	args := []string{"-m", l.Model, "-p", prompt, "-n", strconv.Itoa(n), "-c", "1024",
+	args := []string{"-m", l.Model, "-p", prompt, "-n", strconv.Itoa(n), "-c", "2048",
 		"-t", strconv.Itoa(threads), "--temp", "0", "--no-display-prompt"}
 	// llama-completion needs -no-cnv or it waits in chat mode until the
 	// timeout; the newer llama-cli rejects the flag.
