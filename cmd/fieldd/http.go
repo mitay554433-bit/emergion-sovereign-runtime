@@ -3,14 +3,22 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"html"
+	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"emergion-sovereign-runtime/pkg/fieldapi"
 )
 
 func newHTTPMux(rt *fieldapi.Runtime, token string, loopback bool) *http.ServeMux {
+	return newHTTPMuxOn(rt, token, loopback, "")
+}
+
+func newHTTPMuxOn(rt *fieldapi.Runtime, token string, loopback bool, bindAddr string) *http.ServeMux {
 	mux := http.NewServeMux()
 	protect := func(fn http.HandlerFunc) http.HandlerFunc {
 		return maybeRequireBearer(token, loopback, fn)
@@ -195,7 +203,22 @@ func newHTTPMux(rt *fieldapi.Runtime, token string, loopback bool) *http.ServeMu
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		http.ServeFile(w, req, filepath.Join("cmd", "fieldd", "living-universe.html"))
+		path := filepath.Join("cmd", "fieldd", "living-universe.html")
+		if !canInjectLivingToken(loopback, bindAddr, token, req) {
+			http.ServeFile(w, req, path)
+			return
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			http.Error(w, "living universe page unavailable", http.StatusInternalServerError)
+			return
+		}
+		page, ok := applyLivingToken(string(body), token, w.Header())
+		if !ok {
+			http.ServeFile(w, req, path)
+			return
+		}
+		_, _ = w.Write([]byte(page))
 	})
 	mux.HandleFunc("/living-universe", livingUniverse)
 	// /living is a read-only alias for the same page (the phone uses /living).
@@ -218,4 +241,90 @@ func newHTTPMux(rt *fieldapi.Runtime, token string, loopback bool) *http.ServeMu
 	mux.Handle("/deliverables/", maybeRequireBearerHandler(token, loopback, http.StripPrefix("/deliverables/", http.FileServer(http.Dir(filepath.Join("outputs", "deliverables"))))))
 
 	return mux
+}
+
+const livingTokenMetaEmpty = `<meta name="fieldd-token" content="">`
+
+func livingTokenMeta(token string) string {
+	return `<meta name="fieldd-token" content="` + html.EscapeString(token) + `">`
+}
+
+func isLoopbackRemoteAddr(remoteAddr string) bool {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		host = remoteAddr
+	}
+	ip := net.ParseIP(strings.TrimSpace(host))
+	return ip != nil && ip.IsLoopback()
+}
+
+func livingInjectHostOK(reqHost, bindAddr string) bool {
+	_, port, err := net.SplitHostPort(strings.TrimSpace(bindAddr))
+	if err != nil || port == "" {
+		return false
+	}
+	host := strings.TrimSpace(reqHost)
+	return strings.EqualFold(host, "127.0.0.1:"+port) || strings.EqualFold(host, "localhost:"+port)
+}
+
+func canInjectLivingToken(loopback bool, bindAddr, token string, req *http.Request) bool {
+	if !loopback || strings.TrimSpace(token) == "" || bindAddr == "" || req == nil {
+		return false
+	}
+	if !isLoopbackRemoteAddr(req.RemoteAddr) {
+		return false
+	}
+	return livingInjectHostOK(req.Host, bindAddr)
+}
+
+func cacheControlHas(value, token string) bool {
+	for _, part := range strings.Split(value, ",") {
+		if strings.EqualFold(strings.TrimSpace(part), token) {
+			return true
+		}
+	}
+	return false
+}
+
+// livingSafeInjectHeaders is the last gate before a token is written into
+// the page: Cache-Control must include no-store, Referrer-Policy must be
+// no-referrer, and no CORS headers may be present. If any check fails the
+// page is served without the token.
+func livingSafeInjectHeaders(h http.Header) bool {
+	if h == nil || !cacheControlHas(h.Get("Cache-Control"), "no-store") {
+		return false
+	}
+	if h.Get("Referrer-Policy") != "no-referrer" {
+		return false
+	}
+	for _, k := range []string{
+		"Access-Control-Allow-Origin",
+		"Access-Control-Allow-Credentials",
+		"Access-Control-Allow-Headers",
+		"Access-Control-Allow-Methods",
+		"Access-Control-Expose-Headers",
+	} {
+		if h.Get(k) != "" {
+			return false
+		}
+	}
+	return true
+}
+
+func applyLivingToken(page, token string, hdr http.Header) (string, bool) {
+	if strings.TrimSpace(token) == "" || !strings.Contains(page, livingTokenMetaEmpty) {
+		return page, false
+	}
+	if hdr == nil {
+		return page, false
+	}
+	hdr.Set("Cache-Control", "no-store")
+	hdr.Set("Referrer-Policy", "no-referrer")
+	// Never add CORS headers on this response.
+	if !livingSafeInjectHeaders(hdr) {
+		hdr.Del("Cache-Control")
+		hdr.Del("Referrer-Policy")
+		return page, false
+	}
+	return strings.Replace(page, livingTokenMetaEmpty, livingTokenMeta(token), 1), true
 }

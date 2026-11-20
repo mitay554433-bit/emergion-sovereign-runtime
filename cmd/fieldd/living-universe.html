@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#05070d"><title>MAXIOM Control Center · UNIFUSION Living Universe</title>
+<html lang="en"><head><meta charset="UTF-8"><meta name="fieldd-token" content=""><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#05070d"><title>MAXIOM Control Center · UNIFUSION Living Universe</title>
 <style>
 :root{color-scheme:dark;--bg:#05070d;--bg2:#0a0f1a;--panel:rgba(11,16,30,.78);--panel2:rgba(14,21,40,.9);--line:rgba(120,150,220,.25);--line2:rgba(120,150,220,.14);--ink:#f2f5ff;--ink2:#aab6d3;--ink3:#6c7896;--blue:#3b82f6;--royal:#2f6bff;--deep:#1d4ed8;--pale:#c9d8ff;--gov:#d9a35b;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
 *{box-sizing:border-box}
@@ -508,24 +508,27 @@ function collapseTraj(q,trs){const mem=new Map();for(const t of trs)for(const id
 // <governed-accept> The ONLY write on this page. A human pressing Accept records a HUMAN_FINAL
 // APPROVE through the existing POST /decide route (fieldapi.Decide: gov.Decide with authority
 // HUMAN_FINAL, then reg.Accept), the same receipts `field decide <id> APPROVE <reason>` writes.
-// A reason is required. The bearer token is never embedded: the operator pastes it once and it
-// is kept in this browser's localStorage under fieldd.token. Nothing here accepts automatically.
+// A reason is required. On loopback fieldd the bearer token is injected into
+// meta[name="fieldd-token"] and used automatically. The paste box is only a fallback
+// (kept in this browser's localStorage under fieldd.token). Nothing here accepts automatically.
 const TOKEN_KEY='fieldd.token';
-function savedToken(){try{return localStorage.getItem(TOKEN_KEY)||''}catch(e){return ''}}
-function storeToken(v){try{v?localStorage.setItem(TOKEN_KEY,v):localStorage.removeItem(TOKEN_KEY)}catch(e){}}
+function injectedToken(){const m=document.querySelector('meta[name="fieldd-token"]');return (m&&m.getAttribute('content')||'').trim()}
+function savedToken(){const t=injectedToken();if(t)return t;try{return localStorage.getItem(TOKEN_KEY)||''}catch(e){return ''}}
+function storeToken(v){if(injectedToken())return;try{v?localStorage.setItem(TOKEN_KEY,v):localStorage.removeItem(TOKEN_KEY)}catch(e){}}
 function acceptBody(id,reason){return JSON.stringify({emergion_id:id,decision:'APPROVE',reason:reason})}
-async function acceptAtGOV(id,btn){const tok=savedToken();if(!tok){alert('Paste the fieldd token first (from fieldd.token in the state directory).');return}
+async function acceptAtGOV(id,btn){const tok=savedToken();if(!tok){if(!injectedToken())alert('Paste the fieldd token first (from fieldd.token in the state directory).');return}
  const reason=prompt('HUMAN_FINAL reason for accepting '+id+' (required):');if(reason===null)return;if(!reason.trim()){alert('A HUMAN_FINAL decision requires an explicit reason.');return}
  if(!confirm('Accept '+id+'?\nThis records a HUMAN_FINAL APPROVE and REG acceptance.'))return;
  if(btn)btn.disabled=true;
  try{const r=await fetch('/decide',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:acceptBody(id,reason.trim())});
-  if(r.status===401){storeToken('');alert('Token refused (401). Paste the current fieldd token and retry.');if(selected)select(selected);return}
+  if(r.status===401){storeToken('');alert(injectedToken()?'Token refused (401). Restart fieldd and refresh.':'Token refused (401). Paste the current fieldd token and retry.');if(selected)select(selected);return}
   const res=await r.json().catch(()=>({error:'HTTP '+r.status}));if(!r.ok||res.error){alert(res.error||('HUMAN_FINAL decision was not accepted (HTTP '+r.status+').'));return}
   await refresh();const n=byID.get(id);if(n)select(n)}
  catch(e){alert('HUMAN_FINAL decision could not be confirmed. Refresh before retrying.')}
  finally{if(btn)btn.disabled=false}}
 function acceptButton(id){const b=el('button','acc','Accept');b.title='Record HUMAN_FINAL APPROVE for '+id+' (reason required)';b.onclick=e=>{e.stopPropagation();acceptAtGOV(id,b)};return b}
-function acceptControls(id){const w=el('div');if(!savedToken()){const f=el('div','tok'),i=el('input');i.type='password';i.placeholder='paste fieldd token once';i.autocomplete='off';const s=el('button','acc','Save');s.onclick=()=>{const v=i.value.trim();if(v){storeToken(v);select(byID.get(id)||selected)}};f.append(i,s);w.append(f)}
+function acceptControls(id){const w=el('div');if(injectedToken()){w.append(acceptButton(id));return w}
+ if(!savedToken()){const f=el('div','tok'),i=el('input');i.type='password';i.placeholder='paste fieldd token once';i.autocomplete='off';const s=el('button','acc','Save');s.onclick=()=>{const v=i.value.trim();if(v){storeToken(v);select(byID.get(id)||selected)}};f.append(i,s);w.append(f)}
  else{const f=el('div','tok');const a=acceptButton(id),fg=el('button','acc','Forget token');fg.style.background='none';fg.onclick=()=>{storeToken('');select(byID.get(id)||selected)};f.append(a,fg);w.append(f)}return w}
 // Batch accept: one human double-press over many AtGOV records. The human picks a filter and sees
 // the exact count and a sample. The reason is pre-filled from the filter, count and sample (editable;
@@ -585,7 +588,7 @@ function batchKey(ids){return ids.length+'|'+(ids[0]||'')+'|'+(ids[ids.length-1]
 function batchStep(arm,key,now){if(arm&&arm.key===key&&now-arm.at<=BATCH_ARM_MS)return {send:true,arm:null};return {send:false,arm:{key,at:now}}}
 async function readBatchCap(){if(batchCapRead)return;batchCapRead=true;try{const r=await fetch('/decide-batch-human');const j=await r.json();if(Number.isFinite(j.cap)&&j.cap>0&&j.cap!==batchCap){batchCap=j.cap;renderBatch()}}catch(e){batchCapRead=false}}
 async function batchAccept(ids,reason,out,decision){const tok=savedToken();const hold=decision==='HOLD',verb=hold?'held':'accepted';
- if(!tok){out.textContent='Paste the fieldd token first (Next Governed Step panel).';return}
+ if(!tok){out.textContent=injectedToken()?'Token missing from this page. Refresh.':'Paste the fieldd token first (Next Governed Step panel).';return}
  if(!reason.trim()){out.textContent='A HUMAN_FINAL reason is required.';return}
  if(!ids.length)return;
  // One press, then cap-sized chunks in order; all chunks share the first chunk's batch id. Each
@@ -594,7 +597,7 @@ async function batchAccept(ids,reason,out,decision){const tok=savedToken();const
  out.textContent='Recording '+fmt(total)+' HUMAN_FINAL '+(hold?'HOLD ':'')+'decisions…';
  try{for(const part of batchChunks(ids,batchCap)){
    const r=await fetch('/decide-batch-human',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:batchBody(part,reason.trim(),bid,decision)});
-   if(r.status===401){storeToken('');out.textContent='Token refused (401) after '+prog()+'. Paste the current fieldd token and retry.';return}
+   if(r.status===401){storeToken('');out.textContent=injectedToken()?'Token refused (401) after '+prog()+'. Restart fieldd and refresh.':'Token refused (401) after '+prog()+'. Paste the current fieldd token and retry.';return}
    const j=await r.json().catch(()=>({error:'HTTP '+r.status}));acc+=(hold?j.held:j.accepted)||0;skip+=j.skipped||0;if(j.batch_id)bid=j.batch_id;
    if(j.error||!r.ok){out.textContent=(j.stopped_at?'Stopped at '+j.stopped_at:'Refused')+' · '+prog()+': '+(j.error||('HTTP '+r.status));return}
    out.textContent=prog()}

@@ -102,7 +102,7 @@ func main() {
 	}()
 
 	if *httpAddr != "" {
-		mux := newHTTPMux(rt, token, loopback)
+		mux := newHTTPMuxOn(rt, token, loopback, *httpAddr)
 		go func() {
 			log.Printf("Field Sovereign HTTP status listening on %s", *httpAddr)
 			if err := http.ListenAndServe(*httpAddr, mux); err != nil {
