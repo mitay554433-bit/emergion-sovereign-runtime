@@ -150,7 +150,7 @@ process.stdout.write([ids.length,new Set(ids).size,one.kind,one.facets.join('+')
 // never scrolls sideways on a phone.
 func TestLivingUniverseLabelsShowIDNOnce(t *testing.T) {
 	src := livingUniverseHTML(t)
-	for _, want := range []string{"overflow-x:hidden", "lines=wrap2(String(nameOf(n))", "renderQueue()", "govP.length<=400"} {
+	for _, want := range []string{"overflow-x:hidden", "labelsOn=false", "t=fit1(String(nameOf(n)),maxW-16)", "if(count>=5)break", "renderQueue()", "govP.length<=400"} {
 		if !strings.Contains(src, want) {
 			t.Fatalf("living-universe.html missing %q", want)
 		}
@@ -191,5 +191,23 @@ const fe=a.anchorEdges.map(e=>[e.a.facet,e.b.facet].sort().join("+")+":"+e.w).jo
 process.stdout.write([same,a.anchors.map(x=>x.facet).sort().join("+"),fe,a.stats.govLinked,a.stats.linkedAcc,near,sd/m>0.35,a.threads.length].join(","));`)
 	if out != "true,GRANT_FUNDING+PATENT_IP,GRANT_FUNDING+PATENT_IP:3,1800,2,true,true,31" {
 		t.Fatalf("layout = %s", out)
+	}
+}
+
+// Node size and brightness come from real counts: weight = links + AtGOV refs
+// + assembly membership; radius = 2 + 7*sqrt(weight/max) clamped to 2..9 px.
+func TestLivingUniverseNodeSizeFromWeight(t *testing.T) {
+	src := livingUniverseHTML(t)
+	out := runNode(t, block(t, src, "node-set")+`
+const ids=["E-aaaa000001","E-aaaa000002","E-aaaa000003","E-aaaa000004"],acc={};for(const id of ids)acc[id]={i:id,r:{}};
+acc[ids[1]].r.kin_emergion=ids[0];
+const gov={};for(let i=0;i<8;i++)gov["E-bbbb0000"+(10+i)]={r:{target_emergion:ids[0]}};gov["E-bbbb000099"]={r:{target_emergion:ids[2]}};
+const proj={records:ids.map(id=>({id,facets:[],kin_root:id})),assemblies:[{id:"S",members:[ids[0],ids[1]],links:[]}]};
+const ns=nodeSet({Accepted:acc,AtGOV:gov},proj,[]),w=ids.map(id=>ns.byID.get(id).weight),r=w.map(x=>nodeRadius(x,ns.maxWeight).toFixed(2));
+const again=nodeSet({Accepted:acc,AtGOV:gov},proj,[]).nodes.map(n=>n.weight).join("+")===ns.nodes.map(n=>n.weight).join("+");
+process.stdout.write([w.join("+"),ns.maxWeight,r.join("+"),new Set(r).size,nodeRadius(0,0),nodeRadius(5,5),nodeBright(10,10),nodeBright(0,10),again].join(","));`)
+	// a1: 1 link + 8 AtGOV + 1 assembly = 10; a2: 1 link + 1 assembly = 2; a3: 1 AtGOV; a4: 0
+	if out != "10+2+1+0,10,9.00+5.13+4.21+2.00,4,2,9,1,0.4,true" {
+		t.Fatalf("weights/radii = %s", out)
 	}
 }

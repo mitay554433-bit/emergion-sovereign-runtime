@@ -168,4 +168,26 @@ func TestLivingUniverseHasNoCyan(t *testing.T) {
 		b, _ := strconv.Atoi(m[3])
 		check(m[0], float64(r), float64(g), float64(b))
 	}
+	// The kind palette as rendered: every kind colour (and the unknown-kind
+	// fallback) stays out of the cyan band and inside the owner's family.
+	out := runNode(t, block(t, src, "node-set")+`
+const ks=["SOURCE_FILE","CAPABILITY_PROVIDER","PROJECTION","EXECUTION_OBSERVATION","GOVERNED_EVIDENCE","IMPLEMENTATION","COMPARISON","","ATGOV"];
+process.stdout.write(ks.map(k=>kindColor(k)).join(";"));`)
+	want := "#c9d1e0;#2f5bff;#7f9cff;#5b7bd6;#4b4fd8;#4b4fd8;#ffffff;#ffffff;rgba(140,155,190,0.35)"
+	if out != want {
+		t.Fatalf("kind palette = %s want %s", out, want)
+	}
+	for _, c := range strings.Split(out, ";") {
+		if m := regexp.MustCompile(`^#([0-9a-f]{6})$`).FindStringSubmatch(c); m != nil {
+			v, _ := strconv.ParseUint(m[1], 16, 32)
+			check(c, float64(v>>16&255), float64(v>>8&255), float64(v&255))
+		} else if m := regexp.MustCompile(`rgba\((\d+),(\d+),(\d+)`).FindStringSubmatch(c); m != nil {
+			r, _ := strconv.Atoi(m[1])
+			g, _ := strconv.Atoi(m[2])
+			b, _ := strconv.Atoi(m[3])
+			check(c, float64(r), float64(g), float64(b))
+		} else {
+			t.Fatalf("unexpected kind colour %q", c)
+		}
+	}
 }

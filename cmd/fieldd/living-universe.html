@@ -59,7 +59,8 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2);padding:7px 10px;border-radius:8px;border:1px solid var(--line2);background:rgba(5,7,13,.72)}
 .lg{display:inline-flex;align-items:center;gap:6px}
 .sw{width:8px;height:8px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px rgba(59,130,246,.55),0 0 10px rgba(59,130,246,.9)}
-.sw.g{background:transparent;border:1px solid rgba(200,210,235,.5);box-shadow:none}
+.sw.g{background:transparent;border:1px solid rgba(140,155,190,.6);box-shadow:none}
+.sw.kd{box-shadow:0 0 6px rgba(59,130,246,.6)}
 .sw.k{width:16px;height:0;border-radius:0;border-top:1px solid rgba(200,215,255,.55);box-shadow:none;background:none}
 .sw.c{width:16px;height:2px;border-radius:2px;background:linear-gradient(90deg,rgba(29,78,216,0),#2f6bff 60%,#fff);box-shadow:none}
 .sw.a{width:16px;height:0;border-radius:0;border-top:2px solid #3b82f6;box-shadow:0 0 6px #2f6bff;background:none}
@@ -72,6 +73,9 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 #evtip.on{display:block}#evtip b{display:block;font-size:10px;letter-spacing:.14em;color:#fff}#evtip span{display:block;font-family:var(--mono);color:#a9c2ff;overflow-wrap:anywhere}#evtip small{display:block;color:var(--ink2);font-family:var(--mono)}
 #detail{position:absolute;z-index:3;left:12px;bottom:96px;width:min(360px,calc(100% - 24px));max-height:calc(100% - 120px);overflow:auto;display:none;background:rgba(8,12,24,.94);border-color:rgba(59,130,246,.45)}
 #detail.on{display:block}
+.stage{position:relative}
+/* phone: details sit below the render instead of covering it; the tooltip marks the node */
+@media(max-width:759px){#detail{position:static;width:auto;max-height:none;margin-top:10px}}
 .dh{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;padding:12px 14px 6px}
 .dh h3{margin:4px 0 0;font-size:15px;font-weight:700;letter-spacing:.02em;overflow-wrap:anywhere}
 .badge{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;padding:3px 7px;border-radius:5px;border:1px solid rgba(59,130,246,.55);color:#dbe6ff;background:rgba(29,78,216,.25)}
@@ -197,14 +201,16 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
   <div class="centerg">
    <section class="panel hero" aria-label="FIELD render">
     <div class="ph"><span><span class="pt">FIELD Render <i>• Linked Projection</i></span><br><span class="ps" id="heroSub">Emergent layout · facet attractors · kin · AtGOV haze around targets</span></span><span class="ps mono" id="zoomv" style="white-space:nowrap">1.00×</span></div>
+    <div class="stage">
     <canvas id="c" aria-label="Interactive FIELD render. Drag to orbit, pinch or scroll to zoom, tap a node to inspect."></canvas>
     <div id="evtip" role="status" aria-live="polite"></div>
-    <div class="panel" id="detail" role="dialog" aria-labelledby="dTitle"></div>
     <div class="hfoot">
      <div class="auth"><span class="shield"></span><b>COSL + REG remain authoritative</b> · visualization only</div>
-     <div class="hrow"><div class="legend"><span class="lg"><i class="sw"></i>REG accepted</span><span class="lg"><i class="sw g"></i>AtGOV</span><span class="lg"><i class="sw k"></i>Kin / REL link</span><span class="lg"><i class="sw a"></i>Composed with</span><span class="lg"><i class="sw c"></i>Event comet</span></div>
-     <div class="ctl"><button id="bGov" aria-pressed="true" title="Show AtGOV records awaiting HUMAN_FINAL">AtGOV</button><button id="bFit" title="Reset view">Reset</button></div></div>
+     <div class="hrow"><div class="legend"><span id="kindLg" style="display:contents"></span><span class="lg"><i class="sw g"></i>AtGOV</span><span class="lg"><i class="sw k"></i>Kin / REL link</span><span class="lg"><i class="sw a"></i>Composed with</span><span class="lg"><i class="sw c"></i>Event comet</span></div>
+     <div class="ctl"><button id="bLbl" aria-pressed="false" title="Show a few small title tags">Labels</button><button id="bGov" aria-pressed="true" title="Show AtGOV records awaiting HUMAN_FINAL">AtGOV</button><button id="bFit" title="Reset view">Reset</button></div></div>
     </div>
+    </div>
+    <div class="panel" id="detail" role="dialog" aria-labelledby="dTitle"></div>
    </section>
    <div class="mini">
     <section class="panel"><div class="ph"><span class="pt">Field Principle</span><span class="ps mono">A06 · A09</span></div><div class="pb quote">PROJ is not authority. Indexes and projections are rebuildable and non-authoritative.<span>internal/axiom · REG accepts · GOV decides</span></div></section>
@@ -323,7 +329,11 @@ function nodeSet(field,proj,facetOrder){
  for(const l of links)for(const fa of l.a.facets)for(const fb of l.b.facets)bump(fa,fb);
  const anchorEdges=[...fe].map(([k,w])=>{const [a,b]=k.split('|');return {a:anchors.get(a),b:anchors.get(b),w}}).filter(e=>e.a&&e.b);
  const linkedAcc=new Set();for(const l of links){linkedAcc.add(l.a.id);linkedAcc.add(l.b.id)}
- return {nodes:out,byID:by,links,threads:[...threads.values()],anchors:[...anchors.values()],anchorEdges,stats:{accTotal:accN.length,linkedAcc:accN.filter(n=>linkedAcc.has(n.id)).length,govTotal:govRefs.length,govLinked}}}
+ const asmOf=new Map();if(proj&&Array.isArray(proj.assemblies))for(const a of proj.assemblies){const ms=new Set([...(a.members||[]),...(a.links||[]).flatMap(l=>[l.from,l.to])]);for(const m of ms)asmOf.set(m,(asmOf.get(m)||0)+1)}
+ for(const n of accN){n.nl=0;n.asm=asmOf.get(n.id)||0}for(const l of links){l.a.nl++;l.b.nl++}
+ let maxWeight=0;for(const n of accN){n.weight=n.nl+n.gov+n.asm;if(n.weight>maxWeight)maxWeight=n.weight}
+ const maxMembers=Math.max(0,...[...anchors.values()].map(a=>a.members));
+ return {nodes:out,byID:by,links,threads:[...threads.values()],anchors:[...anchors.values()],anchorEdges,maxWeight,maxMembers,stats:{accTotal:accN.length,linkedAcc:accN.filter(n=>linkedAcc.has(n.id)).length,govTotal:govRefs.length,govLinked}}}
 // Shortest unique IDN prefix (at least 10 chars) so no two labels ever read the same.
 function shortLen(ids){const u=[...new Set(ids)];for(let n=10;n<64;n++){const s=new Set(u.map(id=>id.slice(0,n)));if(s.size===u.length)return n}return 64}
 // Records that share one SOURCE hash under different IDNs (reported, never merged).
@@ -335,11 +345,25 @@ function nameOf(n){if(!n)return '';const em=n.em||{},r=em.r||{},isID=v=>/^\s*E-[
  const sum=String((em.m&&em.m.s)||(n.kind==='pending'?n.label:'')||'').replace(IDN_G,'').replace(/[\s:,;·|-]+$/,'').replace(/\s{2,}/g,' ').trim();
  if(sum.length>=3&&!isID(sum))return sum;
  const kind=n.kind==='pending'?'AtGOV record':'REG-accepted record';return r.source_kind?kind+' · '+r.source_kind:kind}
+// Colour by the record's real kind (REL source_kind / kind / type), within the palette only.
+// Unknown kinds fall back to the white core. Hues stay out of 165-200 (no cyan/teal).
+const KIND_PALETTE=[[/CAPAB|PROVIDER/,'capability','#2f5bff'],[/PROJECT/,'projection','#7f9cff'],[/EXECUT|OBSERV|RESULT/,'execution','#5b7bd6'],[/GOVERN|IMPLEMENT|EVIDENCE/,'evidence','#4b4fd8'],[/SOURCE/,'source','#c9d1e0']];
+const KIND_WHITE='#ffffff',GOV_COLOR='rgba(140,155,190,0.35)';
+function kindOf(n){const r=(n&&n.em&&n.em.r)||{};const k=r.source_kind||r.kind||r.type||'';if(k)return String(k).toUpperCase();if(n&&n.rec&&Array.isArray(n.rec.capabilities)&&n.rec.capabilities.length)return 'CAPABILITY';return ''}
+function kindColor(kind){if(kind==='ATGOV')return GOV_COLOR;for(const [re,,c] of KIND_PALETTE)if(re.test(kind))return c;return KIND_WHITE}
+// Kinds present in the data with counts (accepted records), most common first.
+function kindCounts(nodes){const m=new Map();for(const n of nodes)if(n.kind==='accepted'){const k=kindOf(n)||'REG_ACCEPTED';m.set(k,(m.get(k)||0)+1)}return [...m].sort((a,b)=>b[1]-a[1]||(a[0]<b[0]?-1:1))}
+// Node size/brightness from real counts:
+//   weight = kin/REL/composition links touching the record + AtGOV records referencing it + assemblies it belongs to
+//   radius = 2 + 7*sqrt(weight/maxWeight) px at DPR1 (2..9 px); brightness = .4 + .6*sqrt(weight/maxWeight)
+// Facet anchors use the same curve over member counts.
+function nodeRadius(w,maxW){return maxW>0?Math.min(9,Math.max(2,2+7*Math.sqrt(Math.max(0,w)/maxW))):2}
+function nodeBright(w,maxW){return maxW>0?.4+.6*Math.sqrt(Math.min(1,Math.max(0,w)/maxW)):.4}
 // </node-set>
-let SHORT=12,threads=[],anchors=[],anchorEdges=[],lstats=null;
+let maxWeight=0,maxMembers=0,SHORT=12,threads=[],anchors=[],anchorEdges=[],lstats=null;
 function build(){
  facetOrder=proj&&Array.isArray(proj.facet_order)?proj.facet_order:Object.keys(FACET_LABEL);
- const ns=nodeSet(field,proj,facetOrder);nodes=ns.nodes;byID=ns.byID;links=ns.links;threads=ns.threads;anchors=ns.anchors;anchorEdges=ns.anchorEdges;lstats=ns.stats;SHORT=shortLen(nodes.map(n=>n.id));
+ const ns=nodeSet(field,proj,facetOrder);nodes=ns.nodes;byID=ns.byID;links=ns.links;threads=ns.threads;anchors=ns.anchors;anchorEdges=ns.anchorEdges;lstats=ns.stats;maxWeight=ns.maxWeight;maxMembers=ns.maxMembers;renderKinds();SHORT=shortLen(nodes.map(n=>n.id));for(const n of nodes)n.col=n.kind==='accepted'?kindColor(kindOf(n)):GOV_COLOR;
  if(selected)selected=byID.get(selected.id)||null;
 }
 
@@ -418,7 +442,7 @@ function select(n,focus){selected=n;const D=$('detail');D.replaceChildren();if(!
  if(n.t)kv('Captured',new Date(n.t).toLocaleString());if(em.m&&em.m.s)kv('Summary',em.m.s);if(em.m&&em.m.h)kv('Source hash',em.m.h.slice(0,16)+'…',true);
  const r=em.r||{},w=el('div');for(const k of Object.keys(KIN_KEYS)){const v=r[k];if(typeof v!=='string'||!v)continue;for(const id of (v.match(/E-[A-Fa-f0-9]+/g)||[])){const o=byID.get(id),pend=!o||o.kind!=='accepted'||n.kind!=='accepted',s=el('span','kin'+(pend?' p':''));s.append(el('em',null,KIN_KEYS[k]),document.createTextNode(shortID(id)));s.title=pend?'Pending (AtGOV) or outside view':'Verified · both REG-accepted';w.append(s)}}
  if(w.childNodes.length)kv('Recorded kin',w);
- if(n.kind==='accepted'&&n.gov)kv('AtGOV refs',fmt(n.gov)+' AtGOV records reference this record');if(n.kind==='pending'&&n.target)kv('References',n.target.id,true);if(n.kind==='pending')kv('Governance','Awaiting HUMAN_FINAL. Not verified, not counted in verified references.');
+ if(n.kind==='accepted')kv('Weight',fmt(n.weight)+': '+fmt(n.nl)+' links, '+fmt(n.gov)+' AtGOV refs, '+fmt(n.asm)+' assemblies');if(n.kind==='accepted')kv('Kind',kindOf(n)||'REG_ACCEPTED');if(n.kind==='accepted'&&n.gov)kv('AtGOV refs',fmt(n.gov)+' AtGOV records reference this record');if(n.kind==='pending'&&n.target)kv('References',n.target.id,true);if(n.kind==='pending')kv('Governance','Awaiting HUMAN_FINAL. Not verified, not counted in verified references.');
  D.classList.add('on');if(focus)$('c').scrollIntoView({block:'nearest',behavior:'smooth'});want()}
 
 /* ---------- renderer ---------- */
@@ -442,7 +466,7 @@ function frame(ts){raf=0;const dt=Math.min(.05,(ts-(lastT||ts))/1000);lastT=ts;c
 function draw(t){g.clearRect(0,0,W,H);
  // backdrop: near-black with deep electric blue underglow
  const bg=g.createLinearGradient(0,0,0,H);bg.addColorStop(0,'#04060b');bg.addColorStop(.55,'#060a16');bg.addColorStop(1,'#04060c');g.fillStyle=bg;g.fillRect(0,0,W,H);
- const gc=P(0,-1.2,0);if(gc){const s=Math.max(W,H)*1.1*cam.zoom;g.globalAlpha=.9;g.drawImage(sprites.glow,gc.x-s/2,gc.y-s*.22,s,s*.44);g.globalAlpha=1}
+ const zf=1/Math.pow(Math.max(1,cam.zoom),.8);const gc=P(0,-1.2,0);if(gc){const s=Math.max(W,H)*1.1*cam.zoom;g.globalAlpha=.9*zf;g.drawImage(sprites.glow,gc.x-s/2,gc.y-s*.22,s,s*.44);g.globalAlpha=1}
  // mesh wave surface
  const cols=mesh.cols,pts=new Array(mesh.length);for(let i=0;i<mesh.length;i++){const m=mesh[i],y=-1.2+.055*Math.sin(m.x*2.1+t*.7)+.04*Math.sin(m.z*2.7-t*.9)+.025*Math.sin((m.x+m.z)*4+t*1.3);pts[i]=P(m.x,y,m.z);if(pts[i])pts[i].h=y}
  g.lineWidth=.6;for(let j=0;j<mesh.rows;j++){g.beginPath();let on=false;for(let i=0;i<cols;i++){const p=pts[j*cols+i];if(!p){on=false;continue}on?g.lineTo(p.x,p.y):g.moveTo(p.x,p.y);on=true}const dep=j/(mesh.rows-1);g.strokeStyle=`rgba(59,130,246,${.08+.22*dep})`;g.stroke()}
@@ -450,8 +474,8 @@ function draw(t){g.clearRect(0,0,W,H);
  for(const p of pts){if(!p)continue;const cr=(p.h+1.2)/.12,a=Math.min(1,.4+cr*.6)*Math.min(1,2.6/p.z);const s=1+.9*Math.min(1,2.6/p.z);g.fillStyle=cr>.75?`rgba(225,230,255,${a})`:`rgba(100,140,255,${a*.85})`;g.fillRect(p.x-s/2,p.y-s/2,s,s)}
  // fog cloud
  g.globalCompositeOperation='lighter';
- {const cc=P(0,0,0);if(cc){const s=Math.min(W,H)*1.15*cam.zoom;g.globalAlpha=.45;g.drawImage(sprites.core,cc.x-s/2,cc.y-s*.32,s,s*.64);g.globalAlpha=1}}
- for(const f of fog){const p=P(f.x+.06*Math.sin(t*.12+f.ph),f.y+.03*Math.sin(t*.2+f.ph),f.z);if(!p)continue;const s=f.s*p.s*Math.min(W,H)*.55;g.globalAlpha=.34+.1*Math.sin(t*.3+f.ph);g.drawImage(f.b?sprites.fogW:sprites.fogB,p.x-s/2,p.y-s*.36,s,s*.72)}
+ {const cc=P(0,0,0);if(cc){const s=Math.min(W,H)*1.15*cam.zoom;g.globalAlpha=.45*zf;g.drawImage(sprites.core,cc.x-s/2,cc.y-s*.32,s,s*.64);g.globalAlpha=1}}
+ for(const f of fog){const p=P(f.x+.06*Math.sin(t*.12+f.ph),f.y+.03*Math.sin(t*.2+f.ph),f.z);if(!p)continue;const s=f.s*p.s*Math.min(W,H)*.55;g.globalAlpha=(.34+.1*Math.sin(t*.3+f.ph))*zf;g.drawImage(f.b?sprites.fogW:sprites.fogB,p.x-s/2,p.y-s*.36,s,s*.72)}
  g.globalAlpha=1;g.globalCompositeOperation='source-over';
  for(const d of dust){const p=P(d.x,d.y+.02*Math.sin(t*.5+d.s*6),d.z);if(!p)continue;const a=(.18+.5*d.b)*Math.min(1,2.2/p.z)*(.75+.25*Math.sin(t*1.5+d.s*9));const s=.7+1.3*d.b*Math.min(1.4,2.6/p.z);g.fillStyle=`rgba(${d.b>.6?'240,243,255':'160,180,255'},${a})`;g.fillRect(p.x,p.y,s,s)}
  g.globalCompositeOperation='source-over';
@@ -462,7 +486,7 @@ function draw(t){g.clearRect(0,0,W,H);
  const selAdj=new Set();if(selected)for(const l of links)if(l.a===selected||l.b===selected){selAdj.add(l.a);selAdj.add(l.b)}
  for(const l of links){if(!l.a.p||!l.b.p||(l.a.kind==='pending'&&!showGov))continue;const on=l.a.on&&l.b.on,hot=selected&&(l.a===selected||l.b===selected);const p=l.a.p,q=l.b.p,mx=(p.x+q.x)/2,my=(p.y+q.y)/2-Math.hypot(q.x-p.x,q.y-p.y)*.22;
   g.beginPath();g.moveTo(p.x,p.y);g.quadraticCurveTo(mx,my,q.x,q.y);
-  if(l.k==='COMPOSED_WITH'){g.strokeStyle=`rgba(59,130,246,${hot?.95:on?.5:.06})`;g.lineWidth=hot?1.8:1}else{g.strokeStyle=`rgba(210,222,255,${hot?.8:on?.13:.03})`;g.lineWidth=hot?1.2:.6}g.stroke()}
+  const zl=Math.min(2.6,Math.max(1,cam.zoom));if(l.k==='COMPOSED_WITH'){g.strokeStyle=`rgba(59,130,246,${hot?.95:on?Math.min(.85,.5*Math.sqrt(zl)):.06})`;g.lineWidth=(hot?1.8:1)*Math.sqrt(zl)}else{g.strokeStyle=`rgba(210,222,255,${hot?.8:on?Math.min(.5,.13*zl):.03})`;g.lineWidth=(hot?1.2:.6)*Math.sqrt(zl)}g.stroke()}
  // emergent facet attractors: faint edges only where facets share relationships, names at the attractor
  const maxW=Math.max(1,...anchorEdges.map(e=>e.w));
  for(const e of anchorEdges){const p=P(e.a.x,e.a.y,e.a.z),q=P(e.b.x,e.b.y,e.b.z);if(!p||!q)continue;const on=filter==='ALL'||filter===e.a.facet||filter===e.b.facet;g.strokeStyle=`rgba(150,175,240,${(on?.05:.015)+.22*(e.w/maxW)*(on?1:.2)})`;g.lineWidth=.5+1.6*(e.w/maxW);g.setLineDash([2,4]);g.beginPath();g.moveTo(p.x,p.y);g.lineTo(q.x,q.y);g.stroke()}
@@ -471,35 +495,61 @@ function draw(t){g.clearRect(0,0,W,H);
  const maxC=Math.max(1,...threads.map(th=>th.count));
  if(showGov)for(const th of threads){const p=P(th.cx,th.cy,th.cz),q=th.t.p;if(!p||!q)continue;const on=inFilter(th.t),hot=selected===th.t,f=Math.log2(1+th.count)/Math.log2(1+maxC);
   g.strokeStyle=`rgba(205,214,236,${hot?.7:on?.05+.18*f:.02})`;g.lineWidth=.4+1.4*f;g.beginPath();g.moveTo(p.x,p.y);g.lineTo(q.x,q.y);g.stroke()}
- g.font='700 9px system-ui,sans-serif';g.textAlign='center';
- for(const A of anchors){const p=P(A.x,A.y,A.z);A.p=p;if(!p)continue;const sel=filter===A.facet,front=Math.max(.25,Math.min(1,2.9/p.z-.25));g.fillStyle=sel?'rgba(120,165,255,.95)':`rgba(190,205,240,${(filter==='ALL'?.55:.22)*front})`;g.fillText((FACET_LABEL[A.facet]||A.facet).toUpperCase(),p.x,p.y-10);g.fillStyle=`rgba(150,175,240,${.35*front})`;g.fillText('· '+A.members+' ·',p.x,p.y+1)}
+ // facet attractor dots (sized by member count); their names are drawn above the nodes
+ for(const A of anchors){const p=P(A.x,A.y,A.z);A.p=p;A.rect=null;if(!p)continue;const sel=filter===A.facet;g.fillStyle=`rgba(127,156,255,${sel?.6:.3})`;g.beginPath();g.arc(p.x,p.y,nodeRadius(A.members,maxMembers)*.8,0,6.283);g.fill()}
  g.textAlign='left';
  // nodes
  // AtGOV layer: rings when few, one batched density pass when many (thousands stay smooth)
- if(govP.length<=400){g.lineWidth=1;for(const on of [true,false]){g.strokeStyle=`rgba(205,214,236,${on?.38:.06})`;g.beginPath();for(const n of govP){if(n.on!==on)continue;const r=2.2+1.2*n.p.s;g.moveTo(n.p.x+r,n.p.y);g.arc(n.p.x,n.p.y,r,0,6.283)}g.stroke()}}
- else{const a=Math.max(.16,Math.min(.4,180/govP.length*2));for(const on of [true,false]){g.fillStyle=`rgba(205,214,236,${on?a:a*.15})`;g.beginPath();for(const n of govP){if(n.on!==on)continue;g.rect(n.p.x-.8,n.p.y-.8,1.6,1.6)}g.fill()}}
+ if(govP.length<=400){g.lineWidth=1;for(const on of [true,false]){g.strokeStyle=`rgba(140,155,190,${on?.35:.06})`;g.beginPath();for(const n of govP){if(n.on!==on)continue;const r=2.2+1.2*n.p.s;g.moveTo(n.p.x+r,n.p.y);g.arc(n.p.x,n.p.y,r,0,6.283)}g.stroke()}}
+ else{const a=Math.max(.16,Math.min(.35,180/govP.length*2));for(const on of [true,false]){g.fillStyle=`rgba(140,155,190,${on?a:a*.15})`;g.beginPath();for(const n of govP){if(n.on!==on)continue;g.rect(n.p.x-.8,n.p.y-.8,1.6,1.6)}g.fill()}}
  for(const n of proj2){const p=n.p,dim=n.on?1:.14;
-  const sel=n===selected,adj=selAdj.has(n),s=(sel?54:adj?42:32)*Math.max(.6,Math.min(1.4,p.s*2))*(.92+.08*Math.sin(t*1.6+n.tw));g.globalAlpha=dim*(sel?1:.9);g.drawImage(sprites.halo,p.x-s/2,p.y-s/2,s,s);g.globalAlpha=1;g.fillStyle=`rgba(255,255,255,${dim})`;g.beginPath();g.arc(p.x,p.y,(sel?2.8:1.9)*Math.max(.75,Math.min(1.3,p.s*2)),0,6.283);g.fill();
-  if(sel){g.strokeStyle='rgba(255,255,255,.9)';g.lineWidth=1;g.beginPath();g.arc(p.x,p.y,9,0,6.283);g.stroke()}}
+  const sel=n===selected,adj=selAdj.has(n),depth=Math.max(.8,Math.min(1.2,p.s*2)),r=Math.min(9,Math.max(2,nodeRadius(n.weight,maxWeight)*depth)),br=nodeBright(n.weight,maxWeight),s=(sel?Math.max(40,r*7):adj?r*6+8:r*5+6)*(.92+.08*Math.sin(t*1.6+n.tw));
+  g.globalAlpha=dim*(sel?1:br*.95);g.drawImage(sprites.halo,p.x-s/2,p.y-s/2,s,s);g.globalAlpha=dim*Math.max(br,sel?1:0);g.fillStyle=n.col||KIND_WHITE;g.beginPath();g.arc(p.x,p.y,sel?r+.8:r,0,6.283);g.fill();g.globalAlpha=dim*br*.9;g.fillStyle='#fff';g.beginPath();g.arc(p.x,p.y,Math.max(.8,r*.38),0,6.283);g.fill();g.globalAlpha=1;
+  if(sel){g.strokeStyle='rgba(255,255,255,.9)';g.lineWidth=1;g.beginPath();g.arc(p.x,p.y,r+6,0,6.283);g.stroke()}}
  drawComets(t);
+ facetNames();
  if(field&&!nodes.some(n=>n.kind==='accepted')){g.textAlign='center';g.font='700 11px system-ui,sans-serif';g.fillStyle='rgba(242,245,255,.85)';g.fillText('NO REG-ACCEPTED RECORDS YET',W/2,H*.42);g.font='500 10.5px system-ui,sans-serif';g.fillStyle='rgba(170,182,211,.8)';g.fillText('The render fills in as HUMAN_FINAL approves and REG accepts',W/2,H*.42+18);g.textAlign='left'}
  labels();
  setText('zoomv',cam.zoom.toFixed(2)+'×')}
-function labels(){const placed=[],small=W<700,max=small?4:7;const cand=[],shown=new Set();if(selected&&selected.p)cand.push(selected);
- for(const n of proj2.filter(n=>n.kind==='accepted'&&n.on&&n!==selected).sort((a,b)=>String(b.t).localeCompare(String(a.t))))cand.push(n);
- g.textBaseline='middle';let count=0;
- for(const n of cand){if(count>=max)break;if(shown.has(n.id))continue;const p=n.p;if(p.x<20||p.x>W-20||p.y<70||p.y>H-60)continue;
-  const right=p.x<W*.62,dx=right?1:-1,ex=p.x+dx*24,ey=p.y-22,id=shortID(n.id);
-  g.font='600 10.5px '+getComputedStyle(document.body).getPropertyValue('--mono');const w1=g.measureText(id).width;g.font='500 11px system-ui,sans-serif';const lines=wrap2(String(nameOf(n)),small?138:168);const w2=Math.max(...lines.map(l=>g.measureText(l).width));const w=Math.max(w1,w2)+14,h=lines.length>1?47:34;
-  const bx=right?ex+16:ex-16-w,by=ey-h/2;const rect={x:bx-4,y:by-4,w:w+8,h:h+8};if(bx<6||bx+w>W-6||by<60)continue;
-  if(placed.some(r=>!(rect.x+rect.w<r.x||r.x+r.w<rect.x||rect.y+rect.h<r.y||r.y+r.h<rect.y)))continue;placed.push(rect);shown.add(n.id);count++;
-  const sel=n===selected;g.strokeStyle=sel?'rgba(255,255,255,.85)':'rgba(170,195,255,.55)';g.lineWidth=.8;g.beginPath();g.moveTo(p.x+dx*3,p.y-3);g.lineTo(ex,ey);g.lineTo(right?bx:bx+w,ey);g.stroke();
-  g.fillStyle='rgba(5,8,16,.82)';g.strokeStyle=sel?'rgba(59,130,246,.9)':'rgba(120,150,220,.32)';g.beginPath();g.roundRect?g.roundRect(bx,by,w,h,4):g.rect(bx,by,w,h);g.fill();g.stroke();
-  g.fillStyle='#3b82f6';g.fillRect(right?bx:bx+w-2,by+5,2,h-10);
-  g.font='600 10.5px '+getComputedStyle(document.body).getPropertyValue('--mono');g.fillStyle='#a9c2ff';g.fillText(id,bx+8,by+11);g.font='500 11px system-ui,sans-serif';g.fillStyle='#f2f5ff';lines.forEach((l,i)=>g.fillText(l,bx+8,by+24+i*13))}}
-// two lines at most, word-wrapped; ellipsis only if the second line still overflows (font must be set)
-function wrap2(text,max){const words=text.split(/\s+/).filter(Boolean),out=[''];for(const w of words){const cur=out[out.length-1],t=cur?cur+' '+w:w;if(g.measureText(t).width<=max||!cur)out[out.length-1]=t;else if(out.length<2)out.push(w);else{out[1]+=' '+w}}
- return out.map(l=>{if(g.measureText(l).width<=max)return l;while(l.length>1&&g.measureText(l+'…').width>max)l=l.slice(0,-1);return l+'…'})}
+// Labels: none by default. A tapped node gets one compact tooltip placed away from it; the
+// optional Labels toggle adds at most 5 tiny title tags for the nodes nearest the viewer.
+// Facet names are reserved first, so no tag or tooltip ever covers them.
+// Label budget: facet names may use at most 6% of the render, all labels together under 10%.
+const FACET_BUDGET=.06,LABEL_BUDGET=.095;let labelsOn=false,labelArea=0,facetArea=0,tipOverlap=0;
+const hit=(a,b)=>!(a.x+a.w<=b.x||b.x+b.w<=a.x||a.y+a.h<=b.y||b.y+b.h<=a.y);
+function labels(){const placed=[],drawn=[],mono=getComputedStyle(document.body).getPropertyValue('--mono');g.textBaseline='middle';g.textAlign='left';
+ for(const A of anchors)if(A.rect)placed.push(A.rect);
+ const inside=r=>r.x>=4&&r.y>=4&&r.x+r.w<=W-4&&r.y+r.h<=H-4;
+ const n=selected;if(n&&n.p){const p=n.p,maxW=W*.6;g.font='600 10px '+mono;const id=fit1(shortID(n.id),maxW-16);const w1=g.measureText(id).width;g.font='500 11px system-ui,sans-serif';const t=fit1(String(nameOf(n)),maxW-16);const w=Math.min(maxW,Math.max(w1,g.measureText(t).width)+16),h=32;
+  const sx=p.x<W/2?1:-1,sy=p.y<H/2?1:-1;let r=null,bestOv=Infinity;
+  // try near-to-far offsets in all four quadrants; never over a facet name if any spot is free
+  for(const k of [1,2,3,4.5])for(const [ax,ay] of [[sx,sy],[sx,-sy],[-sx,sy],[-sx,-sy]]){const bx=ax>0?p.x+20*k:p.x-20*k-w,by=ay>0?p.y+16*k:p.y-16*k-h,c={x:Math.max(6,Math.min(W-6-w,bx)),y:Math.max(56,Math.min(H-6-h,by)),w,h};if(Math.hypot(c.x+w/2-p.x,c.y+h/2-p.y)<24||(p.x>=c.x-6&&p.x<=c.x+w+6&&p.y>=c.y-6&&p.y<=c.y+h+6))continue;
+   const ov=placed.reduce((a,q)=>a+(hit(c,q)?Math.max(0,Math.min(c.x+w,q.x+q.w)-Math.max(c.x,q.x))*Math.max(0,Math.min(c.y+h,q.y+q.h)-Math.max(c.y,q.y)):0),0);if(ov<bestOv){bestOv=ov;r=c}if(ov===0)break}
+  if(!r)r={x:Math.max(6,Math.min(W-6-w,p.x+26)),y:Math.max(56,Math.min(H-6-h,p.y+22)),w,h};tipOverlap=bestOv===Infinity?0:bestOv;
+  const cx=Math.max(r.x,Math.min(r.x+r.w,p.x)),cy=Math.max(r.y,Math.min(r.y+r.h,p.y));g.strokeStyle='rgba(170,195,255,.45)';g.lineWidth=.7;g.beginPath();g.moveTo(p.x,p.y);g.lineTo(cx,cy);g.stroke();
+  g.fillStyle='rgba(5,8,16,.86)';g.strokeStyle='rgba(59,130,246,.55)';g.beginPath();g.roundRect?g.roundRect(r.x,r.y,r.w,r.h,4):g.rect(r.x,r.y,r.w,r.h);g.fill();g.stroke();
+  g.font='600 10px '+mono;g.fillStyle='#a9c2ff';g.fillText(id,r.x+8,r.y+10);g.font='500 11px system-ui,sans-serif';g.fillStyle='#f2f5ff';g.fillText(t,r.x+8,r.y+22);placed.push(r);drawn.push(r)}
+ if(labelsOn){g.font='500 11px system-ui,sans-serif';let count=0;
+  for(const m of proj2.filter(m=>m.kind==='accepted'&&m.on&&m!==selected).sort((a,b)=>a.p.z-b.p.z)){if(count>=5)break;const p=m.p,t=fit1(String(nameOf(m)),W*.32),w=g.measureText(t).width,r={x:p.x+7,y:p.y-7,w:w+2,h:14};
+   if(!inside(r)||placed.some(q=>hit(r,q))||facetArea+drawn.reduce((a,q)=>a+q.w*q.h,0)+r.w*r.h>W*H*LABEL_BUDGET)continue;placed.push(r);drawn.push(r);count++;g.fillStyle='rgba(5,7,13,.62)';g.fillRect(r.x-2,r.y,r.w+4,r.h);g.fillStyle='rgba(230,236,255,.9)';g.fillText(t,r.x+1,r.y+7)}}
+ labelArea=drawn.reduce((a,r)=>a+r.w*r.h,0)}
+function labelCoverage(){return (labelArea+facetArea)/(W*H)}
+// Facet names: crisp near-white small caps with a dark halo, count beneath. Placed by member
+// count (largest first), nudged to avoid each other, clamped inside the render; any that still
+// collide are hidden. Font scales gently with zoom (10-14 px).
+function facetNames(){const fs=Math.max(10,Math.min(14,11*Math.pow(cam.zoom,.35))),cs=Math.max(8.5,fs-2.5),pad=2,placed=[],budget=W*H*FACET_BUDGET;let used=0;
+ g.save();g.textAlign='left';g.textBaseline='middle';g.lineJoin='round';
+ for(const A of anchors.filter(a=>a.p&&a.p.x>=0&&a.p.x<=W&&a.p.y>=0&&a.p.y<=H).sort((a,b)=>b.members-a.members||(a.facet<b.facet?-1:1))){const p=A.p,name=(FACET_LABEL[A.facet]||A.facet).toUpperCase(),cnt=fmt(A.members)+(A.members===1?' record':' records');
+  g.font=`700 ${fs}px system-ui,sans-serif`;g.letterSpacing='1px';const nw=g.measureText(name).width;g.font=`600 ${cs}px system-ui,sans-serif`;g.letterSpacing='0.5px';const cw=g.measureText(cnt).width;
+  const w=Math.max(nw,cw)+pad*2+4,h=fs+cs+pad*2+1;if(used+w*h>budget)continue;let r=null;
+  for(const [dx,dy] of [[0,-1],[0,0],[0,-2],[1,-1],[-1,-1],[0,1]]){const x=Math.max(4,Math.min(W-4-w,p.x-w/2+dx*(w/2+8))),y=Math.max(4,Math.min(H-4-h,p.y-h/2+dy*(h*.75+6))),c={x,y,w,h};if(!placed.some(q=>hit(c,q))){r=c;break}}
+  if(!r)continue;placed.push(r);A.rect=r;used+=w*h;const sel=filter===A.facet,on=filter==='ALL'||sel;
+  g.globalAlpha=on?1:.55;g.fillStyle='rgba(5,7,13,0.66)';g.shadowColor='rgba(5,7,13,0.8)';g.shadowBlur=8;g.beginPath();g.roundRect?g.roundRect(r.x,r.y,r.w,r.h,5):g.rect(r.x,r.y,r.w,r.h);g.fill();g.font=`700 ${fs}px system-ui,sans-serif`;g.letterSpacing='1px';g.strokeStyle='rgba(5,7,13,0.85)';g.lineWidth=3.5;g.shadowColor='rgba(5,7,13,0.85)';g.shadowBlur=6;
+  const tx=r.x+(w-nw)/2,ty=r.y+pad+fs/2;g.strokeText(name,tx,ty);g.shadowBlur=0;g.fillStyle=sel?'#ffffff':'rgba(232,237,247,0.92)';g.fillText(name,tx,ty);
+  g.font=`600 ${cs}px system-ui,sans-serif`;g.letterSpacing='0.5px';const cx=r.x+(w-cw)/2,cy=ty+fs/2+1+cs/2;g.lineWidth=3;g.strokeText(cnt,cx,cy);g.fillStyle=sel?'#c3d2ff':'#9fb1dc';g.fillText(cnt,cx,cy)}
+ g.restore();g.letterSpacing='0px';facetArea=used}
+// one line, ellipsis when it would exceed max px (font must be set)
+function fit1(text,max){text=text.replace(/\s+/g,' ').trim();if(g.measureText(text).width<=max)return text;while(text.length>1&&g.measureText(text+'…').width>max)text=text.slice(0,-1);return text.trimEnd()+'…'}
 
 
 /* ---------- event comets (real ledger events only) ---------- */
@@ -545,9 +595,11 @@ c.addEventListener('pointerdown',e=>{c.setPointerCapture(e.pointerId);ptr.set(e.
 c.addEventListener('pointermove',e=>{if(!ptr.has(e.pointerId)){if(e.pointerType==='mouse'){const r=c.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,ev=hitEvent(x,y);if(ev)showEvent(ev,x,y)}return}const o=ptr.get(e.pointerId);ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
  if(ptr.size===2){const a=[...ptr.values()],d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);if(pinch)cam.zoom=Math.max(.6,Math.min(2.6,cam.zoom*d/pinch));pinch=d}
  else if(drag){cam.yaw+=(e.clientX-o.x)*.006;cam.pitch=Math.max(.12,Math.min(.95,cam.pitch+(e.clientY-o.y)*.004));if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>6)drag.moved=true}want()});
-function up(e){if(drag&&!drag.moved&&ptr.size===1&&e.type==='pointerup'){const r=c.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const hev=hitEvent(x,y);if(hev){showEvent(hev,x,y)}let best=null,bd=24;for(const n of proj2){const d=Math.hypot(n.p.x-x,n.p.y-y);if(d<bd){bd=d;best=n}}if(!best){bd=10;for(const n of govP){const d=Math.hypot(n.p.x-x,n.p.y-y);if(d<bd){bd=d;best=n}}}if(!best&&!hev){for(const A of anchors){if(A.p&&Math.abs(A.p.x-x)<48&&Math.abs(A.p.y-6-y)<12){filter=filter===A.facet?'ALL':A.facet;renderNav();break}}}if(best||!hev)select(best)}ptr.delete(e.pointerId);if(!ptr.size){drag=null;pinch=0;c.classList.remove('grab')}}
+function up(e){if(drag&&!drag.moved&&ptr.size===1&&e.type==='pointerup'){const r=c.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const hev=hitEvent(x,y);if(hev){showEvent(hev,x,y)}let best=null,bd=24;for(const n of proj2){const d=Math.hypot(n.p.x-x,n.p.y-y);if(d<bd){bd=d;best=n}}if(!best){bd=10;for(const n of govP){const d=Math.hypot(n.p.x-x,n.p.y-y);if(d<bd){bd=d;best=n}}}if(!best&&!hev){for(const A of anchors){if(A.rect&&x>=A.rect.x-4&&x<=A.rect.x+A.rect.w+4&&y>=A.rect.y-4&&y<=A.rect.y+A.rect.h+4){filter=filter===A.facet?'ALL':A.facet;renderNav();break}}}if(best||!hev)select(best)}ptr.delete(e.pointerId);if(!ptr.size){drag=null;pinch=0;c.classList.remove('grab')}}
 c.addEventListener('pointerup',up);c.addEventListener('pointercancel',up);
 c.addEventListener('wheel',e=>{e.preventDefault();auto=false;cam.zoom=Math.max(.6,Math.min(2.6,cam.zoom*Math.exp(-e.deltaY*.0015)));want()},{passive:false});
+function renderKinds(){const L=$('kindLg');if(!L)return;const kc=kindCounts(nodes),show=kc.slice(0,6);L.replaceChildren(...show.map(([k,c])=>{const sp=el('span','lg'),i=el('i','sw kd');i.style.background=kindColor(k);sp.append(i,document.createTextNode(k.toLowerCase().replace(/_/g,' ')+' '+fmt(c)));return sp}));if(kc.length>6)L.append(el('span','lg',`+${kc.length-6} kinds`))}
+$('bLbl').onclick=()=>{labelsOn=!labelsOn;$('bLbl').setAttribute('aria-pressed',String(labelsOn));want()};
 $('bGov').onclick=()=>{showGov=!showGov;$('bGov').setAttribute('aria-pressed',String(showGov));if(!showGov&&selected&&selected.kind==='pending')select(null);renderTimeline();want()};
 $('bFit').onclick=()=>{cam={yaw:-.5,pitch:.42,zoom:1};auto=true;filter='ALL';asmSel=null;renderNav();renderSaabs();select(null);want()};
 $('cPrev').onclick=()=>{asmIdx--;renderCode()};$('cNext').onclick=()=>{asmIdx++;renderCode()};
