@@ -16,7 +16,7 @@ func upload(id, h string) core.EmergION {
 		MEM: core.Memory{SourceHash: "src-" + id, Provenance: ProvenanceSourceUpload},
 		REL: map[string]string{
 			"protector": "NO_EXTERNAL_AUTHORITY_CLAIMED", "source_kind": KindSourceUpload, "source_sha256": h,
-			"source_path": "sources/x/" + id + ".pdf", "source_title": "T " + id, "source_bytes": "10", "source_topic": "x",
+			"source_path": "sources/x/" + id + ".pdf", "source_title": "Helix grant brief " + id, "source_bytes": "10", "source_topic": "x",
 		},
 		CAP: []string{"OBS"},
 		VAL: core.Validation{Risk: "L", Recoil: true, WVC: true},
@@ -51,7 +51,7 @@ func TestPolicyFileMatchesCode(t *testing.T) {
 	if err := json.Unmarshal(Bytes(), &d); err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]string{ClassSourceUpload: "APPROVE", ClassDuplicate: "HOLD", ClassGenerated: "HOLD", ClassKinLinkWorker: "APPROVE", ClassInsightWorker: "APPROVE"}
+	want := map[string]string{ClassSourceUpload: "APPROVE", ClassDuplicate: "HOLD", ClassGenerated: "HOLD", ClassKinLinkWorker: "APPROVE", ClassInsightWorker: "APPROVE", ClassWorkerNoise: "HOLD"}
 	if len(d.Classes) != len(want) {
 		t.Fatalf("classes: %+v", d.Classes)
 	}
@@ -123,11 +123,11 @@ func TestA01Auto2LinksAndInsights(t *testing.T) {
 	ends := func() core.State {
 		st := core.EmptyState()
 		a, b := upload("E-a", strings.Repeat("1", 64)), upload("E-b", strings.Repeat("2", 64))
-		b.STA = core.StateHeld
-		st.AtGOV["E-a"], st.Held["E-b"] = a, b
+		b.STA = core.StateApproved
+		st.AtGOV["E-a"], st.Approved["E-b"] = a, b
 		return st
 	}
-	// A01-AUTO-2: a link whose ends are not accepted (AtGOV, held) auto-approves
+	// A01-AUTO-2: a link whose ends are not accepted (AtGOV, approved) auto-approves
 	if v := classify(ends(), link("E-L", "E-a", "E-b")); v.Class != ClassKinLinkWorker || v.Decision != "APPROVE" {
 		t.Fatalf("link with non-accepted ends: %+v", v)
 	}
@@ -143,8 +143,8 @@ func TestA01Auto2LinksAndInsights(t *testing.T) {
 	}
 	// a link to a rejected upload is not approved
 	st = ends()
-	r := st.Held["E-b"]
-	delete(st.Held, "E-b")
+	r := st.Approved["E-b"]
+	delete(st.Approved, "E-b")
 	r.STA = core.StateRejected
 	st.Rejected["E-b"] = r
 	if v := classify(st, link("E-L", "E-a", "E-b")); v.Decision == "APPROVE" {
@@ -168,8 +168,8 @@ func TestA01Auto2LinksAndInsights(t *testing.T) {
 		t.Fatalf("insight citing missing kin: %+v", v)
 	}
 	st = ends()
-	st.Rejected["E-b"] = st.Held["E-b"]
-	delete(st.Held, "E-b")
+	st.Rejected["E-b"] = st.Approved["E-b"]
+	delete(st.Approved, "E-b")
 	if v := classify(st, insight("E-I", "E-b", "")); v.Decision != "" {
 		t.Fatalf("insight on rejected source: %+v", v)
 	}
@@ -281,7 +281,7 @@ func TestClassifyNeverAutoAcceptsHighRisk(t *testing.T) {
 
 func TestVerifyEvidence(t *testing.T) {
 	em := upload("E-1", sha)
-	desc := "SOURCE_UPLOAD/1\nSHA256:" + sha + "\nPATH:sources/x/E-1.pdf\nTITLE:T E-1\nTOPIC:x\nMIME:\nBYTES:10\nCAPTURED_AT:\nRELATED:\nZ\n"
+	desc := "SOURCE_UPLOAD/1\nSHA256:" + sha + "\nPATH:sources/x/E-1.pdf\nTITLE:Helix grant brief E-1\nTOPIC:x\nMIME:\nBYTES:10\nCAPTURED_AT:\nRELATED:\nZ\n"
 	v := Verdict{Class: ClassSourceUpload}
 	if err := VerifyEvidence(v, em, []byte(desc), ""); err != nil {
 		t.Fatal(err)
@@ -292,7 +292,7 @@ func TestVerifyEvidence(t *testing.T) {
 	if err := VerifyEvidence(v, em, []byte(desc), strings.Repeat("0", 64)); err == nil {
 		t.Fatal("file hash mismatch must fail")
 	}
-	if err := VerifyEvidence(v, em, []byte(strings.Replace(desc, "TITLE:T E-1", "TITLE:other", 1)), ""); err == nil {
+	if err := VerifyEvidence(v, em, []byte(strings.Replace(desc, "TITLE:Helix grant brief E-1", "TITLE:other", 1)), ""); err == nil {
 		t.Fatal("descriptor mismatch must fail")
 	}
 }
@@ -319,5 +319,76 @@ func TestReplayCheckNeedsActivePolicyAndHash(t *testing.T) {
 	d.Decision = "HOLD"
 	if err := ReplayCheck(st, x, on, em, d); err == nil {
 		t.Fatal("decision mismatch must fail")
+	}
+}
+
+func TestWorkerNoiseIsHeld(t *testing.T) {
+	mk := func(id, title, topic string) core.EmergION {
+		em := upload(id, strings.Repeat(id[len(id)-1:], 64))
+		em.REL["source_title"], em.REL["source_topic"] = title, topic
+		return em
+	}
+	base := func(a, b core.EmergION) core.State {
+		st := core.EmptyState()
+		a.STA, b.STA = core.StateAccepted, core.StateAccepted
+		st.Accepted[a.IDN], st.Accepted[b.IDN] = a, b
+		return st
+	}
+	real := mk("E-1", "Helix bench protocol.pdf", "inventions-ip")
+	cases := map[string]core.EmergION{
+		"pipe path":    mk("E-2", "PHONE|Download|scan_0042.pdf", "inventions-ip"),
+		"phone path":   mk("E-3", "/PHONE/Download/x.pdf", "inventions-ip"),
+		"raw id":       mk("E-4", "E-4B978014FEAFC9EA", "inventions-ip"),
+		"non-canon":    mk("E-5", "Fluid Registry v3 notes", "inventions-ip"),
+		"sha as title": mk("E-6", strings.Repeat("ab", 32), "inventions-ip"),
+	}
+	for name, bad := range cases {
+		st := base(real, bad)
+		if v := classify(st, link("E-L", "E-1", bad.IDN)); v.Class != ClassWorkerNoise || v.Decision != "HOLD" {
+			t.Fatalf("%s link: %+v", name, v)
+		}
+		if v := classify(st, insight("E-I", bad.IDN, "")); v.Class != ClassWorkerNoise || v.Decision != "HOLD" {
+			t.Fatalf("%s insight: %+v", name, v)
+		}
+		if LinkNoise(st, "E-1", bad.IDN) == "" {
+			t.Fatalf("%s: worker must skip", name)
+		}
+	}
+	// a held end is noise
+	st := base(real, mk("E-7", "Helix bench results", "inventions-ip"))
+	h := st.Accepted["E-7"]
+	delete(st.Accepted, "E-7")
+	h.STA = core.StateHeld
+	st.Held["E-7"] = h
+	if v := classify(st, link("E-L", "E-1", "E-7")); v.Class != ClassWorkerNoise {
+		t.Fatalf("held end: %+v", v)
+	}
+	// no shared topic: different topics and only generic title words
+	st = base(real, mk("E-8", "Investor deck.pdf", "grants"))
+	if v := classify(st, link("E-L", "E-1", "E-8")); v.Class != ClassWorkerNoise || !strings.Contains(v.Why, "no shared topic") {
+		t.Fatalf("no shared topic: %+v", v)
+	}
+	// a generic shared topic does not count
+	st = base(mk("E-1", "Helix bench protocol", "uploads"), mk("E-9", "Investor deck", "uploads"))
+	if v := classify(st, link("E-L", "E-1", "E-9")); v.Class != ClassWorkerNoise {
+		t.Fatalf("generic topic: %+v", v)
+	}
+	// different topics but a meaningful shared title term is a real link
+	st = base(real, mk("E-9", "Helix funding plan", "grants"))
+	if v := classify(st, link("E-L", "E-1", "E-9")); v.Class != ClassKinLinkWorker || v.Decision != "APPROVE" {
+		t.Fatalf("shared term: %+v", v)
+	}
+	// unsafe shape still needs HUMAN_FINAL even when noisy (never auto-held into a pass)
+	st = base(real, cases["non-canon"])
+	em := insight("E-I", "E-5", "")
+	em.EVO.Metadata.Facets = []core.Facet{core.FacetPaymentsFinance}
+	if v := classify(st, em); v.Decision != "" {
+		t.Fatalf("unsafe noisy insight: %+v", v)
+	}
+	// legacy A01-AUTO-1 rules are unchanged by the quality rules
+	st = base(real, cases["pipe path"])
+	st.AtGOV["E-L"] = link("E-L", "E-1", "E-2")
+	if v := classifyLegacy(st, BuildIndex(st), st.AtGOV["E-L"]); v.Class != ClassKinLinkAccepted {
+		t.Fatalf("legacy: %+v", v)
 	}
 }

@@ -87,7 +87,8 @@ type Document struct {
 		Decision string `json:"decision"`
 		Rule     string `json:"rule"`
 	} `json:"classes"`
-	Never []string `json:"never"`
+	Never   []string `json:"never"`
+	Quality *Quality `json:"quality,omitempty"`
 }
 
 var doc Document
@@ -385,6 +386,10 @@ func classifyVersion(st core.State, x *Index, em core.EmergION, legacy bool) Ver
 	if kind == KindSwitch || em.MEM.Provenance == ProvenanceSwitch {
 		return Verdict{Why: "the policy itself needs HUMAN_FINAL"}
 	}
+	if !legacy && st.HumanResumed[em.IDN] {
+		// one RESUME press sticks: the policy does not hold it again
+		return Verdict{Why: "resumed by HUMAN_FINAL"}
+	}
 	if strings.TrimSpace(em.REL["source_name"]) == "provider_population" {
 		return Verdict{Class: ClassGenerated, Decision: "HOLD", Why: "generated provider combination"}
 	}
@@ -439,6 +444,9 @@ func classifyVersion(st core.State, x *Index, em core.EmergION, legacy bool) Ver
 		if why := lowRiskShape(em, linkREL); why != "" {
 			return Verdict{Why: why}
 		}
+		if why := LinkNoise(st, from, to); why != "" {
+			return Verdict{Class: ClassWorkerNoise, Decision: "HOLD", Why: "generated noise: " + why}
+		}
 		return Verdict{Class: ClassKinLinkWorker, Decision: "APPROVE", Why: "worker link between sources " + from + " and " + to}
 	case KindInsight:
 		if legacy {
@@ -456,6 +464,9 @@ func classifyVersion(st core.State, x *Index, em core.EmergION, legacy bool) Ver
 		}
 		if why := lowRiskShape(em, insightREL); why != "" {
 			return Verdict{Why: why}
+		}
+		if why := SourceNoise(st, of); why != "" {
+			return Verdict{Class: ClassWorkerNoise, Decision: "HOLD", Why: "generated noise: " + why}
 		}
 		return Verdict{Class: ClassInsightWorker, Decision: "APPROVE", Why: "worker insight on source " + of}
 	}
