@@ -31,6 +31,9 @@ import (
 // Version is recorded on every worker proposal.
 const Version = "worker-1"
 
+// failRev bumps when old failure counts must be forgotten.
+const failRev = 2
+
 // Limits.
 const (
 	DefaultBatch    = 3
@@ -55,6 +58,7 @@ type Checkpoint struct {
 	Version   string         `json:"version"`
 	Cursor    string         `json:"cursor,omitempty"`
 	Failures  map[string]int `json:"failures,omitempty"`
+	FailRev   int            `json:"failures_rev,omitempty"`
 	Processed int            `json:"processed"`
 	Insights  int            `json:"insights"`
 	Links     int            `json:"links"`
@@ -122,8 +126,9 @@ func (w *Worker) LoadCheckpoint() Checkpoint {
 	if b, err := os.ReadFile(w.checkpointPath()); err == nil {
 		_ = json.Unmarshal(b, &cp)
 	}
-	if cp.Failures == nil {
-		cp.Failures = map[string]int{}
+	if cp.Failures == nil || cp.FailRev != failRev {
+		// counts from before failRev blamed sources for model-run errors
+		cp.Failures, cp.FailRev = map[string]int{}, failRev
 	}
 	return cp
 }
@@ -307,6 +312,15 @@ func (w *Worker) Step(ctx context.Context, batch int) (StepReport, error) {
 			rep.Unavailable = true
 			_ = w.saveCheckpoint(cp)
 			break
+		}
+		if err != nil && errors.Is(err, reason.ErrModelRun) {
+			// The model run itself failed: report it, move on, do not
+			// blame the source.
+			cp.LastError = err.Error()
+			cp.Cursor = id
+			rep.Failed++
+			_ = w.saveCheckpoint(cp)
+			continue
 		}
 		if err != nil {
 			cp.Failures[id]++
