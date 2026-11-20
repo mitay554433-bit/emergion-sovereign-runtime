@@ -19,12 +19,14 @@ import (
 const DefaultBatchCap = 500
 
 // BatchResult reports one batch HUMAN_FINAL press. Accepted records each got
-// their own decision and REG receipt; Skipped were already REG-accepted.
+// their own decision and REG receipt; Skipped were already in the requested
+// end state; Held got their own HUMAN_FINAL HOLD receipt (decision HOLD).
 type BatchResult struct {
 	BatchID   string `json:"batch_id"`
 	Requested int    `json:"requested"`
 	Accepted  int    `json:"accepted"`
 	Skipped   int    `json:"skipped"`
+	Held      int    `json:"held,omitempty"`
 	StoppedAt string `json:"stopped_at,omitempty"`
 	Error     string `json:"error,omitempty"`
 }
@@ -96,6 +98,32 @@ func ValidBatchID(id string) bool {
 // confirm count, cap) and every record still gets its own receipts. The id
 // only appears in the reason text. Empty continueID derives a new one.
 func (r *Runtime) DecideBatchHumanAs(ids []string, reason string, confirm, limit int, continueID string) (BatchResult, error) {
+	return r.DecideBatchHumanDecision(ids, reason, confirm, limit, continueID, "")
+}
+
+// BatchDecision normalises the optional batch decision: empty or APPROVE
+// approves (and REG-accepts); HOLD holds (reversible via RESUME, no REG
+// acceptance). Both are existing gov decision types; nothing else is allowed.
+func BatchDecision(d string) (gov.Decision, error) {
+	switch strings.ToUpper(strings.TrimSpace(d)) {
+	case "", "APPROVE":
+		return gov.Approve, nil
+	case "HOLD":
+		return gov.Hold, nil
+	default:
+		return "", fmt.Errorf("batch decision must be APPROVE or HOLD")
+	}
+}
+
+// DecideBatchHumanDecision is DecideBatchHumanAs with an explicit decision
+// (APPROVE or HOLD). Every record still gets its own HUMAN_FINAL decision
+// receipt; APPROVE also gets its REG acceptance. Records already in the
+// requested end state (Accepted for APPROVE, Held for HOLD) are skipped.
+func (r *Runtime) DecideBatchHumanDecision(ids []string, reason string, confirm, limit int, continueID, decision string) (BatchResult, error) {
+	d, err := BatchDecision(decision)
+	if err != nil {
+		return BatchResult{Requested: len(ids)}, err
+	}
 	if err := ValidateBatch(ids, reason, confirm, limit); err != nil {
 		return BatchResult{Requested: len(ids)}, err
 	}
@@ -105,7 +133,7 @@ func (r *Runtime) DecideBatchHumanAs(ids []string, reason string, confirm, limit
 	}
 	reason = strings.TrimSpace(reason)
 	res := BatchResult{Requested: len(ids)}
-	err := r.store.Batch(func(events []core.Event, w *store.BatchWriter) error {
+	err = r.store.Batch(func(events []core.Event, w *store.BatchWriter) error {
 		st, err := livefield.Rebuild(events)
 		if err != nil {
 			return err
@@ -115,9 +143,16 @@ func (r *Runtime) DecideBatchHumanAs(ids []string, reason string, confirm, limit
 			res.BatchID = batchID(st.TipHash, ids, reason, time.Now())
 		}
 		text := fmt.Sprintf("%s [HUMAN_FINAL batch %s, %d records]", reason, res.BatchID, len(ids))
+		if d == gov.Hold {
+			text = fmt.Sprintf("%s [HUMAN_FINAL HOLD batch %s, %d records]", reason, res.BatchID, len(ids))
+		}
 		for _, raw := range ids {
 			id := strings.TrimSpace(raw)
-			if _, ok := st.Accepted[id]; ok {
+			done := st.Accepted
+			if d == gov.Hold {
+				done = st.Held
+			}
+			if _, ok := done[id]; ok {
 				res.Skipped++
 				continue
 			}
@@ -126,7 +161,7 @@ func (r *Runtime) DecideBatchHumanAs(ids []string, reason string, confirm, limit
 				res.StoppedAt = id
 				return fmt.Errorf("candidate not at GOV: %s", id)
 			}
-			em, receipt, err := gov.Decide(em, gov.Approve, "HUMAN_FINAL", text)
+			em, receipt, err := gov.Decide(em, d, "HUMAN_FINAL", text)
 			if err != nil {
 				res.StoppedAt = id
 				return err
@@ -135,6 +170,12 @@ func (r *Runtime) DecideBatchHumanAs(ids []string, reason string, confirm, limit
 			if err != nil {
 				res.StoppedAt = id
 				return err
+			}
+			if d == gov.Hold {
+				delete(st.AtGOV, id)
+				st.Held[id] = em
+				res.Held++
+				continue
 			}
 			_, rr, err := reg.Accept(em, decisionID)
 			if err != nil {

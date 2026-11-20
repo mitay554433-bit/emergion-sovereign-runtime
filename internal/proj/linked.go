@@ -26,6 +26,9 @@ type LinkedProjection struct {
 	SAWs            []string               `json:"saws"`
 	Realizations    []LinkedRealization    `json:"realizations"`
 	HumanFinalQueue []LinkedHumanFinalItem `json:"human_final_queue"`
+	// Trajectories is filled by the caller that holds the events (capture
+	// times); Linked(st) leaves it empty. Derived, read-only.
+	Trajectories []LinkedTrajectory `json:"trajectories"`
 }
 
 type LinkedFacetGroup struct {
@@ -87,6 +90,7 @@ func Linked(st core.State) LinkedProjection {
 		SAWs:            []string{},
 		Realizations:    []LinkedRealization{},
 		HumanFinalQueue: []LinkedHumanFinalItem{},
+		Trajectories:    []LinkedTrajectory{},
 	}
 	for _, f := range spatialFacetOrder() {
 		out.FacetOrder = append(out.FacetOrder, string(f))
