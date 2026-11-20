@@ -4,6 +4,7 @@ import (
 	"emergion-sovereign-runtime/internal/adapters"
 	"emergion-sovereign-runtime/internal/core"
 	"emergion-sovereign-runtime/internal/pivot"
+	"emergion-sovereign-runtime/policy"
 	"fmt"
 	"strings"
 )
@@ -11,6 +12,23 @@ import (
 func Rebuild(events []core.Event) (core.State, error) {
 	st := core.EmptyState()
 	decisionEvents := map[string]string{}
+	dupIndex := policy.NewIndex()
+	policyStatus := func() policy.Status {
+		if st.AutoPolicy == nil {
+			return policy.Status{}
+		}
+		return policy.Status{On: st.AutoPolicy.On, Version: st.AutoPolicy.Version, SHA256: st.AutoPolicy.SHA256, SwitchID: st.AutoPolicy.SwitchID}
+	}
+	setAuto := func(id, d string) {
+		if st.AutoDecided == nil {
+			st.AutoDecided = map[string]string{}
+		}
+		if d == "" {
+			delete(st.AutoDecided, id)
+			return
+		}
+		st.AutoDecided[id] = d
+	}
 	for _, ev := range events {
 		st.Events++
 		st.TipHash = ev.SelfHash
@@ -37,6 +55,7 @@ func Rebuild(events []core.Event) (core.State, error) {
 				return st, fmt.Errorf("duplicate candidate %s", ev.EmergION.IDN)
 			}
 			st.AtGOV[ev.EmergION.IDN] = *ev.EmergION
+			dupIndex.Add(*ev.EmergION)
 		case "I":
 			if ev.EmergION == nil {
 				return st, fmt.Errorf("interpretation revision event missing EmergION")
@@ -89,14 +108,43 @@ func Rebuild(events []core.Event) (core.State, error) {
 				"LEDGER_AUTHORITY_OBSERVATION",
 				"HUMAN_FINAL_REQUIRED",
 				func() error {
-					if ev.Decision.Authority != "HUMAN_FINAL" {
-						return fmt.Errorf("decision requires HUMAN_FINAL")
+					switch ev.Decision.Authority {
+					case "HUMAN_FINAL":
+						return nil
+					case policy.Authority:
+						// A01-AUTO-1 (HUMAN_FINAL amendment, 2026-11-20): an
+						// AUTO_POLICY receipt is valid only while a
+						// HUMAN_FINAL-approved switch has the policy on, and
+						// only for a record the policy classifies the same way.
+						em, ok := st.AtGOV[ev.Decision.EmergIONID]
+						if !ok {
+							return fmt.Errorf("decision target not at GOV: %s", ev.Decision.EmergIONID)
+						}
+						return policy.ReplayCheck(st, dupIndex, policyStatus(), em, *ev.Decision)
 					}
-					return nil
+					return fmt.Errorf("decision requires HUMAN_FINAL")
 				},
 			)
 			if err != nil {
 				return st, err
+			}
+
+			if ev.Decision.Decision == policy.Revert {
+				// Undo of an AUTO_POLICY accept: one HUMAN_FINAL press moves
+				// the record from REG-accepted to HELD. Append-only; only
+				// records the policy accepted can be reverted.
+				if ev.Decision.Authority != "HUMAN_FINAL" {
+					return st, fmt.Errorf("REVERT requires HUMAN_FINAL")
+				}
+				em, ok := st.Accepted[ev.Decision.EmergIONID]
+				if !ok || st.AutoDecided[em.IDN] != "APPROVE" {
+					return st, fmt.Errorf("revert target is not an AUTO_POLICY REG-accepted record: %s", ev.Decision.EmergIONID)
+				}
+				delete(st.Accepted, em.IDN)
+				setAuto(em.IDN, "")
+				em.STA = core.StateHeld
+				st.Held[em.IDN] = em
+				continue
 			}
 
 			if ev.Decision.Decision == "RESUME" {
@@ -105,6 +153,7 @@ func Rebuild(events []core.Event) (core.State, error) {
 					return st, fmt.Errorf("resume target not held: %s", ev.Decision.EmergIONID)
 				}
 				delete(st.Held, em.IDN)
+				setAuto(em.IDN, "")
 				em.STA = core.StateAtGOV
 				st.AtGOV[em.IDN] = em
 				continue
@@ -114,6 +163,9 @@ func Rebuild(events []core.Event) (core.State, error) {
 				return st, fmt.Errorf("decision target not at GOV: %s", ev.Decision.EmergIONID)
 			}
 			delete(st.AtGOV, em.IDN)
+			if ev.Decision.Authority == policy.Authority {
+				setAuto(em.IDN, ev.Decision.Decision)
+			}
 			switch ev.Decision.Decision {
 			case "APPROVE":
 				em.STA = core.StateApproved
@@ -181,6 +233,12 @@ func Rebuild(events []core.Event) (core.State, error) {
 			delete(decisionEvents, em.IDN)
 			em.STA = core.StateAccepted
 			st.Accepted[em.IDN] = em
+			if on, version, hash, ok := policy.SwitchState(em); ok {
+				if st.AutoDecided[em.IDN] != "" {
+					return st, fmt.Errorf("AUTO_POLICY switch %s was not HUMAN_FINAL", em.IDN)
+				}
+				st.AutoPolicy = &core.AutoPolicyState{On: on, Version: version, SHA256: hash, SwitchID: em.IDN}
+			}
 		case "Q":
 			if ev.ActionAuthorization == nil {
 				return st, fmt.Errorf("action authorization event missing receipt")
