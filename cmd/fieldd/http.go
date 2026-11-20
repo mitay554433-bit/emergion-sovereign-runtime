@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"path/filepath"
+	"strconv"
 
 	"emergion-sovereign-runtime/pkg/fieldapi"
 )
@@ -118,6 +119,23 @@ func newHTTPMux(rt *fieldapi.Runtime, token string, loopback bool) *http.ServeMu
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	}))
+
+	// Read-only recent ledger events (newest last) for the event comets.
+	mux.HandleFunc("/events.json", protect(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		limit, _ := strconv.Atoi(req.URL.Query().Get("limit"))
+		body, err := rt.RecentEventsJSON(limit)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
 		_, _ = w.Write([]byte(body))
 	}))
 

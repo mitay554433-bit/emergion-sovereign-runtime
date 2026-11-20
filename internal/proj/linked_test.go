@@ -47,6 +47,23 @@ func TestLinkedUsesEngineGroupsKinRootsAndAssemblies(t *testing.T) {
 	if len(lp.SAWs) != 1 || len(lp.HumanFinalQueue) != 1 || lp.HumanFinalQueue[0].ID != "E-g1" {
 		t.Fatalf("saws %v queue %v", lp.SAWs, lp.HumanFinalQueue)
 	}
+	// Every IDN appears exactly once in records, and once per facet group.
+	seenRec := map[string]bool{}
+	for _, r := range lp.Records {
+		if seenRec[r.ID] {
+			t.Fatalf("duplicate record IDN %s", r.ID)
+		}
+		seenRec[r.ID] = true
+	}
+	for _, g := range lp.FacetGroups {
+		seen := map[string]bool{}
+		for _, id := range g.Members {
+			if seen[id] {
+				t.Fatalf("duplicate IDN %s in facet group %s", id, g.Facet)
+			}
+			seen[id] = true
+		}
+	}
 	// Linked never mutates state.
 	if len(st.Accepted) != 3 || len(st.AtGOV) != 1 {
 		t.Fatal("state mutated")
