@@ -103,8 +103,12 @@ func TestLivingUniversePageIsReadOnlyProjection(t *testing.T) {
 	}
 	// The batch is sent only from the button, only after a reason and the
 	// human-typed count are checked.
-	if n := strings.Count(src, "batchAccept("); n != 2 || !strings.Contains(acc, "if(!st.send){batchArmTimer=setTimeout(disarm,BATCH_ARM_MS);renderBatch();return}\n   renderBatch();batchAccept(s.ids,rs.value,res)") {
-		t.Fatalf("batchAccept( appears %d times; want definition + the armed second press only", n)
+	// batchAccept is defined once and called only from the armed second press
+	// of the two buttons (Accept, and Hold the rest on a trajectory row).
+	armed := "if(!st.send){batchArmTimer=setTimeout(disarm,BATCH_ARM_MS);renderBatch();return}\n   renderBatch();batchAccept("
+	if n := strings.Count(src, "batchAccept("); n != 3 || strings.Count(acc, armed) != 2 ||
+		!strings.Contains(acc, armed+"ids,rs.value,res)}") || !strings.Contains(acc, armed+"ids,rs.value,res,'HOLD')}") {
+		t.Fatalf("batchAccept( appears %d times; want definition + the two armed second presses only", n)
 	}
 	// No typed count: the page fills confirm_count from the shown batch.
 	if strings.Contains(src, "bCount") || strings.Contains(src, "type count") || !strings.Contains(acc, "confirm_count:ids.length") {

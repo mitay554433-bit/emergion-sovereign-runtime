@@ -113,7 +113,64 @@ process.stdout.write(JSON.stringify({pre,all,before,kept,after:savedReason(),p1:
 
 // batchBlocks is the batch code plus the reference resolver the haze uses.
 func batchBlocks(t *testing.T, src string) string {
-	return block(t, src, "ref-resolve") + "\n" + block(t, src, "ref-resolve-fn") + "\n" + block(t, src, "governed-accept")
+	return block(t, src, "ref-resolve") + "\n" + block(t, src, "ref-resolve-fn") + "\n" + block(t, src, "trajectory-rows") + "\n" + block(t, src, "governed-accept")
+}
+
+// A provider trajectory is ONE row: in the group list and in the HUMAN_FINAL
+// queue. Accept takes only the newest member; Hold the rest HOLDs the others
+// (decision HOLD in the batch body); the row carries the OBS warning.
+func TestLivingTrajectoryOneRowAcceptNewestHoldRest(t *testing.T) {
+	src := livingUniverseHTML(t)
+	out := runNode(t, batchBlocks(t, src)+`
+const acc={"E-AAAAAA01":{e:{m:{h:"F;C;T",f:["ANALYTICS_FORECAST"]}}}};
+const gov={"E-X00001":{r:{source_kind:"EXECUTION_OBSERVATION",target_emergion:"E-AAAAAA01"}}};
+const members=[];for(let i=1;i<=5;i++){const id="E-T0000"+i;members.push(id);gov[id]={r:{source_name:"provider_population",capability_providers:"ANALYZE:E-AAAAAA01,CMP:E-C"+i}}}
+const proj={trajectories:[{key:"DERIVE_CAPABILITY|ANALYZE+CMP+RLT|E-AAAAAA01",required_capability:"DERIVE_CAPABILITY",first_provider:"E-AAAAAA01",first_provider_title:"F;C;T",count:6,first_at:"2026-11-01T10:00:00Z",last_at:"2026-11-19T22:00:00Z",newest_id:"E-T00004",members:members.concat(["E-GONE01"])}]};
+const trs=trajList(proj,gov),idx=batchIndex(gov,acc,trs),g=idx.groups.find(g=>g.traj),f={kind:'group',value:g.key};
+const s=batchSelect(gov,f,500,idx),pl=batchPlan(s,f,idx),other=batchPlan(batchSelect(gov,{kind:'group',value:idx.groups.find(g=>!g.traj).key},500,idx),{kind:'group',value:idx.groups.find(g=>!g.traj).key},idx);
+const q=collapseTraj([{id:"E-X00001",summary:"x"}].concat(members.map(id=>({id,summary:"deterministic capability provider trajectory"}))),trs);
+process.stdout.write(JSON.stringify({count:trs[0].count,label:g.label,groups:idx.groups.map(x=>x.count),accept:pl.accept,hold:pl.hold,otherAccept:other.accept,otherTraj:!!other.traj,
+ q:q.map(x=>[x.id,!!x.traj]),hold_body:JSON.parse(batchBody(pl.hold.slice(0,2),"r","","HOLD")),appr_body:JSON.parse(batchBody(pl.accept,"r","",undefined)),warn:TRAJ_WARN}));`)
+	var r struct {
+		Count       int
+		Label       string
+		Groups      []int
+		Accept      []string
+		Hold        []string
+		OtherAccept []string
+		OtherTraj   bool
+		Q           [][]any
+		HoldBody    map[string]any `json:"hold_body"`
+		ApprBody    map[string]any `json:"appr_body"`
+		Warn        string
+	}
+	if err := json.Unmarshal([]byte(out), &r); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if r.Count != 5 || !strings.HasPrefix(r.Label, "provider trajectory · DERIVE_CAPABILITY → F;C;T · 5 runs · ") || !strings.Contains(r.Label, "…") {
+		t.Fatalf("label/count: %d %q", r.Count, r.Label)
+	}
+	if fmt.Sprint(r.Groups) != "[5 1]" {
+		t.Fatalf("groups = %v (trajectory members must leave the haze groups)", r.Groups)
+	}
+	if fmt.Sprint(r.Accept) != "[E-T00004]" || len(r.Hold) != 4 || strings.Contains(fmt.Sprint(r.Hold), "E-T00004") {
+		t.Fatalf("plan accept=%v hold=%v", r.Accept, r.Hold)
+	}
+	if r.OtherTraj || fmt.Sprint(r.OtherAccept) != "[E-X00001]" {
+		t.Fatalf("non-trajectory group plan: %v", r.OtherAccept)
+	}
+	if fmt.Sprint(r.Q) != "[[E-X00001 false] [E-T00004 true]]" {
+		t.Fatalf("queue = %v want one trajectory row at the newest member", r.Q)
+	}
+	if r.HoldBody["decision"] != "HOLD" || r.HoldBody["confirm_count"] != float64(2) {
+		t.Fatalf("hold body = %v", r.HoldBody)
+	}
+	if _, ok := r.ApprBody["decision"]; ok {
+		t.Fatalf("approve body must stay wire-compatible (no decision field): %v", r.ApprBody)
+	}
+	if r.Warn != "accepting adds OBS providers" {
+		t.Fatalf("warning = %q", r.Warn)
+	}
 }
 
 // AtGOV records carry no facet of their own; for the batch facet filter and
@@ -155,7 +212,7 @@ process.stdout.write(JSON.stringify({docs:sel("DOCS_PROJECTION"),grant:sel("GRAN
 		t.Fatal("index must be cached per field snapshot")
 	}
 	// zero matches: hint line and Accept stays disabled
-	if !strings.Contains(src, "No waiting records point at this facet") || !strings.Contains(src, "$('bGo').disabled") && !strings.Contains(src, "go.disabled=!s.ids.length") {
+	if !strings.Contains(src, "No waiting records point at this facet") || !strings.Contains(src, "go.disabled=!pl.accept.length") {
 		t.Fatal("zero-match facet must show the hint and keep Accept disabled")
 	}
 }
@@ -247,6 +304,9 @@ func TestDecideBatchHumanRoute(t *testing.T) {
 	if c, res := post(testToken, BatchParams{EmergIONIDs: []string{id}, Reason: "x", ConfirmCount: 1, BatchID: "HFB-zz"}); c != http.StatusBadRequest || !strings.Contains(res.Error, "invalid batch id") {
 		t.Fatalf("bad batch id: %d %+v", c, res)
 	}
+	if c, res := post(testToken, BatchParams{EmergIONIDs: []string{id}, Reason: "x", ConfirmCount: 1, Decision: "REJECT"}); c != http.StatusBadRequest || !strings.Contains(res.Error, "APPROVE or HOLD") {
+		t.Fatalf("bad decision: %d %+v", c, res)
+	}
 	if events() != 1 {
 		t.Fatal("refused batches wrote events")
 	}
@@ -276,5 +336,39 @@ func TestDecideBatchHumanRoute(t *testing.T) {
 	}
 	if c, res := post(testToken, good); c != http.StatusOK || res.Accepted != 0 || res.Skipped != 1 || events() != 3 {
 		t.Fatalf("re-run: %d %+v", c, res)
+	}
+}
+
+// decision HOLD over the route: token-gated, one HUMAN_FINAL HOLD receipt.
+func TestDecideBatchHumanRouteHold(t *testing.T) {
+	rt, id, statePath := govCandidate(t)
+	mux := newHTTPMux(rt, testToken, true)
+	post := func(token string) (int, fieldapi.BatchResult) {
+		b, _ := json.Marshal(BatchParams{EmergIONIDs: []string{id}, Reason: "hold the rest", ConfirmCount: 1, Decision: "HOLD"})
+		req := httptest.NewRequest(http.MethodPost, "/decide-batch-human", bytes.NewReader(b))
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		var res fieldapi.BatchResult
+		_ = json.Unmarshal(rec.Body.Bytes(), &res)
+		return rec.Code, res
+	}
+	if c, _ := post(""); c != http.StatusUnauthorized {
+		t.Fatalf("no token: %d", c)
+	}
+	c, res := post(testToken)
+	if c != http.StatusOK || res.Held != 1 || res.Accepted != 0 {
+		t.Fatalf("hold: %d %+v", c, res)
+	}
+	s, _ := store.Open(statePath)
+	ev, _ := s.Events()
+	if len(ev) != 2 || ev[1].Type != "D" || ev[1].Decision.Decision != "HOLD" || ev[1].Decision.Authority != "HUMAN_FINAL" {
+		t.Fatalf("events: %+v", ev)
+	}
+	st, err := livefield.Rebuild(ev)
+	if err != nil || len(st.Held) != 1 || len(st.Accepted) != 0 {
+		t.Fatalf("rebuild: %v", err)
 	}
 }
