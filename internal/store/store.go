@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -425,7 +426,7 @@ func (s *Store) SaveActionAuthorization(r core.ActionAuthorizationReceipt) (stri
 
 func (s *Store) lock() (func(), error) {
 	path := filepath.Join(s.Root, ".lock")
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 400; i++ {
 		f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 		if err == nil {
 			f.WriteString(fmt.Sprint(os.Getpid()))
@@ -434,6 +435,13 @@ func (s *Store) lock() (func(), error) {
 		}
 		if !errors.Is(err, os.ErrExist) {
 			return nil, err
+		}
+		// A lock left by a process that no longer exists (for example a
+		// fieldd killed mid-write) is stale: remove it and retry. A lock held
+		// by a live process, including this one, is always respected.
+		if staleLock(path) {
+			os.Remove(path)
+			continue
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
@@ -533,4 +541,18 @@ func eventIdentityLabel(e core.Event) string {
 		return ""
 	}
 	return " " + strings.Join(parts, " ")
+}
+
+// staleLock reports whether the lock file names a pid that is not running.
+// An unreadable, empty or own-pid lock is never treated as stale.
+func staleLock(path string) bool {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
+	if err != nil || pid <= 0 || pid == os.Getpid() {
+		return false
+	}
+	return !pidAlive(pid)
 }
