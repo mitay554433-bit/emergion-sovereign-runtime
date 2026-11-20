@@ -155,6 +155,12 @@ func Rebuild(events []core.Event) (core.State, error) {
 				}
 				delete(st.Held, em.IDN)
 				setAuto(em.IDN, "")
+				if ev.Decision.Authority == "HUMAN_FINAL" {
+					if st.HumanResumed == nil {
+						st.HumanResumed = map[string]bool{}
+					}
+					st.HumanResumed[em.IDN] = true
+				}
 				em.STA = core.StateAtGOV
 				st.AtGOV[em.IDN] = em
 				continue

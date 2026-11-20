@@ -246,8 +246,11 @@ type State struct {
 	// force on it (APPROVE for REG-accepted, HOLD for held). A HUMAN_FINAL
 	// REVERT or RESUME removes the entry. Derived, never written.
 	AutoDecided map[string]string `json:",omitempty"`
-	Events      int
-	TipHash     string
+	// HumanResumed marks records a HUMAN_FINAL RESUME put back AtGOV; the
+	// A01-AUTO-2 policy leaves them for a human instead of holding them again.
+	HumanResumed map[string]bool `json:",omitempty"`
+	Events       int
+	TipHash      string
 }
 
 // AutoPolicyState is the effective auto-accept switch. Derived, read-only.
