@@ -3,6 +3,7 @@ package fieldapi
 import (
 	"emergion-sovereign-runtime/internal/reason"
 	"emergion-sovereign-runtime/internal/worker"
+	"emergion-sovereign-runtime/policy"
 )
 
 // NewWorker returns the nonstop worker over this runtime's store. dir holds
@@ -44,7 +45,7 @@ func (r *Runtime) AutoStatusOf(w *worker.Worker, sw *reason.SwitchInsighter) (Au
 	insights, _ := worker.Done(st)
 	out.Worker.InsightRecords = len(insights)
 	for id, em := range st.Accepted {
-		if em.REL["source_kind"] == "SOURCE_UPLOAD" && !insights[id] && out.Worker.Checkpoint.Failures[id] < worker.MaxFailures {
+		if em.REL["source_kind"] == "SOURCE_UPLOAD" && !insights[id] && out.Worker.Checkpoint.Failures[id] < worker.MaxFailures && policy.SourceNoise(st, id) == "" {
 			out.Worker.Pending++
 		}
 	}

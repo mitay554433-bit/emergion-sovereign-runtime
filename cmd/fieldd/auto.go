@@ -45,6 +45,8 @@ func newAutoEngine(rt *fieldapi.Runtime, workDir string, sw *reason.SwitchInsigh
 		kick:        make(chan struct{}, 1),
 	}
 	e.w = rt.NewWorker(workDir, sw)
+	e.w.SourcesRoot = e.sourcesRoot
+	e.w.TextChars = worker.TextCharsFromEnv()
 	if m := strings.TrimSpace(os.Getenv("UNIFUSION_REASONER_MODE")); m != "" && reason.ValidMode(m) {
 		// env sets the initial mode only when the UI never chose one
 		if _, err := os.Stat(workDir + "/worker.json"); err != nil {

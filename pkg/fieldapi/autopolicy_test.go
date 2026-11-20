@@ -297,3 +297,87 @@ func TestA01Auto1SwitchCarriesOverToA01Auto2(t *testing.T) {
 		t.Fatalf("off: %+v", ps)
 	}
 }
+
+func TestAutoPolicyHoldsWaitingWorkerNoise(t *testing.T) {
+	rt := openTestRuntime(t)
+	ids := ingestLines(t, rt, manifestLine("q1", "Helix bench protocol"), manifestLine("q2", "PHONE|Download|scan_0042"), manifestLine("q3", "Helix tamper pilot"))
+	capture := func(name, desc, prov string, rel map[string]string) string {
+		t.Helper()
+		res := reason.Result{Summary: name, Relationships: rel, Capabilities: []string{"OBS"}, Facts: []string{name}, Risk: "L"}
+		em, _, err := (fieldruntime.Runtime{Store: rt.store, Reasoner: fixedResult{name: "worker", version: "1", result: res}}).CaptureBytes(context.Background(), name, []byte(desc), prov)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return em.IDN
+	}
+	link := func(a, b string) string {
+		if a > b {
+			a, b = b, a
+		}
+		return capture("link-"+a+b, "SOURCE_KIN_LINK/1\nFROM:"+a+"\nTO:"+b+"\nBASIS:reasoner\nWORKER:worker-1\nZ\n", policy.ProvenanceKinLink,
+			map[string]string{"source_kind": policy.KindKinLink, "kin_link_from": a, "kin_link_to": b, "kin_link_basis": "reasoner", "kin_link_why": "reasoner", "source_topic": "grants-funding", "worker_version": "worker-1"})
+	}
+	insight := func(of string) string {
+		return capture("insight-"+of, "SOURCE_INSIGHT/1\nOF:"+of+"\nOF_SHA256:x\nREASONER:r\nWORKER:worker-1\nSUMMARY:s\nKIN:\nZ\n", policy.ProvenanceInsight,
+			map[string]string{"source_kind": policy.KindInsight, "insight_of": of, "source_topic": "grants-funding", "insight_reasoner": "r", "worker_version": "worker-1"})
+	}
+	noiseLink, goodLink := link(ids[0], ids[1]), link(ids[0], ids[2])
+	noiseIns, goodIns := insight(ids[1]), insight(ids[0])
+	if _, err := rt.SetAutoPolicy(context.Background(), true, "Michael approved A01-AUTO-2"); err != nil {
+		t.Fatal(err)
+	}
+	res, err := rt.ApplyAutoPolicy(0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := rt.state()
+	if err != nil {
+		t.Fatalf("replay: %v", err)
+	}
+	for _, id := range []string{noiseLink, noiseIns} {
+		if _, ok := st.Held[id]; !ok {
+			t.Fatalf("noise %s must be AUTO_POLICY HOLD: %+v", id, res)
+		}
+		d := decisionsFor(t, rt, id)
+		if len(d) != 1 || d[0].Decision != "HOLD" || !strings.Contains(d[0].Reason, "class="+policy.ClassWorkerNoise) {
+			t.Fatalf("noise receipt: %+v", d)
+		}
+	}
+	for _, id := range []string{goodLink, goodIns} {
+		if _, ok := st.Accepted[id]; !ok {
+			t.Fatalf("real %s must auto-accept: %+v", id, res)
+		}
+	}
+	if res.Classes[policy.ClassWorkerNoise] != 2 {
+		t.Fatalf("classes: %+v", res.Classes)
+	}
+}
+
+func TestResumedNoiseIsNotHeldAgain(t *testing.T) {
+	rt := openTestRuntime(t)
+	ids := ingestLines(t, rt, manifestLine("w1", "Helix bench protocol"), manifestLine("w2", "Fluid Registry ledger"))
+	res := reason.Result{Summary: "i", Relationships: map[string]string{"source_kind": policy.KindInsight, "insight_of": ids[1], "source_topic": "grants-funding", "insight_reasoner": "r", "worker_version": "worker-1"}, Capabilities: []string{"OBS"}, Facts: []string{"i"}, Risk: "L"}
+	em, _, err := (fieldruntime.Runtime{Store: rt.store, Reasoner: fixedResult{name: "worker", version: "1", result: res}}).CaptureBytes(context.Background(), "ins", []byte("SOURCE_INSIGHT/1\nOF:"+ids[1]+"\nKIN:\nZ\n"), policy.ProvenanceInsight)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rt.SetAutoPolicy(context.Background(), true, "on"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rt.ApplyAutoPolicy(0, ""); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := rt.UndoAuto(em.IDN, "Michael: keep this one"); err != nil || out != "AT_GOV" {
+		t.Fatalf("resume: %s %v", out, err)
+	}
+	if _, err := rt.ApplyAutoPolicy(0, ""); err != nil {
+		t.Fatal(err)
+	}
+	st, err := rt.state()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := st.AtGOV[em.IDN]; !ok {
+		t.Fatal("a HUMAN_FINAL RESUME must stick; the policy held it again")
+	}
+}

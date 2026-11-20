@@ -74,6 +74,8 @@ func runAutoCommand(state string, args []string) bool {
 		}
 		sw := reason.NewSwitchInsighter(*mode)
 		w := rt.NewWorker(*dir, sw)
+		w.SourcesRoot = *sources
+		w.TextChars = worker.TextCharsFromEnv()
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		for {
