@@ -1,0 +1,185 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	livefield "emergion-sovereign-runtime/internal/field"
+	"emergion-sovereign-runtime/internal/store"
+	"emergion-sovereign-runtime/pkg/fieldapi"
+)
+
+// Page helpers: the batch is the first min(N,cap) records by IDN matching the
+// chosen filter, the typed count must equal it, and the body is what the
+// server's BatchParams decodes.
+func TestLivingBatchSelectionAndBody(t *testing.T) {
+	src := livingUniverseHTML(t)
+	out := runNode(t, block(t, src, "governed-accept")+`
+const gov={"E-03":{r:{source_kind:"A",target_emergion:"E-T1"},e:{m:{f:["MEM"],h:"three"}}},
+ "E-01":{r:{source_kind:"A"},e:{m:{f:["MEM","VAL"]}},m:{s:"one"}},
+ "E-02":{r:{source_kind:"B",target_emergion:"E-T1"},e:{m:{f:["VAL"]}}}};
+const r={
+ all:batchSelect(gov,batchFilter('all','',null),500),
+ tapNone:batchSelect(gov,batchFilter('tap','','ALL'),500).ids,
+ tapVal:batchSelect(gov,batchFilter('tap','','VAL'),500).ids,
+ cls:batchSelect(gov,{kind:'class',value:'A'},500).ids,
+ tgt:batchSelect(gov,{kind:'target',value:'E-T1'},500).ids,
+ cap:batchSelect(gov,{kind:'all'},2),
+ opts:batchOptions(gov).class,
+ title:batchTitle(gov["E-01"],"E-01"),
+ body:JSON.parse(batchBody(["E-01","E-03"],"why"))};
+process.stdout.write(JSON.stringify(r));`)
+	var r struct {
+		All struct {
+			Total int      `json:"total"`
+			IDs   []string `json:"ids"`
+		} `json:"all"`
+		TapNone, TapVal, Cls, Tgt []string
+		Cap                       struct {
+			Total int      `json:"total"`
+			IDs   []string `json:"ids"`
+		} `json:"cap"`
+		Opts          [][]any `json:"opts"`
+		OK, Bad, Zero bool
+		Title         string
+		Body          BatchParams
+	}
+	if err := json.Unmarshal([]byte(out), &r); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if strings.Join(r.All.IDs, ",") != "E-01,E-02,E-03" || r.All.Total != 3 {
+		t.Fatalf("all = %+v", r.All)
+	}
+	if len(r.TapNone) != 3 || strings.Join(r.TapVal, ",") != "E-01,E-02" || strings.Join(r.Cls, ",") != "E-01,E-03" || strings.Join(r.Tgt, ",") != "E-02,E-03" {
+		t.Fatalf("filters: %s", out)
+	}
+	if r.Cap.Total != 3 || strings.Join(r.Cap.IDs, ",") != "E-01,E-02" {
+		t.Fatalf("cap = %+v", r.Cap)
+	}
+	if len(r.Opts) != 2 || r.Opts[0][0] != "A" || r.Opts[0][1] != float64(2) {
+		t.Fatalf("class options = %v", r.Opts)
+	}
+	if r.Title != "one" {
+		t.Fatalf("title: %s", out)
+	}
+	if strings.Join(r.Body.EmergIONIDs, ",") != "E-01,E-03" || r.Body.Reason != "why" || r.Body.ConfirmCount != 2 {
+		t.Fatalf("body = %+v", r.Body)
+	}
+}
+
+// The reason is pre-filled from filter, count and the most common title
+// prefix, and an edited reason is remembered. One press only arms; a second
+// press on the same batch within 4 s sends; a late or changed press re-arms.
+func TestLivingBatchPrefilledReasonAndDoublePress(t *testing.T) {
+	src := livingUniverseHTML(t)
+	out := runNode(t, `const _ls={};globalThis.localStorage={getItem:k=>k in _ls?_ls[k]:null,setItem:(k,v)=>{_ls[k]=String(v)},removeItem:k=>{delete _ls[k]}};
+`+block(t, src, "governed-accept")+`
+const gov={"E-01":{r:{source_kind:"COMPARISON"},e:{m:{h:"comparison: TARGET_EMERGION:E-AA"}}},
+ "E-02":{r:{source_kind:"COMPARISON"},e:{m:{h:"comparison: TARGET_EMERGION:E-BB"}}},
+ "E-03":{r:{source_kind:"OBS"},m:{s:"execution observation of run"}}};
+const f={kind:'class',value:'COMPARISON'},ids=batchSelect(gov,f,500).ids;
+const pre=autoReason(gov,f,ids),all=autoReason(gov,{kind:'all'},Object.keys(gov).sort());
+const before=savedReason();storeReason('my reason');const kept=savedReason();storeReason('');
+const k=batchKey(ids),t0=1000;
+const p1=batchStep(null,k,t0),p2=batchStep(p1.arm,k,t0+1500),late=batchStep(p1.arm,k,t0+4100),other=batchStep(p1.arm,batchKey(['E-09']),t0+500);
+process.stdout.write(JSON.stringify({pre,all,before,kept,after:savedReason(),p1:p1.send,armed:!!p1.arm,p2:p2.send,late:late.send,other:other.send}));`)
+	var r struct {
+		Pre, All, Before, Kept, After string
+		P1, Armed, P2, Late, Other    bool
+	}
+	if err := json.Unmarshal([]byte(out), &r); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if r.Pre != "Batch HUMAN_FINAL: class COMPARISON · 2 records · sample comparison" {
+		t.Fatalf("pre-filled reason = %q", r.Pre)
+	}
+	if !strings.HasPrefix(r.All, "Batch HUMAN_FINAL: all AtGOV · 3 records · sample ") {
+		t.Fatalf("all reason = %q", r.All)
+	}
+	if r.Before != "" || r.Kept != "my reason" || r.After != "" {
+		t.Fatalf("reason memory: %s", out)
+	}
+	if r.P1 || !r.Armed || !r.P2 || r.Late || r.Other {
+		t.Fatalf("double press: single=%v armed=%v second=%v late=%v changed=%v", r.P1, r.Armed, r.P2, r.Late, r.Other)
+	}
+}
+
+func TestDecideBatchHumanRoute(t *testing.T) {
+	rt, id, statePath := govCandidate(t)
+	mux := newHTTPMux(rt, testToken, true)
+	post := func(token string, p BatchParams) (int, fieldapi.BatchResult) {
+		b, _ := json.Marshal(p)
+		req := httptest.NewRequest(http.MethodPost, "/decide-batch-human", bytes.NewReader(b))
+		req.Header.Set("Content-Type", "application/json")
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		out, _ := io.ReadAll(rec.Result().Body)
+		var res fieldapi.BatchResult
+		_ = json.Unmarshal(out, &res)
+		return rec.Code, res
+	}
+	events := func() int {
+		s, err := store.Open(statePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ev, err := s.Events()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(ev)
+	}
+	good := BatchParams{EmergIONIDs: []string{id}, Reason: "batch from /living", ConfirmCount: 1}
+	for _, tok := range []string{"", "wrong-token"} {
+		if c, _ := post(tok, good); c != http.StatusUnauthorized {
+			t.Fatalf("token %q: %d want 401", tok, c)
+		}
+	}
+	if c, res := post(testToken, BatchParams{EmergIONIDs: []string{id}, Reason: "x", ConfirmCount: 2}); c != http.StatusBadRequest || !strings.Contains(res.Error, "confirm count") {
+		t.Fatalf("count mismatch: %d %+v", c, res)
+	}
+	old := batchCap
+	batchCap = 1
+	if c, res := post(testToken, BatchParams{EmergIONIDs: []string{id, "E-0000000000000001"}, Reason: "x", ConfirmCount: 2}); c != http.StatusBadRequest || !strings.Contains(res.Error, "exceeds cap 1") {
+		t.Fatalf("cap: %d %+v", c, res)
+	}
+	batchCap = old
+	if events() != 1 {
+		t.Fatal("refused batches wrote events")
+	}
+	req := httptest.NewRequest(http.MethodGet, "/decide-batch-human", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"cap":500`) {
+		t.Fatalf("GET cap: %d %s", rec.Code, rec.Body.String())
+	}
+
+	c, res := post(testToken, good)
+	if c != http.StatusOK || res.Accepted != 1 || res.Error != "" || !strings.HasPrefix(res.BatchID, "HFB-") {
+		t.Fatalf("accept: %d %+v", c, res)
+	}
+	s, _ := store.Open(statePath)
+	ev, _ := s.Events()
+	if len(ev) != 3 || ev[1].Type != "D" || ev[2].Type != "R" || ev[1].Decision.Authority != "HUMAN_FINAL" ||
+		ev[1].Decision.Reason != "batch from /living [HUMAN_FINAL batch "+res.BatchID+", 1 records]" || ev[2].REG.DecisionID != ev[1].ID {
+		t.Fatalf("receipts: %+v", ev)
+	}
+	st, err := livefield.Rebuild(ev)
+	if err != nil || len(st.Accepted) != 1 || len(st.AtGOV) != 0 {
+		t.Fatalf("rebuild: %v", err)
+	}
+	if _, err := s.VerifyEvidence(); err != nil {
+		t.Fatal(err)
+	}
+	if c, res := post(testToken, good); c != http.StatusOK || res.Accepted != 0 || res.Skipped != 1 || events() != 3 {
+		t.Fatalf("re-run: %d %+v", c, res)
+	}
+}
