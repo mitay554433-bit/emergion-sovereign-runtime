@@ -153,6 +153,7 @@ func newHTTPMuxOn(rt *fieldapi.Runtime, token string, loopback bool, bindAddr st
 		}
 		w.Header().Set("X-Field-Tip", receipt.TipHash)
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
 		http.ServeFile(w, req, filepath.Join("outputs", "field.json"))
 	}))
 
@@ -168,6 +169,7 @@ func newHTTPMuxOn(rt *fieldapi.Runtime, token string, loopback bool, bindAddr st
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
 		_, _ = w.Write([]byte(body))
 	}))
 
