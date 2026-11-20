@@ -117,6 +117,11 @@ func (e *autoEngine) once(ctx context.Context) {
 }
 
 func (e *autoEngine) run(ctx context.Context) {
+	if c := e.w.LoadControl(); c.On {
+		// load Gemma once at boot so the first record finds it ready
+		e.sw.SetMode(c.Mode)
+		e.sw.Warm(ctx)
+	}
 	for {
 		e.once(ctx)
 		wait := e.tick
