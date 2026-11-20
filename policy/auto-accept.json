@@ -1,0 +1,41 @@
+{
+  "policy": "AUTO_ACCEPT",
+  "version": "A01-AUTO-1",
+  "amends": "A01",
+  "approved": "2026-11-20, Michael (owner), HUMAN_FINAL in chat: \"Build it and change A01 so low-risk records auto-accept\"",
+  "authority": "AUTO_POLICY",
+  "default": "OFF",
+  "switch": "ON and OFF are each a governed AUTO_POLICY_SWITCH record that only a HUMAN_FINAL APPROVE + REG acceptance makes effective. The switch names this file's sha256; a changed file is a new policy and is OFF until switched on again.",
+  "classes": [
+    {
+      "class": "SOURCE_UPLOAD_VERIFIED",
+      "decision": "APPROVE",
+      "rule": "source_kind SOURCE_UPLOAD from governed_source_upload; source_sha256 is 64 hex; the preserved descriptor's SHA256, PATH, TITLE and BYTES lines equal the record and the descriptor hash equals the record's source hash; when the file itself is present under UNIFUSION_SOURCES_ROOT its sha256 must match too; no Archonym; CAP exactly OBS; risk L; RECOIL and WVC passed; no facets, Supersedes, build graph, monetization or authority REL keys; no other record shares its source_sha256."
+    },
+    {
+      "class": "EXACT_DUPLICATE",
+      "decision": "HOLD",
+      "rule": "Another record (any state) already carries the same source_sha256 (SOURCE_UPLOAD) or the same preserved source hash, and that record is decided or has the smaller IDN. HOLD only; RESUME is one HUMAN_FINAL press."
+    },
+    {
+      "class": "GENERATED_PROVIDER_COMBINATION",
+      "decision": "HOLD",
+      "rule": "Generated provider-combination / trajectory record (REL source_name provider_population). HOLD only, never accepted; RESUME is one HUMAN_FINAL press."
+    },
+    {
+      "class": "SOURCE_KIN_LINK_ACCEPTED_ENDS",
+      "decision": "APPROVE",
+      "rule": "Worker-derived SOURCE_KIN_LINK (topic or kin) whose two distinct ends are both REG-accepted SOURCE_UPLOAD records at decision time; preserved descriptor FROM/TO equal the record; no Archonym; CAP exactly OBS; risk L; RECOIL and WVC passed; no facets, Supersedes or authority REL keys."
+    }
+  ],
+  "never": [
+    "capabilities other than OBS",
+    "projections, facets, build graphs, monetization",
+    "any record that changes authority (Supersedes, COMPOSITION_KIN, kin_emergion, capability providers, targets, requirements)",
+    "wire keys, the GOV gate, the policy itself (AUTO_POLICY_SWITCH)",
+    "money or external actions (action authorizations stay HUMAN_FINAL)",
+    "Archonym-claiming records",
+    "worker SOURCE_INSIGHT proposals (summaries, combinations, gaps): they wait AtGOV for one HUMAN_FINAL batch press"
+  ],
+  "undo": "REVERT: one HUMAN_FINAL press moves an AUTO_POLICY-accepted record from REG-accepted to HELD (append-only). An AUTO_POLICY HOLD is undone with the existing HUMAN_FINAL RESUME."
+}
