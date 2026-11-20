@@ -31,9 +31,8 @@ const r={
  tgt:batchSelect(gov,{kind:'target',value:'E-T1'},500).ids,
  cap:batchSelect(gov,{kind:'all'},2),
  opts:batchOptions(gov).class,
- ok:batchConfirmed(' 3 ',3),bad:batchConfirmed('2',3),zero:batchConfirmed('0',0),
  title:batchTitle(gov["E-01"],"E-01"),
- body:JSON.parse(batchBody(["E-01"],"why",1))};
+ body:JSON.parse(batchBody(["E-01","E-03"],"why"))};
 process.stdout.write(JSON.stringify(r));`)
 	var r struct {
 		All struct {
@@ -65,11 +64,48 @@ process.stdout.write(JSON.stringify(r));`)
 	if len(r.Opts) != 2 || r.Opts[0][0] != "A" || r.Opts[0][1] != float64(2) {
 		t.Fatalf("class options = %v", r.Opts)
 	}
-	if !r.OK || r.Bad || r.Zero || r.Title != "one" {
-		t.Fatalf("confirm/title: %s", out)
+	if r.Title != "one" {
+		t.Fatalf("title: %s", out)
 	}
-	if strings.Join(r.Body.EmergIONIDs, ",") != "E-01" || r.Body.Reason != "why" || r.Body.ConfirmCount != 1 {
+	if strings.Join(r.Body.EmergIONIDs, ",") != "E-01,E-03" || r.Body.Reason != "why" || r.Body.ConfirmCount != 2 {
 		t.Fatalf("body = %+v", r.Body)
+	}
+}
+
+// The reason is pre-filled from filter, count and the most common title
+// prefix, and an edited reason is remembered. One press only arms; a second
+// press on the same batch within 4 s sends; a late or changed press re-arms.
+func TestLivingBatchPrefilledReasonAndDoublePress(t *testing.T) {
+	src := livingUniverseHTML(t)
+	out := runNode(t, `const _ls={};globalThis.localStorage={getItem:k=>k in _ls?_ls[k]:null,setItem:(k,v)=>{_ls[k]=String(v)},removeItem:k=>{delete _ls[k]}};
+`+block(t, src, "governed-accept")+`
+const gov={"E-01":{r:{source_kind:"COMPARISON"},e:{m:{h:"comparison: TARGET_EMERGION:E-AA"}}},
+ "E-02":{r:{source_kind:"COMPARISON"},e:{m:{h:"comparison: TARGET_EMERGION:E-BB"}}},
+ "E-03":{r:{source_kind:"OBS"},m:{s:"execution observation of run"}}};
+const f={kind:'class',value:'COMPARISON'},ids=batchSelect(gov,f,500).ids;
+const pre=autoReason(gov,f,ids),all=autoReason(gov,{kind:'all'},Object.keys(gov).sort());
+const before=savedReason();storeReason('my reason');const kept=savedReason();storeReason('');
+const k=batchKey(ids),t0=1000;
+const p1=batchStep(null,k,t0),p2=batchStep(p1.arm,k,t0+1500),late=batchStep(p1.arm,k,t0+4100),other=batchStep(p1.arm,batchKey(['E-09']),t0+500);
+process.stdout.write(JSON.stringify({pre,all,before,kept,after:savedReason(),p1:p1.send,armed:!!p1.arm,p2:p2.send,late:late.send,other:other.send}));`)
+	var r struct {
+		Pre, All, Before, Kept, After string
+		P1, Armed, P2, Late, Other    bool
+	}
+	if err := json.Unmarshal([]byte(out), &r); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if r.Pre != "Batch HUMAN_FINAL: class COMPARISON · 2 records · sample comparison" {
+		t.Fatalf("pre-filled reason = %q", r.Pre)
+	}
+	if !strings.HasPrefix(r.All, "Batch HUMAN_FINAL: all AtGOV · 3 records · sample ") {
+		t.Fatalf("all reason = %q", r.All)
+	}
+	if r.Before != "" || r.Kept != "my reason" || r.After != "" {
+		t.Fatalf("reason memory: %s", out)
+	}
+	if r.P1 || !r.Armed || !r.P2 || r.Late || r.Other {
+		t.Fatalf("double press: single=%v armed=%v second=%v late=%v changed=%v", r.P1, r.Armed, r.P2, r.Late, r.Other)
 	}
 }
 

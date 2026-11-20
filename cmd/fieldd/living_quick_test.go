@@ -103,11 +103,12 @@ func TestLivingUniversePageIsReadOnlyProjection(t *testing.T) {
 	}
 	// The batch is sent only from the button, only after a reason and the
 	// human-typed count are checked.
-	if n := strings.Count(src, "batchAccept("); n != 2 || !strings.Contains(acc, "batchAccept(s.ids,rs.value,ct.value,res)") {
-		t.Fatalf("batchAccept( appears %d times; want definition + button handler only", n)
+	if n := strings.Count(src, "batchAccept("); n != 2 || !strings.Contains(acc, "if(!st.send){batchArmTimer=setTimeout(disarm,BATCH_ARM_MS);renderBatch();return}\n   renderBatch();batchAccept(s.ids,rs.value,res)") {
+		t.Fatalf("batchAccept( appears %d times; want definition + the armed second press only", n)
 	}
-	if !strings.Contains(acc, "if(!batchConfirmed(typed,ids.length))") {
-		t.Fatal("batch accept must require the human-typed count")
+	// No typed count: the page fills confirm_count from the shown batch.
+	if strings.Contains(src, "bCount") || strings.Contains(src, "type count") || !strings.Contains(acc, "confirm_count:ids.length") {
+		t.Fatal("batch panel must not ask for a typed count; confirm_count comes from the shown batch")
 	}
 	if !strings.Contains(acc, "decision:'APPROVE'") || !strings.Contains(acc, "'Authorization':'Bearer '+tok") {
 		t.Fatal("governed-accept must post APPROVE with the pasted bearer token")

@@ -120,8 +120,9 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .bottom .wide{grid-column:1/-1}
 .bsel{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:6px;min-width:0}
 .bsel select,.bin input{font:inherit;font-size:11px;padding:6px 8px;border-radius:8px;border:1px solid var(--line2);background:#05070d;color:var(--ink);min-width:0;width:100%}
-.bin{display:grid;grid-template-columns:minmax(0,1fr) 92px auto;gap:6px;margin-top:8px;min-width:0}
-@media(max-width:440px){.bin{grid-template-columns:minmax(0,1fr) auto}.bin input:first-child{grid-column:1/-1}}
+.bin{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;margin-top:8px;min-width:0}
+@media(max-width:440px){.bin{grid-template-columns:minmax(0,1fr)}}
+.acc.arm{background:rgba(217,119,6,.28);border-color:rgba(245,158,11,.85)}
 .bsum{margin:8px 0 2px;font-size:12px;color:var(--ink)}.bsum b{font-family:var(--mono)}
 .bsam{list-style:none;margin:0;padding:0;font-size:11px}.bsam li{display:flex;gap:8px;padding:3px 0;border-top:1px solid var(--line2);min-width:0}.bsam li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}.bsam code{font-family:var(--mono);color:var(--ink2);flex:0 0 auto}
 .bres{margin-top:8px;font-size:12px;overflow-wrap:anywhere}
@@ -487,11 +488,15 @@ async function acceptAtGOV(id,btn){const tok=savedToken();if(!tok){alert('Paste 
 function acceptButton(id){const b=el('button','acc','Accept');b.title='Record HUMAN_FINAL APPROVE for '+id+' (reason required)';b.onclick=e=>{e.stopPropagation();acceptAtGOV(id,b)};return b}
 function acceptControls(id){const w=el('div');if(!savedToken()){const f=el('div','tok'),i=el('input');i.type='password';i.placeholder='paste fieldd token once';i.autocomplete='off';const s=el('button','acc','Save');s.onclick=()=>{const v=i.value.trim();if(v){storeToken(v);select(byID.get(id)||selected)}};f.append(i,s);w.append(f)}
  else{const f=el('div','tok');const a=acceptButton(id),fg=el('button','acc','Forget token');fg.style.background='none';fg.onclick=()=>{storeToken('');select(byID.get(id)||selected)};f.append(a,fg);w.append(f)}return w}
-// Batch accept: one human press over many AtGOV records. The human picks a filter, sees the exact
-// count and a sample, types a reason and then types the count. The batch is the first min(N,cap)
-// matching records by IDN; the page sends those exact IDs to POST /decide-batch-human, where each
-// record gets its own gov.Decide(HUMAN_FINAL) + reg.Accept receipts. Nothing is sent without both.
-let batchCap=500,batchCapRead=false,batchBusy=false;const BS={kind:'tap',value:''};
+// Batch accept: one human double-press over many AtGOV records. The human picks a filter and sees
+// the exact count and a sample. The reason is pre-filled from the filter, count and sample (editable;
+// an edited reason is remembered in this browser). The first press arms the button as
+// "CONFIRM ACCEPT N" for 4 s; only a second press inside that window sends. The batch is the first
+// min(N,cap) matching records by IDN; the page sends those exact IDs with confirm_count = the shown
+// count to POST /decide-batch-human, where each record gets its own gov.Decide(HUMAN_FINAL) +
+// reg.Accept receipts and the server re-checks reason, count and cap. A single press never sends.
+const REASON_KEY='fieldd.batchReason',BATCH_ARM_MS=4000;
+let batchCap=500,batchCapRead=false,batchBusy=false,batchArm=null,batchArmTimer=0;const BS={kind:'tap',value:''};
 function batchMatch(em,f){const r=(em&&em.r)||{},m=(em&&em.e&&em.e.m)||{};
  if(f.kind==='all')return true;
  if(!f.value)return false;
@@ -504,41 +509,58 @@ function batchSelect(gov,f,cap){const ids=Object.keys(gov||{}).filter(id=>batchM
 function batchOptions(gov){const o={facet:{},class:{},target:{}},inc=(m,k)=>{if(k)m[k]=(m[k]||0)+1};
  for(const em of Object.values(gov||{})){const r=(em&&em.r)||{},m=(em&&em.e&&em.e.m)||{};for(const f of (Array.isArray(m.f)?m.f:[]))inc(o.facet,f);inc(o.class,String(r.source_kind||'').trim());inc(o.target,String(r.target_emergion||'').trim())}
  for(const k of Object.keys(o))o[k]=Object.entries(o[k]).sort((a,b)=>b[1]-a[1]||(a[0]<b[0]?-1:1));return o}
-function batchBody(ids,reason,confirm){return JSON.stringify({emergion_ids:ids,reason:reason,confirm_count:confirm})}
-function batchConfirmed(typed,n){return n>0&&String(typed==null?'':typed).trim()===String(n)}
+function batchBody(ids,reason){return JSON.stringify({emergion_ids:ids,reason:reason,confirm_count:ids.length})}
 function batchTitle(em,id){const m=(em&&em.e&&em.e.m)||{};return m.h||(em&&em.m&&em.m.s)||id}
-async function readBatchCap(){if(batchCapRead)return;try{const r=await fetch('/decide-batch-human');const j=await r.json();if(Number.isFinite(j.cap)&&j.cap>0)batchCap=j.cap;batchCapRead=true}catch(e){}}
-async function batchAccept(ids,reason,typed,out){const tok=savedToken();
+function facetName(f){return (typeof FACET_LABEL!=='undefined'&&FACET_LABEL[f])||f}
+function batchLabel(f){return f.kind==='all'?'all AtGOV':f.kind==='facet'?'facet '+facetName(f.value):f.kind==='class'?'class '+f.value:'target '+f.value}
+// Most common title prefix in the batch: the text before ':' or the first three words.
+function titlePrefix(gov,ids){const c=new Map();for(const id of ids){const t=String(batchTitle(gov[id],id)).trim(),p=(t.includes(':')?t.slice(0,t.indexOf(':')):t.split(/\s+/).slice(0,3).join(' ')).trim();if(p)c.set(p,(c.get(p)||0)+1)}
+ let best='',n=0;for(const [p,k] of c)if(k>n||(k===n&&p<best)){best=p;n=k}return best}
+function autoReason(gov,f,ids){const p=titlePrefix(gov,ids);return 'Batch HUMAN_FINAL: '+batchLabel(f)+' · '+ids.length+' record'+(ids.length===1?'':'s')+(p?' · sample '+p:'')}
+function savedReason(){try{return localStorage.getItem(REASON_KEY)||''}catch(e){return ''}}
+function storeReason(v){try{v?localStorage.setItem(REASON_KEY,v):localStorage.removeItem(REASON_KEY)}catch(e){}}
+function batchKey(ids){return ids.length+'|'+(ids[0]||'')+'|'+(ids[ids.length-1]||'')}
+// Two-step press: the first press (or a press after the window, or on a changed batch) only arms.
+function batchStep(arm,key,now){if(arm&&arm.key===key&&now-arm.at<=BATCH_ARM_MS)return {send:true,arm:null};return {send:false,arm:{key,at:now}}}
+async function readBatchCap(){if(batchCapRead)return;batchCapRead=true;try{const r=await fetch('/decide-batch-human');const j=await r.json();if(Number.isFinite(j.cap)&&j.cap>0&&j.cap!==batchCap){batchCap=j.cap;renderBatch()}}catch(e){batchCapRead=false}}
+async function batchAccept(ids,reason,out){const tok=savedToken();
  if(!tok){out.textContent='Paste the fieldd token first (Next Governed Step panel).';return}
  if(!reason.trim()){out.textContent='A HUMAN_FINAL reason is required.';return}
- if(!batchConfirmed(typed,ids.length)){out.textContent='Type the exact count ('+ids.length+') to confirm.';return}
+ if(!ids.length)return;
  batchBusy=true;out.textContent='Recording '+ids.length+' HUMAN_FINAL decisions…';
- try{const r=await fetch('/decide-batch-human',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:batchBody(ids,reason.trim(),Number(String(typed).trim()))});
+ try{const r=await fetch('/decide-batch-human',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:batchBody(ids,reason.trim())});
   if(r.status===401){storeToken('');out.textContent='Token refused (401). Paste the current fieldd token and retry.';return}
   const j=await r.json().catch(()=>({error:'HTTP '+r.status}));
   const done=(j.accepted||0)+' accepted · '+(j.skipped||0)+' already accepted'+(j.batch_id?' · '+j.batch_id:'');
-  out.textContent=j.error?(j.stopped_at?'Stopped at '+j.stopped_at+' after '+done+': '+j.error:'Refused: '+j.error):'Done · '+done;
-  if(!j.error){$('bReason').value='';$('bCount').value=''}}
+  out.textContent=j.error?(j.stopped_at?'Stopped at '+j.stopped_at+' after '+done+': '+j.error:'Refused: '+j.error):'Done · '+done+' · next batch loaded'}
  catch(e){out.textContent='Batch result could not be confirmed. Refresh before retrying.'}
- finally{batchBusy=false;await refresh().catch(()=>{});renderBatch()}}
+ finally{batchBusy=false;for(let i=0;i<20&&loading;i++)await new Promise(r=>setTimeout(r,150));await refresh().catch(()=>{});renderBatch()}}
+function disarm(){batchArm=null;clearTimeout(batchArmTimer);renderBatch()}
 function renderBatch(){const P=$('hfbP'),B=$('hfb');if(!P||!B)return;const gov=(field&&field.AtGOV)||{},n=Object.keys(gov).length;P.hidden=!n;if(!n)return;readBatchCap();
  if(!$('bKind')){const sel=el('div','bsel'),k=el('select'),v=el('select');k.id='bKind';v.id='bVal';k.setAttribute('aria-label','Batch filter');v.setAttribute('aria-label','Batch filter value');
   for(const [x,t] of [['tap','Current tap filter'],['all','All AtGOV'],['facet','Facet'],['class','Class (source_kind)'],['target','Target emergion']]){const o=el('option',null,t);o.value=x;k.append(o)}
-  k.onchange=()=>{BS.kind=k.value;BS.value='';renderBatch()};v.onchange=()=>{BS.value=v.value;renderBatch()};sel.append(k,v);
+  k.onchange=()=>{BS.kind=k.value;BS.value='';batchArm=null;renderBatch()};v.onchange=()=>{BS.value=v.value;batchArm=null;renderBatch()};sel.append(k,v);
   const sum=el('div','bsum');sum.id='bSum';const sam=el('ul','bsam');sam.id='bSam';
-  const inp=el('div','bin'),rs=el('input'),ct=el('input'),go=el('button','acc','Accept batch');rs.id='bReason';rs.placeholder='HUMAN_FINAL reason (required)';rs.autocomplete='off';ct.id='bCount';ct.placeholder='type count';ct.inputMode='numeric';ct.autocomplete='off';go.id='bGo';
+  const inp=el('div','bin'),rs=el('input'),go=el('button','acc','Accept batch');rs.id='bReason';rs.placeholder='HUMAN_FINAL reason (pre-filled)';rs.autocomplete='off';rs.setAttribute('aria-label','HUMAN_FINAL reason');go.id='bGo';
+  rs.oninput=()=>{rs.dataset.auto='';storeReason(rs.value.trim())};
   const res=el('div','bres');res.id='bRes';
-  go.onclick=()=>{if(batchBusy)return;const g=(field&&field.AtGOV)||{},s=batchSelect(g,batchFilter(BS.kind,BS.value,filter),batchCap);batchAccept(s.ids,rs.value,ct.value,res)};
-  inp.append(rs,ct,go);B.append(sel,sum,sam,inp,res)}
+  go.onclick=()=>{if(batchBusy)return;const g=(field&&field.AtGOV)||{},s=batchSelect(g,batchFilter(BS.kind,BS.value,filter),batchCap);if(!s.ids.length)return;
+   const st=batchStep(batchArm,batchKey(s.ids),Date.now());batchArm=st.arm;clearTimeout(batchArmTimer);
+   if(!st.send){batchArmTimer=setTimeout(disarm,BATCH_ARM_MS);renderBatch();return}
+   renderBatch();batchAccept(s.ids,rs.value,res)};
+  inp.append(rs,go);B.append(sel,sum,sam,inp,res)}
  const k=$('bKind'),v=$('bVal');k.value=BS.kind;const opts=batchOptions(gov);
  if(BS.kind==='facet'||BS.kind==='class'||BS.kind==='target'){const list=opts[BS.kind].slice(0,60);if(!BS.value||!list.some(x=>x[0]===BS.value))BS.value=list.length?list[0][0]:'';
-  if(document.activeElement!==v){v.replaceChildren();for(const [x,c] of list){const o=el('option',null,(BS.kind==='facet'&&typeof FACET_LABEL!=='undefined'&&FACET_LABEL[x]||x)+' · '+c);o.value=x;v.append(o)}v.value=BS.value}v.disabled=false}
- else{v.replaceChildren(el('option',null,BS.kind==='tap'?(filter&&filter!=='ALL'?'facet '+((typeof FACET_LABEL!=='undefined'&&FACET_LABEL[filter])||filter):'no tap filter · all AtGOV'):'every AtGOV record'));v.disabled=true}
+  if(document.activeElement!==v){v.replaceChildren();for(const [x,c] of list){const o=el('option',null,(BS.kind==='facet'?facetName(x):x)+' · '+c);o.value=x;v.append(o)}v.value=BS.value}v.disabled=false}
+ else{v.replaceChildren(el('option',null,BS.kind==='tap'?(filter&&filter!=='ALL'?'facet '+facetName(filter):'no tap filter · all AtGOV'):'every AtGOV record'));v.disabled=true}
  const f=batchFilter(BS.kind,BS.value,filter),s=batchSelect(gov,f,batchCap),sum=$('bSum');sum.replaceChildren();
  sum.append(document.createTextNode('This batch: '),el('b',null,fmt(s.ids.length)),document.createTextNode(s.total>s.ids.length?' of '+fmt(s.total)+' matching (cap '+fmt(batchCap)+', first by IDN)':' record'+(s.ids.length===1?'':'s')+' matching'));
  const sam=$('bSam');sam.replaceChildren();for(const id of s.ids.slice(0,10)){const li=el('li');li.append(el('code',null,id),el('span',null,batchTitle(gov[id],id)));sam.append(li)}
  if(s.ids.length>10)sam.append(el('li',null,'… and '+fmt(s.ids.length-10)+' more'));
- $('bGo').disabled=!s.ids.length||batchBusy;setText('hfbPill',fmt(s.ids.length)+' IN BATCH')}
+ const rs=$('bReason');if(document.activeElement!==rs){const kept=savedReason();rs.value=kept||autoReason(gov,f,s.ids);rs.dataset.auto=kept?'':'1'}
+ if(batchArm&&batchArm.key!==batchKey(s.ids))batchArm=null;
+ const go=$('bGo'),armed=!!batchArm;go.textContent=armed?'Confirm accept '+fmt(s.ids.length):'Accept batch';go.classList.toggle('arm',armed);go.disabled=!s.ids.length||batchBusy;
+ setText('hfbPill',fmt(s.ids.length)+' IN BATCH')}
 // </governed-accept>
 
 /* ---------- renderer ---------- */
