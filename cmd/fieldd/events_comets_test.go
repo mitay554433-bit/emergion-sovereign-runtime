@@ -223,17 +223,34 @@ func TestLivingUniverseRenderIsUncluttered(t *testing.T) {
 		"#c{height:70vh;",
 		"const FACET_MAX=4;",
 		"function facetNames(){const fs=10.5,",
+		"let labelsOn=false,",
+		// Labels OFF (the default) => zero text on the canvas at every zoom and after a fly
+		"let used=0,shown=0;if(!labelsOn){facetArea=0;return}",
+		"function labels(){if(!labelsOn){labelArea=0;tipOverlap=0;return}",
 	} {
 		if !strings.Contains(src, want) {
 			t.Fatalf("living-universe.html missing %q", want)
 		}
 	}
 	fn := src[strings.Index(src, "function facetNames(){"):]
-	fn = fn[:strings.Index(fn, "\nfunction showFacet(")]
+	fn = fn[:strings.Index(fn, "\n// A facet tap names")]
 	for _, bad := range []string{"cam.zoom", "roundRect", "fillRect", "records'"} {
 		if strings.Contains(fn, bad) {
 			t.Fatalf("facetNames must not use %q (fixed size, no plate, no count)", bad)
 		}
+	}
+	// Every canvas text call lives in facetNames or labels (both gated on Labels) or in the
+	// empty-state message; nothing else (zoom, fly, facet tap) may draw text on the render.
+	lb := src[strings.Index(src, "function labels(){"):]
+	lb = lb[:strings.Index(lb, "\nfunction labelCoverage(")]
+	rest := strings.Replace(strings.Replace(src, fn, "", 1), lb, "", 1)
+	for _, line := range strings.Split(rest, "\n") {
+		if (strings.Contains(line, "fillText(") || strings.Contains(line, "strokeText(")) && !strings.Contains(line, "NO REG-ACCEPTED RECORDS YET") {
+			t.Fatalf("canvas text outside the Labels-gated functions: %.120s", strings.TrimSpace(line))
+		}
+	}
+	if strings.Contains(src, "showFacet(") {
+		t.Fatal("a facet tap must name the facet in the header, not in a tooltip over the render")
 	}
 	if strings.Contains(src, `<details class="lgd" id="lgd" open`) {
 		t.Fatal("legend must be collapsed by default")

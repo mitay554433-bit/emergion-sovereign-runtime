@@ -50,6 +50,7 @@ func main() {
 	socketPath := flag.String("socket", filepath.Join(os.TempDir(), "fieldd.sock"), "Path to Unix domain socket")
 	pidPath := flag.String("pid", filepath.Join(os.TempDir(), "fieldd.pid"), "Path to PID file")
 	httpAddr := flag.String("http", "", "HTTP listen address. Empty disables HTTP. Default operator bind is 127.0.0.1:8899 via field daemon start. Non-loopback requires FIELDD_TOKEN or a 0600 fieldd.token in the state directory.")
+	flag.IntVar(&batchCap, "batch-cap", batchCapFromEnv(), "Largest batch one HUMAN_FINAL press may accept via /decide-batch-human (env FIELDD_BATCH_CAP)")
 	flag.Parse()
 
 	if err := writePIDFile(*pidPath); err != nil {

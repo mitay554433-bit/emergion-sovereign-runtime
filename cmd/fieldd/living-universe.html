@@ -13,6 +13,7 @@ button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--blue);outl
 .ph{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:11px 14px 0}
 .pt{font-size:10.5px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--ink)}
 .pt i{font-style:normal;color:var(--ink3);font-weight:600}
+#heroSub.on{color:var(--pale);font-family:var(--mono);letter-spacing:.08em}
 .ps{font-size:10.5px;color:var(--ink3);letter-spacing:.06em}
 .pb{padding:10px 14px 13px}
 .nf{font-family:var(--mono);font-size:11px;color:var(--ink3);letter-spacing:.08em}
@@ -115,6 +116,23 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .ax b{font-family:var(--mono);color:#4f8dff;font-size:11px;font-weight:700}
 .list{display:grid;grid-template-columns:minmax(0,1fr);min-width:0}
 .pb{min-width:0}.ps,.pt{overflow-wrap:anywhere}
+.qrow{display:flex;gap:8px;align-items:center;min-width:0;border-top:1px solid var(--line2)}.qrow .row{border-top:0;flex:1}
+.acc{font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:7px 10px;border-radius:8px;border:1px solid rgba(59,130,246,.75);background:rgba(29,78,216,.22);color:#fff;min-height:32px;white-space:nowrap}.acc:disabled{opacity:.5}
+.bottom .wide{grid-column:1/-1}
+.bsel{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:6px;min-width:0}
+.bsel select,.bin input{font:inherit;font-size:11px;padding:6px 8px;border-radius:8px;border:1px solid var(--line2);background:#05070d;color:var(--ink);min-width:0;width:100%}
+.bin{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;margin-top:8px;min-width:0}
+@media(max-width:440px){.bin{grid-template-columns:minmax(0,1fr)}}
+.acc.arm{background:rgba(217,119,6,.28);border-color:rgba(245,158,11,.85)}
+.bsum{margin:8px 0 2px;font-size:12px;color:var(--ink)}.bsum b{font-family:var(--mono)}
+.bsam{list-style:none;margin:0;padding:0;font-size:11px}.bsam li{display:flex;gap:8px;padding:3px 0;border-top:1px solid var(--line2);min-width:0}.bsam li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}.bsam code{font-family:var(--mono);color:var(--ink2);flex:0 0 auto}
+.bsam li.bhint{color:var(--ink2);font-style:italic}
+.twarn{color:#f0b35a;font-size:11px;margin:4px 0 2px}.qrow small.twarn{margin:0}
+.acc.hold{background:none;border-color:var(--line)}
+.bin:has(#bHold:not([hidden])){grid-template-columns:minmax(0,1fr) auto auto}
+@media(max-width:440px){.bin:has(#bHold:not([hidden])){grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.bin:has(#bHold:not([hidden])) input{grid-column:1/-1}}
+.bres{margin-top:8px;font-size:12px;overflow-wrap:anywhere}
+.tok{display:flex;gap:6px;min-width:0}.tok input{flex:1;min-width:0;font:inherit;font-size:11px;padding:6px 8px;border-radius:8px;border:1px solid var(--line2);background:#05070d;color:var(--ink)}
 .row{min-width:0;display:flex;justify-content:space-between;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--line2);font-size:12px;text-align:left;width:100%}
 .row:first-child{border-top:0}
 .row .l{min-width:0;flex:1 1 auto;overflow:hidden}
@@ -191,9 +209,9 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
     <div class="st"><small>Field status</small><b class="live" id="sLive"><span class="dot off"></span>—</b></div>
     <div class="st"><small>Events</small><b id="sEv">—</b></div>
     <div class="st"><small>Accepted (REG)</small><b id="sAcc">—</b></div>
-    <div class="st"><small>AtGOV pending</small><b id="sGov">—</b></div>
-    <div class="st"><small>Verified references</small><b id="sRef">—</b></div>
-    <div class="st"><small>Pending (AtGOV)</small><b id="sPend">—</b></div>
+    <div class="st" title="AtGOV records waiting for a HUMAN_FINAL decision"><small>AtGOV waiting (records)</small><b id="sGov">—</b></div>
+    <div class="st" title="Distinct recorded REL kin references whose two ends are both REG-accepted"><small>Verified references</small><b id="sRef">—</b></div>
+    <div class="st" title="Distinct recorded REL kin references (kin, parent, successor, origin, composition, capability provider) between two records in the FIELD where at least one end is AtGOV. Counts references, not records."><small>Pending references (AtGOV)</small><b id="sPend">—</b></div>
     <div class="st"><small>Kin assemblies</small><b id="sSaab">—</b></div>
     <div class="st"><small>Temporal states</small><b id="sWave">—</b></div>
     <div class="st"><small>Linked accepted</small><b id="sLinked">—</b></div>
@@ -207,12 +225,12 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
  <main class="center">
   <div class="centerg">
    <section class="panel hero" aria-label="FIELD render">
-    <div class="ph"><span><span class="pt">FIELD Render <i>• Linked Projection</i></span><br><span class="ps" id="heroSub">Emergent layout · facet attractors · kin · AtGOV haze around targets</span></span><span class="ps mono" id="zoomv" style="white-space:nowrap">1.00×</span></div>
+    <div class="ph"><span><span class="pt">FIELD Render <i>• Linked Projection</i></span><br><span class="ps" id="heroSub" aria-live="polite">Emergent layout · facet attractors · kin · AtGOV haze around targets</span></span><span class="ps mono" id="zoomv" style="white-space:nowrap">1.00×</span></div>
     <div class="stage">
     <canvas id="c" aria-label="Interactive FIELD render. Drag to orbit, pinch or scroll to zoom, tap a node to inspect."></canvas>
     <div id="evtip" role="status" aria-live="polite"></div>
     <div class="hfoot">
-     <div class="auth"><span class="shield"></span><b>COSL + REG remain authoritative</b> · visualization only</div>
+     <div class="auth"><span class="shield"></span><b>COSL + REG remain authoritative</b> · visualization · Accept = HUMAN_FINAL</div>
      <div class="hrow"><details class="lgd" id="lgd"><summary>Legend ▾</summary><div class="legend"><span id="kindLg" style="display:contents"></span><span class="lg"><i class="sw g"></i>AtGOV</span><span class="lg"><i class="sw k"></i>Kin / REL link</span><span class="lg"><i class="sw a"></i>Composed with</span><span class="lg"><i class="sw c"></i>Event comet</span></div></details>
      <div class="ctl"><button id="bLbl" aria-pressed="false" title="Show a few small title tags">Labels</button><button id="bGov" aria-pressed="true" title="Show AtGOV records awaiting HUMAN_FINAL">AtGOV</button><button id="bFit" title="Reset view">Reset</button></div></div>
     </div>
@@ -230,6 +248,7 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
    <section class="panel"><div class="ph"><span class="pt">Live Projection</span><span class="ps">REG state counts</span></div><div class="pb bars" id="bars"></div></section>
    <section class="panel"><div class="ph"><span class="pt">Latest REG Difference</span><span class="pillst" id="ldPill">REG ACCEPTED</span></div><div class="pb" id="latest"><span class="nf">NOT_FOUND_YET</span></div></section>
    <section class="panel"><div class="ph"><span class="pt">Next Governed Step</span><span class="pillst g" id="hfPill">HUMAN_FINAL</span></div><div class="pb" id="hf"><span class="nf">NOT_FOUND_YET</span></div></section>
+   <section class="panel wide" id="hfbP" hidden><div class="ph"><span class="pt">Batch accept <i>• HUMAN_FINAL</i></span><span class="pillst g" id="hfbPill">REVIEW</span></div><div class="pb" id="hfb"></div></section>
   </div>
  </main>
 
@@ -242,7 +261,7 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 </div>
 
 <section class="panel"><div class="ph"><span class="pt">Field Timeline <i>• Recent Manifestations</i></span><span class="ps" id="tlMeta">by capture time</span></div><div class="tlw"><div class="tl" id="tl"></div></div></section>
-<div class="foot">Read-only projection of /field.json, /projection.json and /real_temporal_wave.json · nothing here writes, decides or authorizes · COSL + REG remain authoritative · visualization only</div>
+<div class="foot">Projection of /field.json, /projection.json and /real_temporal_wave.json · the only write is a human Accept press, recorded as HUMAN_FINAL APPROVE through /decide (same path as <code>field decide</code>) · COSL + REG remain authoritative · visualization only</div>
 </div>
 
 <script>
@@ -265,7 +284,8 @@ let nodes=[],byID=new Map(),links=[],facetOrder=[],filter='ALL',showGov=true,sel
 
 /* ---------- counts ---------- */
 // Recorded REL kin references between records in view. Verified only when both ends are REG-accepted;
-// any reference touching an AtGOV record is Pending (AtGOV), never verified.
+// any reference touching an AtGOV record is a Pending reference (AtGOV), never verified.
+// These count references (edges), not records: one AtGOV record can carry several.
 function relRefs(f){const acc=(f&&f.Accepted)||{},gov=(f&&f.AtGOV)||{},out=[],seen=new Set();
  const add=(u,v,k)=>{if(!v||u===v)return;const a=acc[u]?'accepted':gov[u]?'pending':null,b=acc[v]?'accepted':gov[v]?'pending':null;if(!a||!b)return;const key=u+'|'+v+'|'+k;if(seen.has(key))return;seen.add(key);out.push({u,v,k,a:{kind:a},b:{kind:b}})};
  for(const m of [acc,gov])for(const [id,em] of Object.entries(m)){const r=(em&&em.r)||{};
@@ -281,13 +301,17 @@ function refCounts(es){let verified=0,pending=0;for(const e of es){if(e.a&&e.b&&
 function hash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
 function rnd(s){let h=hash(s);h^=h>>>16;h=Math.imul(h,0x85ebca6b);h^=h>>>13;h=Math.imul(h,0xc2b2ae35);h^=h>>>16;return (h>>>0)/4294967296}
 function meta(em){return (em&&em.e&&em.e.m)||{}}
+// <ref-resolve>
 const IDN_G=/E-[0-9A-Fa-f]{6,}/g;
+// </ref-resolve>
 const REL_KIN={kin_emergion:'KIN',parent_emergion:'KIN',COMPOSITION_KIN:'COMPOSED_WITH',transition_emergion:'SUCCESSOR_KIN',origin:'ORIGIN_KIN',capability_providers:'CAPABILITY_KIN'};
 // point in a ball by hash (direction + cube-root radius), never on a shell or ring
 function ball(key,r){const u=rnd(key+'u')*2-1,a=rnd(key+'v')*Math.PI*2,q=Math.sqrt(1-u*u),rr=r*Math.cbrt(.05+.95*rnd(key+'w'));return [Math.cos(a)*q*rr,u*rr*.7,Math.sin(a)*q*rr]}
 function gauss(key){const u=Math.max(1e-6,rnd(key+'g1')),v=rnd(key+'g2');return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
 // AtGOV references: target_emergion first, then other recorded REL IDNs, then IDNs in the summary
+// <ref-resolve-fn>
 function refsOf(em){const r=(em&&em.r)||{},out=[];const push=v=>{if(typeof v==='string')for(const m of v.match(IDN_G)||[])if(!out.includes(m))out.push(m)};push(r.target_emergion);for(const k of Object.keys(r).sort())if(k!=='target_emergion')push(r[k]);push(em&&em.m&&em.m.s);return out}
+// </ref-resolve-fn>
 function relax(items,springs,iters){const n=items.length;if(!n)return;
  for(let it=0;it<iters;it++){const cool=1-it/iters,step=.06*cool+.004;const f=items.map(()=>[0,0,0]);
   for(let i=0;i<n;i++){const a=items[i];for(let j=i+1;j<n;j++){const b=items[j];let dx=a.x-b.x,dy=a.y-b.y,dz=a.z-b.z,d2=dx*dx+dy*dy+dz*dz+1e-4;const k=.004*a.q*b.q/d2;const d=Math.sqrt(d2);dx/=d;dy/=d;dz/=d;f[i][0]+=dx*k;f[i][1]+=dy*k;f[i][2]+=dz*k;f[j][0]-=dx*k;f[j][1]-=dy*k;f[j][2]-=dz*k}}
@@ -366,16 +390,31 @@ function kindCounts(nodes){const m=new Map();for(const n of nodes)if(n.kind==='a
 // Facet anchors use the same curve over member counts.
 function nodeRadius(w,maxW){return maxW>0?Math.min(9,Math.max(2,2+7*Math.sqrt(Math.max(0,w)/maxW))):2}
 function nodeBright(w,maxW){return maxW>0?.4+.6*Math.sqrt(Math.min(1,Math.max(0,w)/maxW)):.4}
+// Emergent clusters for the soft hulls: facet groups and kin-root groups with >= 3 accepted members.
+function clusterGroups(nodes){const by=new Map(),add=(k,n)=>{let a=by.get(k);if(!a)by.set(k,a=[]);if(!a.includes(n))a.push(n)};
+ for(const n of nodes){if(n.kind!=='accepted')continue;for(const f of n.facets)add('facet:'+f,n);if(n.root)add('kin:'+n.root,n)}
+ return [...by].filter(([,m])=>m.length>=3).map(([key,members])=>({key,facet:key.startsWith('facet:')?key.slice(6):null,members})).sort((a,b)=>b.members.length-a.members.length||(a.key<b.key?-1:1))}
+// Camera target for a group of nodes: centroid, and a zoom that frames its 90th-percentile spread.
+// a flight is meant to be seen: at least 2.2x, at most 3.2x (pinch/scroll share the cap)
+const ZMIN_FLY=2.2,ZMAX=3.2;
+function groupFrame(ms){if(!ms.length)return null;const cx=ms.reduce((a,n)=>a+n.x,0)/ms.length,cy=ms.reduce((a,n)=>a+n.y,0)/ms.length,cz=ms.reduce((a,n)=>a+n.z,0)/ms.length;
+ const d=ms.map(n=>Math.hypot(n.x-cx,n.y-cy,n.z-cz)).sort((a,b)=>a-b),r90=d[Math.floor((d.length-1)*.9)]||0;return {tx:cx,ty:cy,tz:cz,zoom:Math.max(ZMIN_FLY,Math.min(ZMAX,1.1/Math.max(.2,r90)))}}
 // </node-set>
-let maxWeight=0,maxMembers=0,SHORT=12,threads=[],anchors=[],anchorEdges=[],lstats=null;
+let clusters=[],fly=null,maxWeight=0,maxMembers=0,SHORT=12,threads=[],anchors=[],anchorEdges=[],lstats=null;
 function build(){
  facetOrder=proj&&Array.isArray(proj.facet_order)?proj.facet_order:Object.keys(FACET_LABEL);
- const ns=nodeSet(field,proj,facetOrder);nodes=ns.nodes;byID=ns.byID;links=ns.links;threads=ns.threads;anchors=ns.anchors;anchorEdges=ns.anchorEdges;lstats=ns.stats;maxWeight=ns.maxWeight;maxMembers=ns.maxMembers;renderKinds();SHORT=shortLen(nodes.map(n=>n.id));for(const n of nodes)n.col=n.kind==='accepted'?kindColor(kindOf(n)):GOV_COLOR;
+ const ns=nodeSet(field,proj,facetOrder);nodes=ns.nodes;byID=ns.byID;links=ns.links;threads=ns.threads;anchors=ns.anchors;anchorEdges=ns.anchorEdges;lstats=ns.stats;maxWeight=ns.maxWeight;maxMembers=ns.maxMembers;renderKinds();SHORT=shortLen(nodes.map(n=>n.id));clusters=clusterGroups(nodes);for(const n of nodes)n.col=n.kind==='accepted'?kindColor(kindOf(n)):GOV_COLOR;
  if(selected)selected=byID.get(selected.id)||null;
 }
 
 /* ---------- panels ---------- */
 function setText(id,v){$(id).textContent=v}
+// Header line outside the render: the flown-to facet (name + accepted count) or the tapped record.
+const HERO_SUB='Emergent layout · facet attractors · kin · AtGOV haze around targets';
+function heroSub(){const h=$('heroSub');if(!h)return;let t=HERO_SUB,on=false;
+ if(selected){t='▸ '+shortID(selected.id)+' · '+String(nameOf(selected));on=true}
+ else if(filter!=='ALL'){const k=filter==='UNASSIGNED'?nodes.filter(n=>n.kind==='accepted'&&!n.facets.length).length:nodes.filter(n=>n.kind==='accepted'&&n.facets.includes(filter)).length;t='▸ '+(filter==='UNASSIGNED'?'Unassigned':(FACET_LABEL[filter]||filter)).toUpperCase()+' · '+fmt(k)+(k===1?' accepted record':' accepted records');on=true}
+ h.textContent=t;h.classList.toggle('on',on)}
 function renderPanels(){
  const acc=(field&&field.Accepted)||{},gov=(field&&field.AtGOV)||{},nA=Object.keys(acc).length,nG=Object.keys(gov).length;
  const rc=refCounts(relRefs(field));
@@ -405,24 +444,24 @@ function renderPanels(){
  // next governed step: HUMAN_FINAL queue from the engine
  const q=proj&&Array.isArray(proj.human_final_queue)?proj.human_final_queue:Object.keys(gov).map(id=>({id,summary:(gov[id].m||{}).s}));const H=$('hf');H.replaceChildren();
  setText('hfPill',q.length?q.length+' AWAITING':'CLEAR');
- hfQ=q;if(q.length){H.append(el('div','ps',`HUMAN_FINAL review · ${fmt(q.length)} AtGOV record${q.length>1?'s':''} · not accepted`));const lst=el('div','list');lst.id='hfList';lst.style.marginTop='6px';H.append(lst);const pg=el('div','pager');pg.innerHTML='<button id="hfPrev" aria-label="Previous page">‹ Prev</button><span class="ps mono" id="hfPage"></span><button id="hfNext" aria-label="Next page">Next ›</button>';H.append(pg);$('hfPrev').onclick=()=>{hfPage--;renderQueue()};$('hfNext').onclick=()=>{hfPage++;renderQueue()};renderQueue()}
+ hfQ=collapseTraj(q,trajNow(proj,gov));if(q.length){H.append(el('div','ps',`HUMAN_FINAL review · ${fmt(q.length)} AtGOV record${q.length>1?'s':''} · not accepted`));const lst=el('div','list');lst.id='hfList';lst.style.marginTop='6px';H.append(lst);const pg=el('div','pager');pg.innerHTML='<button id="hfPrev" aria-label="Previous page">‹ Prev</button><span class="ps mono" id="hfPage"></span><button id="hfNext" aria-label="Next page">Next ›</button>';H.append(pg);$('hfPrev').onclick=()=>{hfPage--;renderQueue()};$('hfNext').onclick=()=>{hfPage++;renderQueue()};renderQueue()}
  else H.append(el('span','nf','NO RECORD AWAITING HUMAN_FINAL'));
  // wave
  if(wave){const cw=Array.isArray(wave.compressed_wave)?wave.compressed_wave.length:0;setText('sWave',fmt(cw));setText('mWave',fmt(cw));setText('mWaveS',wave.locked?'locked':'recorded');setText('mWaveT',(wave.state||'RECORDED')+(wave.compression_ratio!=null?' · ratio '+wave.compression_ratio:''))}
  else{setText('sWave','NOT_FOUND_YET');setText('mWave','NOT_FOUND_YET');setText('mWaveT','temporal wave unavailable')}
- renderNav();renderCode();renderSaabs();renderReal();renderTimeline();
+ renderNav();renderCode();renderSaabs();renderReal();renderTimeline();renderBatch();
 }
 let hfQ=[],hfPage=0;const HF_PAGE=5;
 function renderQueue(){const L=$('hfList');if(!L)return;const pages=Math.max(1,Math.ceil(hfQ.length/HF_PAGE));hfPage=Math.max(0,Math.min(pages-1,hfPage));L.replaceChildren();
- for(const it of hfQ.slice(hfPage*HF_PAGE,hfPage*HF_PAGE+HF_PAGE)){const n=byID.get(it.id),b=el('button','row'),l=el('span','l'),nm=n?nameOf(n):(it.summary&&it.summary!==it.id?it.summary:'AtGOV record');l.append(el('div',null,nm),el('small',null,it.id));b.title=nm;b.append(l,el('span','r','AtGOV'));if(n)b.onclick=()=>select(n,true);L.append(b)}
+ for(const it of hfQ.slice(hfPage*HF_PAGE,hfPage*HF_PAGE+HF_PAGE)){const n=byID.get(it.id),b=el('button','row'),l=el('span','l'),nm=it.traj?it.summary:n?nameOf(n):(it.summary&&it.summary!==it.id?it.summary:'AtGOV record');l.append(el('div',null,nm),el('small',it.traj?'twarn':null,it.traj?'newest '+it.id+' · '+TRAJ_WARN:it.id));b.title=nm;b.append(l,el('span','r','AtGOV'));if(n)b.onclick=()=>select(n,true);const q=el('div','qrow');q.append(b,acceptButton(it.id));L.append(q)}
  const a=hfPage*HF_PAGE+1,z=Math.min(hfQ.length,a+HF_PAGE-1);setText('hfPage',`${fmt(a)}–${fmt(z)} of ${fmt(hfQ.length)}`);$('hfPrev').disabled=hfPage===0;$('hfNext').disabled=hfPage>=pages-1}
-function renderNav(){const nav=$('nav');nav.replaceChildren();
+function renderNav(){if($('bKind'))renderBatch();const nav=$('nav');nav.replaceChildren();
  const groups=proj&&Array.isArray(proj.facet_groups)?proj.facet_groups.map(g=>({key:g.facet,n:(g.members||[]).length})):facetOrder.map(f=>({key:f,n:nodes.filter(x=>x.kind==='accepted'&&x.facets.includes(f)).length}));
  const govN=f=>nodes.filter(x=>x.kind==='pending'&&x.facets.includes(f)).length;
  const items=[{key:'ALL',title:'FIELD View',sub:fmt(nodes.filter(n=>n.kind==='accepted').length)+' accepted · all facets'}];
  for(const g of groups){if(!g.n&&!govN(g.key))continue;items.push({key:g.key,title:FACET_LABEL[g.key]||g.key,sub:fmt(g.n)+' accepted'+(govN(g.key)?' · '+fmt(govN(g.key))+' AtGOV':'')})}
  if(proj&&proj.unassigned&&proj.unassigned.length)items.push({key:'UNASSIGNED',title:'Unassigned',sub:fmt(proj.unassigned.length)+' accepted · no facet'});
- for(const it of items){const b=el('button','tile');b.setAttribute('aria-pressed',String(filter===it.key));const ic=el('span','ic');ic.innerHTML=svg(ICON[it.key]||ICON.ALL);const t=el('span');t.append(el('div','tt',it.title),el('div','ts',it.sub));b.append(ic,t);b.onclick=()=>{filter=it.key;renderNav();want()};nav.append(b)}}
+ for(const it of items){const b=el('button','tile');b.setAttribute('aria-pressed',String(filter===it.key));const ic=el('span','ic');ic.innerHTML=svg(ICON[it.key]||ICON.ALL);const t=el('span');t.append(el('div','tt',it.title),el('div','ts',it.sub));b.append(ic,t);b.onclick=()=>{showField();if(it.key==='ALL'){filter='ALL';renderNav();flyHome()}else flyToFacet(it.key)};nav.append(b)}heroSub()}
 function inFilter(n){if(filter==='ALL')return true;if(filter==='UNASSIGNED')return n.kind==='accepted'&&!n.facets.length;return n.facets.includes(filter)}
 function hl(line){const d=el('div');const m=line.match(/^([A-Z])(\|.*)?$/);if(!m){d.append(el('span','k2',line));return d}
  d.append(el('span','k1',m[1]));if(m[2]){for(const part of m[2].slice(1).split('|')){d.append(el('span','k3',' | '));const s=part.replace(/^"|"$/g,'');d.append(el('span',/_KIN$|^[A-Z_]+$/.test(s)?'k4':/^E-/.test(s)||/^SAAB:/.test(s)?'k2':'k5',part))}}return d}
@@ -441,7 +480,7 @@ function renderTimeline(){const T=$('tl');T.replaceChildren();const ev=nodes.fil
  if(!ev.length)T.append(el('span','nf','NOT_FOUND_YET'))}
 
 /* ---------- detail ---------- */
-function select(n,focus){selected=n;const D=$('detail');D.replaceChildren();if(!n){D.classList.remove('on');want();return}
+function select(n,focus){selected=n;const D=$('detail');D.replaceChildren();if(!n){D.classList.remove('on');heroSub();want();return}
  const h=el('div','dh'),t=el('div');t.append(el('span','badge'+(n.kind==='pending'?' g':''),n.kind==='pending'?'AtGOV · not accepted':'REG accepted'));const h3=el('h3',null,nameOf(n));h3.id='dTitle';t.append(h3);const x=el('button','x','Close');x.onclick=()=>select(null);h.append(t,x);D.append(h);
  const kv=(k,v,mono)=>{if(v==null||v==='')return;const r=el('div','kv');r.append(el('small',null,k));const d=el('div',mono?'mono':null);if(v instanceof Node)d.append(v);else d.textContent=v;r.append(d);D.append(r)};
  const em=n.em||{};kv('Identity',n.id,true);kv('Facets',n.facets.map(f=>FACET_LABEL[f]||f).join(' · ')||'unassigned');
@@ -449,8 +488,156 @@ function select(n,focus){selected=n;const D=$('detail');D.replaceChildren();if(!
  if(n.t)kv('Captured',new Date(n.t).toLocaleString());if(em.m&&em.m.s)kv('Summary',em.m.s);if(em.m&&em.m.h)kv('Source hash',em.m.h.slice(0,16)+'…',true);
  const r=em.r||{},w=el('div');for(const k of Object.keys(KIN_KEYS)){const v=r[k];if(typeof v!=='string'||!v)continue;for(const id of (v.match(/E-[A-Fa-f0-9]+/g)||[])){const o=byID.get(id),pend=!o||o.kind!=='accepted'||n.kind!=='accepted',s=el('span','kin'+(pend?' p':''));s.append(el('em',null,KIN_KEYS[k]),document.createTextNode(shortID(id)));s.title=pend?'Pending (AtGOV) or outside view':'Verified · both REG-accepted';w.append(s)}}
  if(w.childNodes.length)kv('Recorded kin',w);
- if(n.kind==='accepted')kv('Weight',fmt(n.weight)+': '+fmt(n.nl)+' links, '+fmt(n.gov)+' AtGOV refs, '+fmt(n.asm)+' assemblies');if(n.kind==='accepted')kv('Kind',kindOf(n)||'REG_ACCEPTED');if(n.kind==='accepted'&&n.gov)kv('AtGOV refs',fmt(n.gov)+' AtGOV records reference this record');if(n.kind==='pending'&&n.target)kv('References',n.target.id,true);if(n.kind==='pending')kv('Governance','Awaiting HUMAN_FINAL. Not verified, not counted in verified references.');
- D.classList.add('on');if(focus)$('c').scrollIntoView({block:'nearest',behavior:'smooth'});want()}
+ if(n.kind==='accepted')kv('Weight',fmt(n.weight)+': '+fmt(n.nl)+' links, '+fmt(n.gov)+' AtGOV refs, '+fmt(n.asm)+' assemblies');if(n.kind==='accepted')kv('Kind',kindOf(n)||'REG_ACCEPTED');if(n.kind==='accepted'&&n.gov)kv('AtGOV refs',fmt(n.gov)+' AtGOV records reference this record');if(n.kind==='pending'&&n.target)kv('References',n.target.id,true);if(n.kind==='pending'){kv('Governance','Awaiting HUMAN_FINAL. Not verified, not counted in verified references.');kv('HUMAN_FINAL',acceptControls(n.id))}
+ heroSub();D.classList.add('on');if(focus)$('c').scrollIntoView({block:'nearest',behavior:'smooth'});want()}
+
+/* ---------- governed accept ---------- */
+// <trajectory-rows> A provider trajectory (projection trajectories[]: AtGOV provider_population
+// candidates sharing required_capability, composition and first provider) is shown as ONE row.
+// Derived and read-only; every member record stays in the ledger unchanged.
+const TRAJ_WARN='accepting adds OBS providers';
+function trajList(p,gov){const out=[];for(const t of ((p&&Array.isArray(p.trajectories))?p.trajectories:[])){const m=(t.members||[]).filter(id=>!gov||gov[id]);if(!m.length)continue;out.push({...t,members:m,count:m.length,newest_id:m.includes(t.newest_id)?t.newest_id:m[m.length-1]})}return out}
+function trajWhen(v){const d=new Date(v);return isNaN(d)||d.getFullYear()<2000?'?':d.toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})}
+function trajLabel(t){return 'provider trajectory · '+(t.required_capability||'?')+' → '+(t.first_provider_title||t.first_provider||'?')+' · '+Number(t.count).toLocaleString('en-US')+' run'+(t.count===1?'':'s')+' · '+trajWhen(t.first_at)+'…'+trajWhen(t.last_at)}
+let trajCache=null;function trajNow(p,gov){if(trajCache&&trajCache.p===p&&trajCache.gov===gov)return trajCache.v;const v=trajList(p,gov);trajCache={p,gov,v};return v}
+// HUMAN_FINAL queue with each trajectory collapsed to one row at its newest member.
+function collapseTraj(q,trs){const mem=new Map();for(const t of trs)for(const id of t.members)mem.set(id,t);const out=[],done=new Set();
+ for(const it of q){const t=mem.get(it.id);if(!t){out.push(it);continue}if(done.has(t.key))continue;done.add(t.key);out.push({id:t.newest_id,summary:trajLabel(t),traj:t})}
+ for(const t of trs)if(!done.has(t.key)){done.add(t.key);out.push({id:t.newest_id,summary:trajLabel(t),traj:t})}return out}
+// </trajectory-rows>
+// <governed-accept> The ONLY write on this page. A human pressing Accept records a HUMAN_FINAL
+// APPROVE through the existing POST /decide route (fieldapi.Decide: gov.Decide with authority
+// HUMAN_FINAL, then reg.Accept), the same receipts `field decide <id> APPROVE <reason>` writes.
+// A reason is required. The bearer token is never embedded: the operator pastes it once and it
+// is kept in this browser's localStorage under fieldd.token. Nothing here accepts automatically.
+const TOKEN_KEY='fieldd.token';
+function savedToken(){try{return localStorage.getItem(TOKEN_KEY)||''}catch(e){return ''}}
+function storeToken(v){try{v?localStorage.setItem(TOKEN_KEY,v):localStorage.removeItem(TOKEN_KEY)}catch(e){}}
+function acceptBody(id,reason){return JSON.stringify({emergion_id:id,decision:'APPROVE',reason:reason})}
+async function acceptAtGOV(id,btn){const tok=savedToken();if(!tok){alert('Paste the fieldd token first (from fieldd.token in the state directory).');return}
+ const reason=prompt('HUMAN_FINAL reason for accepting '+id+' (required):');if(reason===null)return;if(!reason.trim()){alert('A HUMAN_FINAL decision requires an explicit reason.');return}
+ if(!confirm('Accept '+id+'?\nThis records a HUMAN_FINAL APPROVE and REG acceptance.'))return;
+ if(btn)btn.disabled=true;
+ try{const r=await fetch('/decide',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:acceptBody(id,reason.trim())});
+  if(r.status===401){storeToken('');alert('Token refused (401). Paste the current fieldd token and retry.');if(selected)select(selected);return}
+  const res=await r.json().catch(()=>({error:'HTTP '+r.status}));if(!r.ok||res.error){alert(res.error||('HUMAN_FINAL decision was not accepted (HTTP '+r.status+').'));return}
+  await refresh();const n=byID.get(id);if(n)select(n)}
+ catch(e){alert('HUMAN_FINAL decision could not be confirmed. Refresh before retrying.')}
+ finally{if(btn)btn.disabled=false}}
+function acceptButton(id){const b=el('button','acc','Accept');b.title='Record HUMAN_FINAL APPROVE for '+id+' (reason required)';b.onclick=e=>{e.stopPropagation();acceptAtGOV(id,b)};return b}
+function acceptControls(id){const w=el('div');if(!savedToken()){const f=el('div','tok'),i=el('input');i.type='password';i.placeholder='paste fieldd token once';i.autocomplete='off';const s=el('button','acc','Save');s.onclick=()=>{const v=i.value.trim();if(v){storeToken(v);select(byID.get(id)||selected)}};f.append(i,s);w.append(f)}
+ else{const f=el('div','tok');const a=acceptButton(id),fg=el('button','acc','Forget token');fg.style.background='none';fg.onclick=()=>{storeToken('');select(byID.get(id)||selected)};f.append(a,fg);w.append(f)}return w}
+// Batch accept: one human double-press over many AtGOV records. The human picks a filter and sees
+// the exact count and a sample. The reason is pre-filled from the filter, count and sample (editable;
+// an edited reason is remembered in this browser). The first press arms the button as
+// "CONFIRM ACCEPT N" for 4 s; only a second press inside that window sends. The batch is the first
+// min(N,cap) matching records by IDN; the page sends those exact IDs with confirm_count = the shown
+// count to POST /decide-batch-human, where each record gets its own gov.Decide(HUMAN_FINAL) +
+// reg.Accept receipts and the server re-checks reason, count and cap. A single press never sends.
+const REASON_KEY='fieldd.batchReason',BATCH_ARM_MS=4000;
+let batchCap=500,batchCapRead=false,batchBusy=false,batchArm=null,batchArmTimer=0;const BS={kind:'group',value:''};
+function batchMatch(em,f,fs){const r=(em&&em.r)||{};
+ if(f.kind==='all')return true;
+ if(!f.value)return false;
+ if(f.kind==='facet')return !!fs&&fs.includes(f.value);
+ if(f.kind==='class')return String(r.source_kind||'').trim()===f.value;
+ if(f.kind==='target')return String(r.target_emergion||'').trim()===f.value;
+ return false}
+function batchFilter(kind,value,tap){if(kind==='tap')return tap&&tap!=='ALL'?{kind:'facet',value:tap}:{kind:'all',value:''};return {kind,value}}
+// An AtGOV record has no facet of its own: it belongs to the facet(s) of the REG-accepted record it
+// references, resolved exactly as the haze does (refsOf: target_emergion, then REL IDNs, then the
+// summary; first reference that is accepted). An accepted target without facets is UNASSIGNED.
+// Page-side and read-only: nothing is written.
+let batchIdxCache=null;
+// Emergent groups are the data's own: AtGOV records that resolve to the same accepted target (the
+// haze target) with the same source_kind. No invented grouping; larger groups are still one group.
+function kindName(k){return k?String(k).toLowerCase().replace(/_/g,' '):'records'}
+const NO_TRAJ=[];function batchIndex(gov,acc,trs){trs=trs||NO_TRAJ;if(batchIdxCache&&batchIdxCache.gov===gov&&batchIdxCache.acc===acc&&batchIdxCache.trs===trs)return batchIdxCache.idx;const idx=new Map(),group=new Map(),gc=new Map(),tmem=new Map();
+ for(const t of trs){const key='traj:'+t.key;gc.set(key,{key,kind:'',target:t.first_provider||'',count:0,label:trajLabel(t),traj:t});for(const id of t.members)tmem.set(id,key)}
+ for(const [id,em] of Object.entries(gov||{})){const own=((em&&em.e&&em.e.m)||{}).f,t=refsOf(em).find(x=>acc&&acc[x]&&x!==id);
+  const tf=t?(((acc[t].e||{}).m||{}).f||[]):[],fs=[...new Set([...(Array.isArray(own)?own:[]),...(t?(tf.length?tf:['UNASSIGNED']):[])])];idx.set(id,fs);
+  if(tmem.has(id)){const key=tmem.get(id);group.set(id,key);gc.get(key).count++;continue}
+  const kind=String(((em&&em.r)||{}).source_kind||'').trim(),key=kind+'→'+(t||'');group.set(id,key);
+  const g=gc.get(key)||{key,kind,target:t||'',count:0,label:kindName(kind)+' → '+(t||'no accepted target')};g.count++;gc.set(key,g)}
+ idx.group=group;idx.groups=[...gc.values()].sort((a,b)=>b.count-a.count||(a.key<b.key?-1:1));
+ batchIdxCache={gov,acc,trs,idx};return idx}
+// A group is accepted whole (sent in cap-sized chunks); other filters take the first cap records.
+function batchSelect(gov,f,cap,idx){const whole=f.kind==='group',ids=Object.keys(gov||{}).filter(id=>whole?!!f.value&&!!idx&&idx.group.get(id)===f.value:batchMatch(gov[id],f,idx&&idx.get(id))).sort();return {total:ids.length,whole,ids:whole?ids:ids.slice(0,Math.max(0,cap))}}
+function batchChunks(ids,cap){const out=[];for(let i=0;i<ids.length;i+=Math.max(1,cap))out.push(ids.slice(i,i+Math.max(1,cap)));return out}
+function batchOptions(gov,idx){const o={facet:{},class:{},target:{}},inc=(m,k)=>{if(k)m[k]=(m[k]||0)+1};
+ for(const [id,em] of Object.entries(gov||{})){const r=(em&&em.r)||{};for(const f of ((idx&&idx.get(id))||[]))inc(o.facet,f);inc(o.class,String(r.source_kind||'').trim());inc(o.target,String(r.target_emergion||'').trim())}
+ for(const k of Object.keys(o))o[k]=Object.entries(o[k]).sort((a,b)=>b[1]-a[1]||(a[0]<b[0]?-1:1));return o}
+function batchBody(ids,reason,bid,decision){const b={emergion_ids:ids,reason:reason,confirm_count:ids.length};if(bid)b.batch_id=bid;if(decision==='HOLD')b.decision='HOLD';return JSON.stringify(b)}
+// What one press sends. A trajectory row accepts its newest member only; 'Hold the rest' HOLDs
+// the other members (existing HUMAN_FINAL HOLD, reversible by RESUME). Anything else: as shown.
+function batchPlan(s,f,idx){const g=f.kind==='group'&&idx&&idx.groups.find(g=>g.key===f.value),t=g&&g.traj;if(!t)return {traj:null,accept:s.ids,hold:[]};const nid=s.ids.includes(t.newest_id)?t.newest_id:s.ids[s.ids.length-1];return {traj:t,accept:nid?[nid]:[],hold:s.ids.filter(id=>id!==nid)}}
+function batchTitle(em,id){const m=(em&&em.e&&em.e.m)||{};return m.h||(em&&em.m&&em.m.s)||id}
+function facetName(f){return (typeof FACET_LABEL!=='undefined'&&FACET_LABEL[f])||f}
+function batchLabel(f,idx){if(f.kind==='group'){const g=idx&&idx.groups.find(g=>g.key===f.value);return 'group '+(g?g.label:f.value)}return f.kind==='all'?'all AtGOV':f.kind==='facet'?'facet '+facetName(f.value):f.kind==='class'?'class '+f.value:'target '+f.value}
+// Most common title prefix in the batch: the text before ':' or the first three words.
+function titlePrefix(gov,ids){const c=new Map();for(const id of ids){const t=String(batchTitle(gov[id],id)).trim(),p=(t.includes(':')?t.slice(0,t.indexOf(':')):t.split(/\s+/).slice(0,3).join(' ')).trim();if(p)c.set(p,(c.get(p)||0)+1)}
+ let best='',n=0;for(const [p,k] of c)if(k>n||(k===n&&p<best)){best=p;n=k}return best}
+function autoReason(gov,f,ids,idx){const p=titlePrefix(gov,ids.slice(0,2000));return 'Batch HUMAN_FINAL: '+batchLabel(f,idx)+' · '+ids.length+' record'+(ids.length===1?'':'s')+(p?' · sample '+p:'')}
+function savedReason(){try{return localStorage.getItem(REASON_KEY)||''}catch(e){return ''}}
+function storeReason(v){try{v?localStorage.setItem(REASON_KEY,v):localStorage.removeItem(REASON_KEY)}catch(e){}}
+function batchKey(ids){return ids.length+'|'+(ids[0]||'')+'|'+(ids[ids.length-1]||'')}
+// Two-step press: the first press (or a press after the window, or on a changed batch) only arms.
+function batchStep(arm,key,now){if(arm&&arm.key===key&&now-arm.at<=BATCH_ARM_MS)return {send:true,arm:null};return {send:false,arm:{key,at:now}}}
+async function readBatchCap(){if(batchCapRead)return;batchCapRead=true;try{const r=await fetch('/decide-batch-human');const j=await r.json();if(Number.isFinite(j.cap)&&j.cap>0&&j.cap!==batchCap){batchCap=j.cap;renderBatch()}}catch(e){batchCapRead=false}}
+async function batchAccept(ids,reason,out,decision){const tok=savedToken();const hold=decision==='HOLD',verb=hold?'held':'accepted';
+ if(!tok){out.textContent='Paste the fieldd token first (Next Governed Step panel).';return}
+ if(!reason.trim()){out.textContent='A HUMAN_FINAL reason is required.';return}
+ if(!ids.length)return;
+ // One press, then cap-sized chunks in order; all chunks share the first chunk's batch id. Each
+ // chunk is checked by the server (reason, count, cap). The first error or refusal stops it.
+ batchBusy=true;let bid='',acc=0,skip=0;const total=ids.length,prog=()=>verb+' '+fmt(acc)+' / '+fmt(total)+(skip?' · '+fmt(skip)+' already '+verb:'')+(bid?' · '+bid:'');
+ out.textContent='Recording '+fmt(total)+' HUMAN_FINAL '+(hold?'HOLD ':'')+'decisions…';
+ try{for(const part of batchChunks(ids,batchCap)){
+   const r=await fetch('/decide-batch-human',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:batchBody(part,reason.trim(),bid,decision)});
+   if(r.status===401){storeToken('');out.textContent='Token refused (401) after '+prog()+'. Paste the current fieldd token and retry.';return}
+   const j=await r.json().catch(()=>({error:'HTTP '+r.status}));acc+=(hold?j.held:j.accepted)||0;skip+=j.skipped||0;if(j.batch_id)bid=j.batch_id;
+   if(j.error||!r.ok){out.textContent=(j.stopped_at?'Stopped at '+j.stopped_at:'Refused')+' · '+prog()+': '+(j.error||('HTTP '+r.status));return}
+   out.textContent=prog()}
+  out.textContent='Done · '+prog()+' · next batch loaded'}
+ catch(e){out.textContent='Batch result could not be confirmed after '+prog()+'. Refresh before retrying.'}
+ finally{batchBusy=false;for(let i=0;i<20&&loading;i++)await new Promise(r=>setTimeout(r,150));await refresh().catch(()=>{});renderBatch()}}
+function disarm(){batchArm=null;clearTimeout(batchArmTimer);renderBatch()}
+function renderBatch(){const P=$('hfbP'),B=$('hfb');if(!P||!B)return;const gov=(field&&field.AtGOV)||{},n=Object.keys(gov).length;P.hidden=!n;if(!n)return;readBatchCap();
+ if(!$('bKind')){const sel=el('div','bsel'),k=el('select'),v=el('select');k.id='bKind';v.id='bVal';k.setAttribute('aria-label','Batch filter');v.setAttribute('aria-label','Batch filter value');
+  for(const [x,t] of [['group','Group (target · kind)'],['tap','Current tap filter'],['all','All AtGOV'],['facet','Facet'],['class','Class (source_kind)'],['target','Target emergion']]){const o=el('option',null,t);o.value=x;k.append(o)}
+  k.onchange=()=>{BS.kind=k.value;BS.value='';batchArm=null;renderBatch()};v.onchange=()=>{BS.value=v.value;batchArm=null;renderBatch()};sel.append(k,v);
+  const sum=el('div','bsum');sum.id='bSum';const sam=el('ul','bsam');sam.id='bSam';
+  const inp=el('div','bin'),rs=el('input'),go=el('button','acc','Accept batch');rs.id='bReason';rs.placeholder='HUMAN_FINAL reason (pre-filled)';rs.autocomplete='off';rs.setAttribute('aria-label','HUMAN_FINAL reason');go.id='bGo';
+  rs.oninput=()=>{rs.dataset.auto='';storeReason(rs.value.trim())};
+  const res=el('div','bres');res.id='bRes';
+  const hb=el('button','acc hold','Hold the rest');hb.id='bHold';hb.hidden=true;const warn=el('div','twarn',TRAJ_WARN);warn.id='bWarn';warn.hidden=true;
+  const plan=()=>{const g=(field&&field.AtGOV)||{},f=batchFilter(BS.kind,BS.value,filter),idx=batchIndex(g,(field&&field.Accepted)||{},trajNow(proj,g));return batchPlan(batchSelect(g,f,batchCap,idx),f,idx)};
+  go.onclick=()=>{if(batchBusy)return;const pl=plan(),ids=pl.accept;if(!ids.length)return;
+   const st=batchStep(batchArm,'A|'+batchKey(ids),Date.now());batchArm=st.arm;clearTimeout(batchArmTimer);
+   if(!st.send){batchArmTimer=setTimeout(disarm,BATCH_ARM_MS);renderBatch();return}
+   renderBatch();batchAccept(ids,rs.value,res)};
+  hb.onclick=()=>{if(batchBusy)return;const pl=plan(),ids=pl.hold;if(!ids.length)return;
+   const st=batchStep(batchArm,'H|'+batchKey(ids),Date.now());batchArm=st.arm;clearTimeout(batchArmTimer);
+   if(!st.send){batchArmTimer=setTimeout(disarm,BATCH_ARM_MS);renderBatch();return}
+   renderBatch();batchAccept(ids,rs.value,res,'HOLD')};
+  inp.append(rs,go,hb);B.append(sel,sum,warn,sam,inp,res)}
+ const k=$('bKind'),v=$('bVal');k.value=BS.kind;const idx=batchIndex(gov,(field&&field.Accepted)||{},trajNow(proj,gov)),opts=batchOptions(gov,idx),fc=new Map(opts.facet);opts.group=idx.groups.map(g=>[g.key,g.count,g.label]);
+ if(BS.kind==='group'||BS.kind==='facet'||BS.kind==='class'||BS.kind==='target'){const list=opts[BS.kind].slice(0,BS.kind==='group'?200:60);if(!BS.value||!list.some(x=>x[0]===BS.value))BS.value=list.length?list[0][0]:'';
+  if(document.activeElement!==v){v.replaceChildren();for(const [x,c,lb] of list){const o=el('option',null,(BS.kind==='group'?(String(x).startsWith('traj:')?lb:lb+' · '+fmt(c)):BS.kind==='facet'?facetName(x)+' · '+fmt(c)+' waiting':x+' · '+fmt(c)));o.value=x;v.append(o)}v.value=BS.value}v.disabled=false}
+ else{v.replaceChildren(el('option',null,BS.kind==='tap'?(filter&&filter!=='ALL'?'facet '+facetName(filter)+' · '+fmt(fc.get(filter)||0)+' waiting':'no tap filter · all AtGOV'):'every AtGOV record'));v.disabled=true}
+ const f=batchFilter(BS.kind,BS.value,filter),s=batchSelect(gov,f,batchCap,idx),pl=batchPlan(s,f,idx),sum=$('bSum');sum.replaceChildren();$('bWarn').hidden=!pl.traj;
+ const nch=batchChunks(s.ids,batchCap).length;if(pl.traj)sum.append(document.createTextNode('One trajectory: '),el('b',null,fmt(s.ids.length)),document.createTextNode(' run'+(s.ids.length===1?'':'s')+' · Accept takes the newest only ('+(pl.accept[0]||'—')+')'+(pl.hold.length?' · Hold the rest = '+fmt(pl.hold.length):'')));else if(s.whole)sum.append(document.createTextNode('This group: '),el('b',null,fmt(s.ids.length)),document.createTextNode(' record'+(s.ids.length===1?'':'s')+(nch>1?' · one press, sent in '+nch+' chunks of ≤'+fmt(batchCap):'')));else sum.append(document.createTextNode('This batch: '),el('b',null,fmt(s.ids.length)),document.createTextNode(s.total>s.ids.length?' of '+fmt(s.total)+' matching (cap '+fmt(batchCap)+', first by IDN)':' record'+(s.ids.length===1?'':'s')+' matching'));
+ const sam=$('bSam');sam.replaceChildren();for(const id of s.ids.slice(0,10)){const li=el('li');li.append(el('code',null,id),el('span',null,batchTitle(gov[id],id)));sam.append(li)}
+ if(s.ids.length>10)sam.append(el('li',null,'… and '+fmt(s.ids.length-10)+' more'));
+ if(!s.ids.length)sam.append(el('li','bhint',f.kind==='facet'?'No waiting records point at this facet':'No waiting records match this filter'));
+ if(s.whole&&s.ids.length>10)sam.lastChild.textContent='… and '+fmt(s.ids.length-10)+' more in this group';
+ const rs=$('bReason');if(document.activeElement!==rs){const kept=savedReason();rs.value=kept||(pl.traj?'Trajectory HUMAN_FINAL: '+trajLabel(pl.traj)+' · newest '+(pl.accept[0]||''):autoReason(gov,f,s.ids,idx));rs.dataset.auto=kept?'':'1'}
+ const ka='A|'+batchKey(pl.accept),kh='H|'+batchKey(pl.hold);if(batchArm&&batchArm.key!==ka&&batchArm.key!==kh)batchArm=null;
+ const go=$('bGo'),hb=$('bHold'),armA=!!batchArm&&batchArm.key===ka,armH=!!batchArm&&batchArm.key===kh;
+ go.textContent=armA?(pl.traj?'Confirm accept newest':'Confirm accept '+fmt(pl.accept.length)):(pl.traj?'Accept newest':'Accept batch');go.classList.toggle('arm',armA);go.disabled=!pl.accept.length||batchBusy;
+ hb.hidden=!pl.traj||!pl.hold.length;hb.textContent=armH?'Confirm hold '+fmt(pl.hold.length):'Hold the rest ('+fmt(pl.hold.length)+')';hb.classList.toggle('arm',armH);hb.disabled=!pl.hold.length||batchBusy;
+ setText('hfbPill',pl.traj?'1 TRAJECTORY':fmt(s.ids.length)+' IN BATCH')}
+// </governed-accept>
 
 /* ---------- renderer ---------- */
 const c=$('c'),g=c.getContext('2d'),reduced=matchMedia('(prefers-reduced-motion: reduce)');
@@ -459,6 +646,7 @@ function sprite(sz,stops){const s=document.createElement('canvas');s.width=s.hei
 function sprites0(){sprites.halo=sprite(96,[[0,'rgba(255,255,255,1)'],[.08,'rgba(235,238,255,.95)'],[.2,'rgba(90,126,255,.55)'],[.45,'rgba(47,107,255,.16)'],[1,'rgba(29,78,216,0)']]);
  sprites.fogW=sprite(256,[[0,'rgba(240,244,255,.6)'],[.35,'rgba(205,212,255,.2)'],[1,'rgba(180,190,255,0)']]);
  sprites.core=sprite(256,[[0,'rgba(220,226,255,.5)'],[.25,'rgba(135,158,255,.22)'],[.6,'rgba(59,110,246,.07)'],[1,'rgba(29,78,216,0)']]);
+ sprites.hull=sprite(128,[[0,'rgba(127,156,255,.55)'],[.45,'rgba(90,120,240,.22)'],[1,'rgba(59,90,220,0)']]);
  sprites.fogB=sprite(256,[[0,'rgba(115,142,255,.45)'],[.45,'rgba(60,110,240,.14)'],[1,'rgba(40,80,220,0)']]);
  sprites.glow=sprite(256,[[0,'rgba(47,107,255,.55)'],[.35,'rgba(29,78,216,.22)'],[1,'rgba(20,50,180,0)']]);
  sprites.dot=sprite(16,[[0,'rgba(255,255,255,1)'],[.4,'rgba(220,226,255,.5)'],[1,'rgba(200,210,255,0)']])}
@@ -467,9 +655,17 @@ function seedParticles(){const small=W<700,R=(i,s)=>rnd(s+i);
  dust=[];const nd=small?700:1200;for(let i=0;i<nd;i++){const k='d'+i;dust.push({x:gauss(k+'x')*.75,y:gauss(k+'y')*.42,z:gauss(k+'z')*.75,b:R(i,'db'),s:R(i,'ds')})}
  fog=[];const nf=small?22:34;for(let i=0;i<nf;i++){const k='f'+i;fog.push({x:gauss(k+'x')*.6,z:gauss(k+'z')*.6,y:gauss(k+'y')*.22,s:.9+R(i,'fs')*1.3,b:R(i,'fb')<.62,ph:R(i,'fp')*6.28})}}
 function resize(){const r=c.getBoundingClientRect();W=Math.max(1,r.width);H=Math.max(1,r.height);dpr=Math.min(window.devicePixelRatio||1,2);c.width=Math.round(W*dpr);c.height=Math.round(H*dpr);g.setTransform(dpr,0,0,dpr,0,0);seedParticles();want()}
-function P(x,y,z){const cy=Math.cos(cam.yaw),sy=Math.sin(cam.yaw);let X=x*cy-z*sy,Z=x*sy+z*cy;const cp=Math.cos(cam.pitch),sp=Math.sin(cam.pitch);let Y=y*cp-Z*sp;Z=y*sp+Z*cp;const D=3.4,zz=Z+D;if(zz<.2)return null;const k=Math.min(W*.92,H*1.25)*.5*cam.zoom*D/1.75/zz;return {x:W/2+X*k,y:H*.5-Y*k+H*.04,s:k/ (Math.min(W*.92,H*1.25)*.5)*2.1/D*1.6,z:zz}}
+function P(x,y,z){x-=cam.tx||0;y-=cam.ty||0;z-=cam.tz||0;const cy=Math.cos(cam.yaw),sy=Math.sin(cam.yaw);let X=x*cy-z*sy,Z=x*sy+z*cy;const cp=Math.cos(cam.pitch),sp=Math.sin(cam.pitch);let Y=y*cp-Z*sp;Z=y*sp+Z*cp;const D=3.4,zz=Z+D;if(zz<.2)return null;const k=Math.min(W*.92,H*1.25)*.5*cam.zoom*D/1.75/zz;return {x:W/2+X*k,y:H*.5-Y*k+H*.04,s:k/ (Math.min(W*.92,H*1.25)*.5)*2.1/D*1.6,z:zz}}
+// Smooth camera flight to a cluster (or home). Reduced motion jumps straight there.
+const HOME={tx:0,ty:0,tz:0,zoom:1};
+function flyTo(to){const from={tx:cam.tx||0,ty:cam.ty||0,tz:cam.tz||0,zoom:cam.zoom};if(reduced.matches){Object.assign(cam,to);fly=null}else fly={from,to,t0:null,dur:800};want()}
+function stepFly(ts){if(!fly)return;if(fly.t0==null)fly.t0=ts;const u=Math.min(1,(ts-fly.t0)/fly.dur),e=u<.5?4*u*u*u:1-Math.pow(-2*u+2,3)/2;for(const k of ['tx','ty','tz','zoom'])cam[k]=fly.from[k]+(fly.to[k]-fly.from[k])*e;if(u>=1)fly=null;else if(reduced.matches){Object.assign(cam,fly.to);fly=null}}
+function flyToFacet(f){filter=f;renderNav();const ms=f==='UNASSIGNED'?nodes.filter(n=>n.kind==='accepted'&&!n.facets.length):nodes.filter(n=>n.kind==='accepted'&&n.facets.includes(f));const fr=groupFrame(ms);if(fr){auto=false;flyTo(fr)}else flyHome()}
+function flyHome(){auto=true;flyTo(HOME)}
+// A nav tile is often tapped with the render below the fold on a phone: scroll it into view first.
+function showField(){const r=c.getBoundingClientRect();if(r.top<0||r.bottom>innerHeight)c.scrollIntoView({block:'center',behavior:reduced.matches?'auto':'smooth'})}
 function want(){if(!raf&&visible&&!document.hidden)raf=requestAnimationFrame(frame)}
-function frame(ts){raf=0;const dt=Math.min(.05,(ts-(lastT||ts))/1000);lastT=ts;const anim=!reduced.matches;if(anim&&auto)cam.yaw+=dt*.035;draw(anim?ts/1000:0);if(anim&&visible&&!document.hidden)want()}
+function frame(ts){raf=0;const dt=Math.min(.05,(ts-(lastT||ts))/1000);lastT=ts;const anim=!reduced.matches;stepFly(ts);if(anim&&auto)cam.yaw+=dt*.035;draw(anim?ts/1000:0);if(anim&&visible&&!document.hidden)want()}
 function draw(t){g.clearRect(0,0,W,H);
  // backdrop: near-black with deep electric blue underglow
  const bg=g.createLinearGradient(0,0,0,H);bg.addColorStop(0,'#04060b');bg.addColorStop(.55,'#060a16');bg.addColorStop(1,'#04060c');g.fillStyle=bg;g.fillRect(0,0,W,H);
@@ -489,6 +685,11 @@ function draw(t){g.clearRect(0,0,W,H);
  // project nodes (comets are drawn after nodes)
  proj2=[];govP=[];for(const n of nodes){if(n.kind==='pending'){if(!showGov)continue;const p=P(n.x,n.y,n.z);if(!p)continue;n.p=p;n.on=inFilter(n);govP.push(n);continue}const p=P(n.x,n.y+.012*Math.sin(t*.8+n.tw),n.z);if(!p)continue;n.p=p;n.on=inFilter(n)&&(!asmSel||(proj.assemblies.find(a=>a.id===asmSel)||{members:[]}).members.includes(n.id));proj2.push(n)}
  proj2.sort((a,b)=>b.p.z-a.p.z);
+ // soft hulls behind emergent clusters (no labels, nothing overlaid)
+ for(const cl of clusters){const ps=cl.members.map(n=>n.p).filter(Boolean);if(ps.length<3)continue;const mx=ps.reduce((a,p)=>a+p.x,0)/ps.length,my=ps.reduce((a,p)=>a+p.y,0)/ps.length;
+  const sx=Math.sqrt(ps.reduce((a,p)=>a+(p.x-mx)**2,0)/ps.length),sy=Math.sqrt(ps.reduce((a,p)=>a+(p.y-my)**2,0)/ps.length);const rx=Math.min(W*.45,sx*2.2+16),ry=Math.min(H*.45,sy*2.2+16);
+  const sel=cl.facet&&filter===cl.facet,on=filter==='ALL'||sel||cl.members.some(inFilter);g.globalAlpha=sel?.32:on?(cl.facet?.12:.09):.03;g.drawImage(sprites.hull,mx-rx,my-ry,rx*2,ry*2)}
+ g.globalAlpha=1;
  // links: thin faint curves, engine-emitted only
  const selAdj=new Set();if(selected)for(const l of links)if(l.a===selected||l.b===selected){selAdj.add(l.a);selAdj.add(l.b)}
  for(const l of links){if(!l.a.p||!l.b.p||(l.a.kind==='pending'&&!showGov))continue;const on=l.a.on&&l.b.on,hot=selected&&(l.a===selected||l.b===selected);const p=l.a.p,q=l.b.p,mx=(p.x+q.x)/2,my=(p.y+q.y)/2-Math.hypot(q.x-p.x,q.y-p.y)*.22;
@@ -503,7 +704,7 @@ function draw(t){g.clearRect(0,0,W,H);
  if(showGov)for(const th of threads){const p=P(th.cx,th.cy,th.cz),q=th.t.p;if(!p||!q)continue;const on=inFilter(th.t),hot=selected===th.t,f=Math.log2(1+th.count)/Math.log2(1+maxC);
   g.strokeStyle=`rgba(205,214,236,${hot?.7:on?.05+.18*f:.02})`;g.lineWidth=.4+1.4*f;g.beginPath();g.moveTo(p.x,p.y);g.lineTo(q.x,q.y);g.stroke()}
  // facet attractor dots (sized by member count); their names are drawn above the nodes
- for(const A of anchors){const p=P(A.x,A.y,A.z);A.p=p;A.rect=null;if(!p)continue;const sel=filter===A.facet;g.fillStyle=`rgba(127,156,255,${sel?.6:.3})`;g.beginPath();g.arc(p.x,p.y,nodeRadius(A.members,maxMembers)*.8,0,6.283);g.fill()}
+ for(const A of anchors){const p=P(A.x,A.y,A.z);A.p=p;A.rect=null;if(!p)continue;const sel=filter===A.facet,ar=nodeRadius(A.members,maxMembers)*.8;A.r=ar;g.fillStyle=`rgba(127,156,255,${sel?.7:.3})`;g.beginPath();g.arc(p.x,p.y,ar,0,6.283);g.fill();if(sel){g.strokeStyle='rgba(47,107,255,.9)';g.lineWidth=1.4;g.beginPath();g.arc(p.x,p.y,ar+5,0,6.283);g.stroke()}}
  g.textAlign='left';
  // nodes
  // AtGOV layer: rings when few, one batched density pass when many (thousands stay smooth)
@@ -524,7 +725,7 @@ function draw(t){g.clearRect(0,0,W,H);
 // Label budget: facet names may use at most 6% of the render, all labels together under 10%.
 const FACET_BUDGET=.035,LABEL_BUDGET=.095;let labelsOn=false,labelArea=0,facetArea=0,tipOverlap=0;
 const hit=(a,b)=>!(a.x+a.w<=b.x||b.x+b.w<=a.x||a.y+a.h<=b.y||b.y+b.h<=a.y);
-function labels(){const placed=[],drawn=[],mono=getComputedStyle(document.body).getPropertyValue('--mono');g.textBaseline='middle';g.textAlign='left';
+function labels(){if(!labelsOn){labelArea=0;tipOverlap=0;return}const placed=[],drawn=[],mono=getComputedStyle(document.body).getPropertyValue('--mono');g.textBaseline='middle';g.textAlign='left';
  for(const A of anchors)if(A.rect)placed.push(A.rect);
  const inside=r=>r.x>=4&&r.y>=4&&r.x+r.w<=W-4&&r.y+r.h<=H-4;
  const n=selected;if(n&&n.p){const p=n.p,maxW=W*.6;g.font='600 10px '+mono;const id=fit1(shortID(n.id),maxW-16);const w1=g.measureText(id).width;g.font='500 11px system-ui,sans-serif';const t=fit1(String(nameOf(n)),maxW-16);const w=Math.min(maxW,Math.max(w1,g.measureText(t).width)+16),h=32;
@@ -542,20 +743,18 @@ function labels(){const placed=[],drawn=[],mono=getComputedStyle(document.body).
  labelArea=drawn.reduce((a,r)=>a+r.w*r.h,0)}
 function labelCoverage(){return (labelArea+facetArea)/(W*H)}
 // Facet names: small fixed-size text (10.5px screen px, never grows with zoom), medium weight,
-// near-white with a thin dark halo only. At most 4 at once, largest facets first, never overlapping,
+// near-white with a thin dark halo only. A name keeps its last side while it fits, so it does not jump under a finger. At most 4 at once, largest facets first, never overlapping,
 // clamped inside the render. Counts appear in the tap tooltip, not on the field.
 const FACET_MAX=4;
-function facetNames(){const fs=10.5,placed=[],budget=W*H*FACET_BUDGET;let used=0,shown=0;
+function facetNames(){const fs=10.5,placed=[],budget=W*H*FACET_BUDGET;let used=0,shown=0;if(!labelsOn){facetArea=0;return}
  g.save();g.textAlign='left';g.textBaseline='middle';g.lineJoin='round';g.font=`500 ${fs}px system-ui,sans-serif`;g.letterSpacing='0.8px';
- for(const A of anchors.filter(a=>a.p&&a.p.x>=0&&a.p.x<=W&&a.p.y>=0&&a.p.y<=H).sort((a,b)=>b.members-a.members||(a.facet<b.facet?-1:1))){if(shown>=FACET_MAX)break;
+ for(const A of anchors.filter(a=>a.p&&a.p.x>=0&&a.p.x<=W&&a.p.y>=0&&a.p.y<=H).sort((a,b)=>(b.facet===filter)-(a.facet===filter)||b.members-a.members||(a.facet<b.facet?-1:1))){if(shown>=FACET_MAX)break;
   const name=(FACET_LABEL[A.facet]||A.facet).toUpperCase(),nw=g.measureText(name).width,w=nw+4,h=fs+4,p=A.p;if(used+w*h>budget)continue;let r=null;
-  for(const [dx,dy] of [[0,-1],[0,1],[1,0],[-1,0],[0,-2],[0,2]]){const x=Math.max(4,Math.min(W-4-w,p.x-w/2+dx*(w/2+8))),y=Math.max(4,Math.min(H-4-h,p.y-h/2+dy*(h+4))),c={x,y,w,h};if(!placed.some(q=>hit(c,q))){r=c;break}}
+  const DIRS=[[0,-1],[0,1],[1,0],[-1,0],[0,-2],[0,2]];for(const di of A.ldir!=null?[A.ldir,...DIRS.keys()]:DIRS.keys()){const [dx,dy]=DIRS[di];const x=Math.max(4,Math.min(W-4-w,p.x-w/2+dx*(w/2+8))),y=Math.max(4,Math.min(H-4-h,p.y-h/2+dy*(h+4))),c={x,y,w,h};if(!placed.some(q=>hit(c,q))){r=c;A.ldir=di;break}}
   if(!r)continue;placed.push(r);A.rect=r;used+=w*h;shown++;const sel=filter===A.facet,on=filter==='ALL'||sel;
-  g.globalAlpha=on?1:.5;g.strokeStyle='rgba(5,7,13,0.85)';g.shadowColor='rgba(5,7,13,0.95)';g.shadowBlur=7;g.lineWidth=3.2;g.strokeText(name,r.x+2,r.y+h/2);g.shadowBlur=3;g.strokeText(name,r.x+2,r.y+h/2);g.shadowBlur=0;g.fillStyle=sel?'rgba(255,255,255,0.95)':'rgba(236,240,250,0.94)';g.fillText(name,r.x+2,r.y+h/2)}
+  g.globalAlpha=on?1:.5;g.strokeStyle='rgba(5,7,13,0.85)';g.shadowColor='rgba(5,7,13,0.95)';g.shadowBlur=7;g.lineWidth=3.2;g.strokeText(name,r.x+2,r.y+h/2);g.shadowBlur=3;g.strokeText(name,r.x+2,r.y+h/2);g.shadowBlur=0;g.fillStyle=sel?'#c9d8ff':'rgba(236,240,250,0.94)';g.fillText(name,r.x+2,r.y+h/2)}
  g.restore();g.letterSpacing='0px';facetArea=used}
-// Tap on a facet name: filter to it and show its name and record count in the small tooltip.
-function showFacet(A,x,y){const T=$('evtip');T.replaceChildren(el('b',null,FACET_LABEL[A.facet]||A.facet),el('span',null,fmt(A.members)+(A.members===1?' accepted record':' accepted records')),el('small',null,filter===A.facet?'filtered · tap again to clear':'filter cleared'));
- T.classList.add('on');const w=T.offsetWidth,h=T.offsetHeight;T.style.left=Math.max(8,Math.min(W-w-8,x+14))+'px';T.style.top=Math.max(8,Math.min(H-h-8,y-h-10))+'px';clearTimeout(showEvent.t);showEvent.t=setTimeout(()=>T.classList.remove('on'),3000)}
+// A facet tap names the facet and its count in the header line above the render (heroSub), never on it.
 // one line, ellipsis when it would exceed max px (font must be set)
 function fit1(text,max){text=text.replace(/\s+/g,' ').trim();if(g.measureText(text).width<=max)return text;while(text.length>1&&g.measureText(text+'…').width>max)text=text.slice(0,-1);return text.trimEnd()+'…'}
 
@@ -601,15 +800,27 @@ async function pollEvents(){if(document.hidden)return;try{const d=await getJSON(
 const ptr=new Map();let drag=null,pinch=0;
 c.addEventListener('pointerdown',e=>{c.setPointerCapture(e.pointerId);ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});auto=false;if(ptr.size===1)drag={sx:e.clientX,sy:e.clientY,moved:false};else if(ptr.size===2){const a=[...ptr.values()];pinch=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);if(drag)drag.moved=true}c.classList.add('grab');want()});
 c.addEventListener('pointermove',e=>{if(!ptr.has(e.pointerId)){if(e.pointerType==='mouse'){const r=c.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,ev=hitEvent(x,y);if(ev)showEvent(ev,x,y)}return}const o=ptr.get(e.pointerId);ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
- if(ptr.size===2){const a=[...ptr.values()],d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);if(pinch)cam.zoom=Math.max(.6,Math.min(2.6,cam.zoom*d/pinch));pinch=d}
- else if(drag){cam.yaw+=(e.clientX-o.x)*.006;cam.pitch=Math.max(.12,Math.min(.95,cam.pitch+(e.clientY-o.y)*.004));if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>6)drag.moved=true}want()});
-function up(e){if(drag&&!drag.moved&&ptr.size===1&&e.type==='pointerup'){const r=c.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const hev=hitEvent(x,y);if(hev){showEvent(hev,x,y)}let best=null,bd=24;for(const n of proj2){const d=Math.hypot(n.p.x-x,n.p.y-y);if(d<bd){bd=d;best=n}}if(!best){bd=10;for(const n of govP){const d=Math.hypot(n.p.x-x,n.p.y-y);if(d<bd){bd=d;best=n}}}if(!best&&!hev){for(const A of anchors){if(A.rect&&x>=A.rect.x-4&&x<=A.rect.x+A.rect.w+4&&y>=A.rect.y-4&&y<=A.rect.y+A.rect.h+4){filter=filter===A.facet?'ALL':A.facet;renderNav();showFacet(A,x,y);break}}}if(best||!hev)select(best)}ptr.delete(e.pointerId);if(!ptr.size){drag=null;pinch=0;c.classList.remove('grab')}}
+ if(ptr.size===2){const a=[...ptr.values()],d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);if(pinch)cam.zoom=Math.max(.6,Math.min(ZMAX,cam.zoom*d/pinch));pinch=d}
+ else if(drag){cam.yaw+=(e.clientX-o.x)*.006;cam.pitch=Math.max(.12,Math.min(.95,cam.pitch+(e.clientY-o.y)*.004));if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>(e.pointerType==='mouse'?6:TAP_SLOP))drag.moved=true}want()});
+// <tap-target> pure: which facet a tap lands on. Facet names (only drawn with Labels on) get a
+// finger-sized 36px band on touch; the attractor dot is always a target (radius >= 18px on touch).
+const TAP_SLOP=12;
+function pickFacet(anchors,x,y,touch){let best=null,bd=Infinity;
+ for(const A of anchors){const r=A.rect;if(!r)continue;const px=touch?10:4,py=Math.max(4,(touch?36:r.h+8)-r.h)/2;
+  if(x>=r.x-px&&x<=r.x+r.w+px&&y>=r.y-py&&y<=r.y+r.h+py){const d=Math.abs(y-(r.y+r.h/2));if(d<bd){bd=d;best=A}}}
+ if(best)return best;
+ for(const A of anchors){if(!A.p)continue;const d=Math.hypot(A.p.x-x,A.p.y-y),lim=Math.max((A.r||4)+(touch?8:3),touch?18:8);if(d<=lim&&d<bd){bd=d;best=A}}return best}
+// </tap-target>
+function up(e){if(drag&&!drag.moved&&ptr.size===1&&e.type==='pointerup'){const r=c.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+ // facet names first: the touch path must reach them even when thousands of AtGOV dots sit under the name
+ const fA=pickFacet(anchors,x,y,e.pointerType!=='mouse');if(fA){if(filter===fA.facet){filter='ALL';renderNav();flyHome()}else flyToFacet(fA.facet);showEvent(null);if(selected)select(null)}
+ else{const hev=hitEvent(x,y);if(hev){showEvent(hev,x,y)}let best=null,bd=24;for(const n of proj2){const d=Math.hypot(n.p.x-x,n.p.y-y);if(d<bd){bd=d;best=n}}if(!best){bd=10;for(const n of govP){const d=Math.hypot(n.p.x-x,n.p.y-y);if(d<bd){bd=d;best=n}}}if(!best&&!hev&&(filter!=='ALL'||cam.tx||cam.ty||cam.tz)){filter='ALL';renderNav();flyHome()}if(best||!hev)select(best)}}ptr.delete(e.pointerId);if(!ptr.size){drag=null;pinch=0;c.classList.remove('grab')}}
 c.addEventListener('pointerup',up);c.addEventListener('pointercancel',up);
-c.addEventListener('wheel',e=>{e.preventDefault();auto=false;cam.zoom=Math.max(.6,Math.min(2.6,cam.zoom*Math.exp(-e.deltaY*.0015)));want()},{passive:false});
+c.addEventListener('wheel',e=>{e.preventDefault();auto=false;cam.zoom=Math.max(.6,Math.min(ZMAX,cam.zoom*Math.exp(-e.deltaY*.0015)));want()},{passive:false});
 function renderKinds(){const L=$('kindLg');if(!L)return;const kc=kindCounts(nodes),show=kc.slice(0,6);L.replaceChildren(...show.map(([k,c])=>{const sp=el('span','lg'),i=el('i','sw kd');i.style.background=kindColor(k);sp.append(i,document.createTextNode(k.toLowerCase().replace(/_/g,' ')+' '+fmt(c)));return sp}));if(kc.length>6)L.append(el('span','lg',`+${kc.length-6} kinds`))}
 $('bLbl').onclick=()=>{labelsOn=!labelsOn;$('bLbl').setAttribute('aria-pressed',String(labelsOn));want()};
 $('bGov').onclick=()=>{showGov=!showGov;$('bGov').setAttribute('aria-pressed',String(showGov));if(!showGov&&selected&&selected.kind==='pending')select(null);renderTimeline();want()};
-$('bFit').onclick=()=>{cam={yaw:-.5,pitch:.42,zoom:1};auto=true;filter='ALL';asmSel=null;renderNav();renderSaabs();select(null);want()};
+$('bFit').onclick=()=>{cam.yaw=-.5;cam.pitch=.42;flyHome();filter='ALL';asmSel=null;renderNav();renderSaabs();select(null);want()};
 $('cPrev').onclick=()=>{asmIdx--;renderCode()};$('cNext').onclick=()=>{asmIdx++;renderCode()};
 addEventListener('resize',resize);document.addEventListener('visibilitychange',()=>{if(!document.hidden){lastT=0;want()}});
 if('IntersectionObserver' in window)new IntersectionObserver(es=>{visible=es[0].isIntersecting;if(visible){lastT=0;want()}}).observe(c);

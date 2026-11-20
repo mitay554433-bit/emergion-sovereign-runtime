@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -91,6 +92,46 @@ func newHTTPMux(rt *fieldapi.Runtime, token string, loopback bool) *http.ServeMu
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
+
+	// Batch HUMAN_FINAL: one human press over an explicit list of AtGOV IDs.
+	// GET reports the server-side cap (read-only); POST requires the bearer
+	// token, a reason and a confirm count equal to the number of IDs.
+	batchGet := protect(func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]int{"cap": batchCap})
+	})
+	batchPost := mutate(func(w http.ResponseWriter, req *http.Request) {
+		var p BatchParams
+		if err := json.NewDecoder(http.MaxBytesReader(w, req.Body, 4<<20)).Decode(&p); err != nil {
+			http.Error(w, "invalid batch params", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		err := fieldapi.ValidateBatch(p.EmergIONIDs, p.Reason, p.ConfirmCount, batchCap)
+		if err == nil && p.BatchID != "" && !fieldapi.ValidBatchID(p.BatchID) {
+			err = errors.New("invalid batch id")
+		}
+		if err == nil {
+			_, err = fieldapi.BatchDecision(p.Decision)
+		}
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(fieldapi.BatchResult{Requested: len(p.EmergIONIDs), Error: err.Error()})
+			return
+		}
+		res, _ := rt.DecideBatchHumanDecision(p.EmergIONIDs, p.Reason, p.ConfirmCount, batchCap, p.BatchID, p.Decision)
+		_ = json.NewEncoder(w).Encode(res)
+	})
+	mux.HandleFunc("/decide-batch-human", func(w http.ResponseWriter, req *http.Request) {
+		switch req.Method {
+		case http.MethodGet:
+			batchGet(w, req)
+		case http.MethodPost:
+			batchPost(w, req)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 
 	mux.HandleFunc("/field.json", protect(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodGet {

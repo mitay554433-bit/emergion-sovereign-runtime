@@ -72,24 +72,66 @@ func livingUniverseHTML(t *testing.T) string {
 	return string(b)
 }
 
-// The page keeps the authority banner, reads only the read-only projection
-// routes, and never posts to a mutating route.
+// The page keeps the authority banner and reads only the read-only projection
+// routes. Its single write is the governed Accept block: a human press posts
+// a HUMAN_FINAL APPROVE to the existing /decide route with a pasted token.
+// Outside that block nothing posts, authorizes or touches storage.
 func TestLivingUniversePageIsReadOnlyProjection(t *testing.T) {
 	src := livingUniverseHTML(t)
-	for _, want := range []string{"COSL + REG remain authoritative", "visualization only", "/field.json", "/projection.json", "/real_temporal_wave.json", "Verified references", "Pending (AtGOV)", "NOT_FOUND_YET"} {
+	for _, want := range []string{"COSL + REG remain authoritative", "visualization", "/field.json", "/projection.json", "/real_temporal_wave.json", "Verified references", "Pending references (AtGOV)", "NOT_FOUND_YET"} {
 		if !strings.Contains(src, want) {
 			t.Fatalf("living-universe.html missing %q", want)
 		}
 	}
-	for _, banned := range []string{"/decide", "/authorize", "method:'POST'", "method:\"POST\"", "localStorage", "parent_child", "hierarchy"} {
-		if strings.Contains(src, banned) {
-			t.Fatalf("living-universe.html must not contain %q", banned)
+	acc := regexp.MustCompile(`(?s)// <governed-accept>.*?// </governed-accept>`).FindString(src)
+	if acc == "" {
+		t.Fatal("governed-accept block missing")
+	}
+	rest := strings.Replace(src, acc, "", 1)
+	for _, banned := range []string{"/decide'", "/authorize", "method:'POST'", "method:\"POST\"", "localStorage", "parent_child", "hierarchy"} {
+		if strings.Contains(rest, banned) {
+			t.Fatalf("living-universe.html outside governed-accept must not contain %q", banned)
 		}
+	}
+	// Three fetches only: POST /decide (one record), POST /decide-batch-human
+	// (a human-confirmed batch) and the read-only GET of the batch cap.
+	if strings.Contains(acc, "/authorize") || strings.Count(acc, "fetch(") != 3 ||
+		!strings.Contains(acc, "fetch('/decide',{method:'POST'") ||
+		!strings.Contains(acc, "fetch('/decide-batch-human',{method:'POST'") ||
+		!strings.Contains(acc, "fetch('/decide-batch-human')") {
+		t.Fatal("governed-accept fetches must be POST /decide, POST /decide-batch-human and GET /decide-batch-human only")
+	}
+	// The batch is sent only from the button, only after a reason and the
+	// human-typed count are checked.
+	// batchAccept is defined once and called only from the armed second press
+	// of the two buttons (Accept, and Hold the rest on a trajectory row).
+	armed := "if(!st.send){batchArmTimer=setTimeout(disarm,BATCH_ARM_MS);renderBatch();return}\n   renderBatch();batchAccept("
+	if n := strings.Count(src, "batchAccept("); n != 3 || strings.Count(acc, armed) != 2 ||
+		!strings.Contains(acc, armed+"ids,rs.value,res)}") || !strings.Contains(acc, armed+"ids,rs.value,res,'HOLD')}") {
+		t.Fatalf("batchAccept( appears %d times; want definition + the two armed second presses only", n)
+	}
+	// No typed count: the page fills confirm_count from the shown batch.
+	if strings.Contains(src, "bCount") || strings.Contains(src, "type count") || !strings.Contains(acc, "confirm_count:ids.length") {
+		t.Fatal("batch panel must not ask for a typed count; confirm_count comes from the shown batch")
+	}
+	if !strings.Contains(acc, "decision:'APPROVE'") || !strings.Contains(acc, "'Authorization':'Bearer '+tok") {
+		t.Fatal("governed-accept must post APPROVE with the pasted bearer token")
+	}
+	// Only a human press calls it: defined once, called once from the button.
+	if n := strings.Count(src, "acceptAtGOV("); n != 2 || !strings.Contains(acc, "b.onclick=e=>{e.stopPropagation();acceptAtGOV(id,b)}") {
+		t.Fatalf("acceptAtGOV( appears %d times; want definition + button handler only", n)
+	}
+	if !strings.Contains(acc, "if(!reason.trim())") {
+		t.Fatal("a HUMAN_FINAL reason must be required")
+	}
+	// Never embed a token: no long hex/base64 literals in the page.
+	if m := regexp.MustCompile(`['"][A-Za-z0-9+/_=-]{32,}['"]`).FindString(src); m != "" {
+		t.Fatalf("page embeds a token-like literal %s", m)
 	}
 }
 
 // Verified references count only links with both ends REG-accepted; links
-// touching an AtGOV record are counted separately as Pending (AtGOV).
+// touching an AtGOV record are counted separately as Pending references (AtGOV).
 func TestLivingUniverseVerifiedExcludesPending(t *testing.T) {
 	src := livingUniverseHTML(t)
 	fn := regexp.MustCompile(`function refCounts\(es\)\{[^\n]*\}`).FindString(src)

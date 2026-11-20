@@ -4615,9 +4615,9 @@ func TestMaterializeCapabilityProviderPopulationAdmitsAllDeterministicTrajectori
 			CAP: []string{"CMP"},
 		},
 		{
-			IDN: "E-CMP-B",
+			IDN: "E-ANALYZE-B",
 			STA: core.StateAccepted,
-			CAP: []string{"CMP"},
+			CAP: []string{"ANALYZE"},
 		},
 		{
 			IDN: "E-RLT-A",
@@ -4652,12 +4652,12 @@ func TestMaterializeCapabilityProviderPopulationAdmitsAllDeterministicTrajectori
 
 	wantProviders := []string{
 		"ANALYZE:E-ANALYZE-A,CMP:E-CMP-A,RLT:E-RLT-A",
-		"ANALYZE:E-ANALYZE-A,CMP:E-CMP-B,RLT:E-RLT-A",
+		"ANALYZE:E-ANALYZE-B,CMP:E-CMP-A,RLT:E-RLT-A",
 	}
 
 	wantEdges := []string{
 		"E-ANALYZE-A->E-CMP-A,E-CMP-A->E-RLT-A",
-		"E-ANALYZE-A->E-CMP-B,E-CMP-B->E-RLT-A",
+		"E-ANALYZE-B->E-CMP-A,E-CMP-A->E-RLT-A",
 	}
 
 	for i, em := range got {
@@ -4746,9 +4746,9 @@ func TestProviderPopulationOriginLineageMustBeRuntimeOwnedAndPreserveBranchIdent
 			CAP: []string{"CMP"},
 		},
 		{
-			IDN: "E-CMP-B",
+			IDN: "E-ANALYZE-B",
 			STA: core.StateAccepted,
-			CAP: []string{"CMP"},
+			CAP: []string{"ANALYZE"},
 		},
 		{
 			IDN: "E-RLT-A",
@@ -4867,9 +4867,9 @@ func TestMaterializedProviderPopulationCanShareRuntimeOwnedOriginWithoutCollapsi
 			CAP: []string{"CMP"},
 		},
 		{
-			IDN: "E-CMP-B",
+			IDN: "E-ANALYZE-B",
 			STA: core.StateAccepted,
-			CAP: []string{"CMP"},
+			CAP: []string{"ANALYZE"},
 		},
 		{
 			IDN: "E-RLT-A",
@@ -4906,7 +4906,7 @@ func TestMaterializedProviderPopulationCanShareRuntimeOwnedOriginWithoutCollapsi
 
 	wantProviders := []string{
 		"ANALYZE:E-ANALYZE-A,CMP:E-CMP-A,RLT:E-RLT-A",
-		"ANALYZE:E-ANALYZE-A,CMP:E-CMP-B,RLT:E-RLT-A",
+		"ANALYZE:E-ANALYZE-B,CMP:E-CMP-A,RLT:E-RLT-A",
 	}
 
 	for i, em := range got {
@@ -5003,9 +5003,9 @@ func TestRecaptureProviderPopulationOriginMustExistBeforeDerivedBranches(t *test
 			CAP: []string{"CMP"},
 		},
 		{
-			IDN: "E-CMP-B",
+			IDN: "E-ANALYZE-B",
 			STA: core.StateAtGOV,
-			CAP: []string{"CMP"},
+			CAP: []string{"ANALYZE"},
 		},
 		{
 			IDN: "E-RLT-A",
@@ -6121,5 +6121,115 @@ func TestAcceptedCapabilityProviderPopulationExcludesAdjacentSelfReference(t *te
 
 	if len(population) != 3 {
 		t.Fatalf("population size = %d want 3: %v", len(population), population)
+	}
+}
+
+func TestProviderPopulationProposesOneTrajectoryAtGOVPerKeyAndSkipsWithoutWriting(t *testing.T) {
+	s, err := store.Open(filepath.Join(t.TempDir(), "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	boundary := core.EmptyState()
+	for _, em := range []core.EmergION{
+		{IDN: "E-ANALYZE-A", STA: core.StateAccepted, CAP: []string{"ANALYZE"}},
+		{IDN: "E-CMP-A", STA: core.StateAccepted, CAP: []string{"CMP"}},
+		{IDN: "E-CMP-B", STA: core.StateAccepted, CAP: []string{"CMP"}},
+		{IDN: "E-RLT-A", STA: core.StateAccepted, CAP: []string{"RLT"}},
+	} {
+		boundary.Accepted[em.IDN] = em
+	}
+
+	r := Runtime{Store: s, Reasoner: coverageRecaptureReasoner{}}
+	materialize := func() []core.EmergION {
+		t.Helper()
+		got, err := r.materializeCapabilityProviderPopulation(
+			context.Background(), "DERIVE_CAPABILITY", boundary, "", "",
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+
+	first := materialize()
+	if len(first) != 1 || first[0].REL["capability_providers"] != "ANALYZE:E-ANALYZE-A,CMP:E-CMP-A,RLT:E-RLT-A" {
+		t.Fatalf("first proposal = %+v want one ANALYZE:E-ANALYZE-A,CMP:E-CMP-A,RLT:E-RLT-A", first)
+	}
+	if first[0].STA != core.StateAtGOV {
+		t.Fatalf("trajectory state = %q want AtGOV", first[0].STA)
+	}
+
+	n := len(mustEvents(t, s))
+	if again := materialize(); len(again) != 0 {
+		t.Fatalf("proposed %d more paths while the trajectory waits AtGOV", len(again))
+	}
+	if got := len(mustEvents(t, s)); got != n {
+		t.Fatalf("skipping wrote events: %d -> %d", n, got)
+	}
+
+	held, receipt, err := gov.Decide(first[0], gov.Hold, "HUMAN_FINAL", "test hold")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if held.STA != core.StateHeld {
+		t.Fatalf("hold state = %s", held.STA)
+	}
+	if _, err := s.SaveDecision(receipt); err != nil {
+		t.Fatal(err)
+	}
+
+	next := materialize()
+	if len(next) != 1 || next[0].REL["capability_providers"] != "ANALYZE:E-ANALYZE-A,CMP:E-CMP-B,RLT:E-RLT-A" {
+		t.Fatalf("after decision proposal = %+v want the next unrecorded path only", next)
+	}
+	if again := materialize(); len(again) != 0 {
+		t.Fatalf("proposed %d more paths while the next trajectory waits AtGOV", len(again))
+	}
+
+	st, err := livefield.Rebuild(mustEvents(t, s))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := st.Held[first[0].IDN]; !ok {
+		t.Fatal("held trajectory evidence changed state")
+	}
+	if _, ok := st.AtGOV[next[0].IDN]; !ok {
+		t.Fatal("next trajectory missing from GOV")
+	}
+	if got := providerTrajectoryKey("DERIVE_CAPABILITY", "ANALYZE+CMP+RLT", next[0].REL["capability_providers"]); got != proj.TrajectoryKey(next[0]) {
+		t.Fatalf("runtime key %q != projection key %q", got, proj.TrajectoryKey(next[0]))
+	}
+}
+
+func TestProviderPopulationSkipsPathsThroughProviderPopulationRecords(t *testing.T) {
+	s, err := store.Open(filepath.Join(t.TempDir(), "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	boundary := core.EmptyState()
+	for _, em := range []core.EmergION{
+		{IDN: "E-OBS-A", STA: core.StateAccepted, CAP: []string{"OBS"}},
+		{
+			IDN: "E-OBS-TRAJ",
+			STA: core.StateAccepted,
+			CAP: []string{"OBS"},
+			REL: map[string]string{"source_name": "provider_population"},
+		},
+		{IDN: "E-VLD-A", STA: core.StateAccepted, CAP: []string{"VLD"}},
+	} {
+		boundary.Accepted[em.IDN] = em
+	}
+
+	r := Runtime{Store: s, Reasoner: coverageRecaptureReasoner{}}
+	got, err := r.materializeCapabilityProviderPopulation(
+		context.Background(), "ESTABLISH_FACT", boundary, "", "",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].REL["capability_providers"] != "OBS:E-OBS-A,VLD:E-VLD-A" {
+		t.Fatalf("materialized = %+v want only OBS:E-OBS-A,VLD:E-VLD-A", got)
 	}
 }

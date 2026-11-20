@@ -117,11 +117,17 @@ func (r *Runtime) RecentEventsJSON(limit int) (string, error) {
 // (proj.Linked) rebuilt from the event ledger. Read-only: nothing is
 // appended, decided or written to disk.
 func (r *Runtime) LinkedProjectionJSON() (string, error) {
-	st, err := r.state()
+	events, err := r.store.Events()
 	if err != nil {
 		return "", err
 	}
-	b, err := json.Marshal(proj.Linked(st))
+	st, err := livefield.Rebuild(events)
+	if err != nil {
+		return "", err
+	}
+	lp := proj.Linked(st)
+	lp.Trajectories = proj.Trajectories(st, events)
+	b, err := json.Marshal(lp)
 	if err != nil {
 		return "", err
 	}

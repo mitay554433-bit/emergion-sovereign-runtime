@@ -431,6 +431,70 @@ func main() {
 			renderField(s, *output)
 			fmt.Println(em.IDN, receipt.Decision)
 		}
+	case "accept-batch":
+		// Batch HUMAN_FINAL. Dry-run by default: lists what the filter selects
+		// and writes nothing. --apply records one HUMAN_FINAL APPROVE + REG
+		// receipt per record with the same reason, only when --confirm equals
+		// the selected count. Already REG-accepted records are skipped.
+		fs := flag.NewFlagSet("accept-batch", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		filter := fs.String("filter", "all", "all | facet=F | source_kind=K | target=E-...")
+		why := fs.String("reason", "", "HUMAN_FINAL reason (required with --apply)")
+		confirm := fs.Int("confirm", -1, "type the selected count to confirm (required with --apply)")
+		limit := fs.Int("limit", 0, "take only the first N matches by IDN (0 = all)")
+		batchCap := fs.Int("cap", fieldapi.DefaultBatchCap, "largest batch allowed")
+		apply := fs.Bool("apply", false, "record the decisions (default: dry run)")
+		if err := fs.Parse(args[1:]); err != nil {
+			fail(err)
+		}
+		st := loadState(s)
+		ids, err := fieldapi.SelectAtGOV(st, *filter)
+		if err != nil {
+			fail(err)
+		}
+		if *limit > 0 && len(ids) > *limit {
+			ids = ids[:*limit]
+		}
+		classes := map[string]int{}
+		for _, id := range ids {
+			k := strings.TrimSpace(st.AtGOV[id].REL["source_kind"])
+			if k == "" {
+				k = "(none)"
+			}
+			classes[k]++
+		}
+		sample := []map[string]string{}
+		for i, id := range ids {
+			if i == 10 {
+				break
+			}
+			em := st.AtGOV[id]
+			title := em.MEM.Summary
+			if em.EVO.Metadata != nil && em.EVO.Metadata.Archonym != "" {
+				title = em.EVO.Metadata.Archonym
+			}
+			sample = append(sample, map[string]string{"id": id, "title": title})
+		}
+		if !*apply {
+			printJSON(map[string]any{"mode": "DRY_RUN", "filter": *filter, "count": len(ids), "cap": *batchCap, "by_source_kind": classes, "sample": sample, "note": "nothing written; add --reason \"...\" --confirm N --apply to record HUMAN_FINAL"})
+			return
+		}
+		if len(ids) == 0 {
+			printJSON(map[string]any{"mode": "APPLY", "filter": *filter, "count": 0, "note": "no AtGOV record matches; nothing written"})
+			return
+		}
+		rt, err := fieldapi.Open(*state, mkReasoner())
+		if err != nil {
+			fail(err)
+		}
+		res, err := rt.DecideBatchHuman(ids, *why, *confirm, *batchCap)
+		if res.Accepted > 0 {
+			renderField(s, *output)
+		}
+		printJSON(res)
+		if err != nil {
+			fail(err)
+		}
 	case "resume":
 		if len(args) < 2 {
 			fail(fmt.Errorf("resume <held-id> [reason]"))
@@ -755,6 +819,7 @@ Commands:
   once                         process and clear the dropzone once
   run                          run the local living FIELD event loop; no server
   decide <id> <decision> [why] HUMAN_FINAL decision; approval is then REG-accepted
+  accept-batch [--filter F] [--limit N] [--reason R --confirm N --apply]  batch HUMAN_FINAL; dry run by default
   resume <held-id> [why]       HUMAN_FINAL resume of a held EmergION back to GOV
   status                       CPU and FIELD metrics
   symbolic <id>                print native symbolic EmergION representation

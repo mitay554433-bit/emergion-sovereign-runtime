@@ -377,6 +377,66 @@ func acceptedCapabilityProviderPopulation(
 	return population, true
 }
 
+// providerTrajectoryKey is the (required_capability, capability_composition,
+// first provider) key of a provider trajectory. It matches proj.TrajectoryKey,
+// so the runtime and the /projection.json trajectories[] agree on grouping.
+func providerTrajectoryKey(required, composition, providers string) string {
+	first, _, _ := strings.Cut(strings.TrimSpace(providers), ",")
+	_, id, _ := strings.Cut(first, ":")
+	return strings.TrimSpace(required) + "|" +
+		strings.TrimSpace(composition) + "|" +
+		strings.TrimSpace(id)
+}
+
+func isProviderPopulationRecord(em core.EmergION) bool {
+	return strings.TrimSpace(em.REL["source_name"]) == "provider_population"
+}
+
+// providerPopulationRecorded reads the ledger (no write) and returns the
+// trajectory keys that still have a provider_population record AtGOV, and
+// every provider path already recorded under its key.
+func (r Runtime) providerPopulationRecorded(boundary core.State) (map[string]bool, map[string]bool, error) {
+	pending := map[string]bool{}
+	recorded := map[string]bool{}
+	note := func(em core.EmergION, atGOV bool) {
+		if !isProviderPopulationRecord(em) {
+			return
+		}
+		key := providerTrajectoryKey(
+			em.REL["required_capability"],
+			em.REL["capability_composition"],
+			em.REL["capability_providers"],
+		)
+		recorded[key+"|"+strings.TrimSpace(em.REL["capability_providers"])] = true
+		if atGOV {
+			pending[key] = true
+		}
+	}
+	for _, em := range boundary.AtGOV {
+		note(em, true)
+	}
+	if r.Store == nil {
+		return pending, recorded, nil
+	}
+	events, err := r.Store.Events()
+	if err != nil {
+		return nil, nil, err
+	}
+	st, err := livefield.Rebuild(events)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, em := range st.AtGOV {
+		note(em, true)
+	}
+	for _, set := range []map[string]core.EmergION{st.Approved, st.Accepted, st.Held, st.Rejected, st.Returned} {
+		for _, em := range set {
+			note(em, false)
+		}
+	}
+	return pending, recorded, nil
+}
+
 func (r Runtime) materializeCapabilityProviderPopulation(
 	ctx context.Context,
 	required string,
@@ -393,17 +453,35 @@ func (r Runtime) materializeCapabilityProviderPopulation(
 	if len(recipe) == 0 {
 		return nil, nil
 	}
+	composition := strings.Join(recipe, "+")
+
+	// One trajectory waits at GOV at a time: while a provider_population
+	// record with the same (required_capability, composition, first provider)
+	// is still AtGOV, no further path of it is proposed. Skipping writes no
+	// event; the next path is proposed after the human decides the waiting one.
+	pending, recorded, err := r.providerPopulationRecorded(boundary)
+	if err != nil {
+		return nil, err
+	}
 
 	out := make([]core.EmergION, 0, len(population))
 
 	for _, providers := range population {
+		key := providerTrajectoryKey(required, composition, providers)
+		if pending[key] || recorded[key+"|"+providers] {
+			continue
+		}
+		if providersIncludeProviderPopulation(providers, boundary) {
+			continue
+		}
+
 		analysis := reason.Result{
 			Summary: "deterministic capability provider trajectory",
 			Relationships: map[string]string{
 				"source_name":            "provider_population",
 				"required_capability":    required,
 				"capability_resolution":  "COMPOSABLE_CANDIDATE",
-				"capability_composition": strings.Join(recipe, "+"),
+				"capability_composition": composition,
 				"capability_providers":   providers,
 			},
 			Capabilities: []string{"OBS"},
@@ -411,7 +489,7 @@ func (r Runtime) materializeCapabilityProviderPopulation(
 			Risk:         "L",
 		}
 
-		em, duplicate, err := r.admitAnalyzedCandidate(
+		em, _, err := r.admitAnalyzedCandidate(
 			ctx,
 			"provider_population",
 			[]byte(providers),
@@ -425,14 +503,28 @@ func (r Runtime) materializeCapabilityProviderPopulation(
 			return out, err
 		}
 
-		if duplicate {
-			continue
-		}
-
+		pending[key] = true
+		recorded[key+"|"+providers] = true
 		out = append(out, em)
 	}
 
 	return out, nil
+}
+
+// providersIncludeProviderPopulation reports whether any provider on the
+// path is itself a provider_population record (an accepted trajectory now
+// offering OBS). Such paths would feed trajectories back into the population.
+func providersIncludeProviderPopulation(providers string, boundary core.State) bool {
+	for _, part := range strings.Split(providers, ",") {
+		_, id, ok := strings.Cut(part, ":")
+		if !ok {
+			continue
+		}
+		if em, found := boundary.Accepted[strings.TrimSpace(id)]; found && isProviderPopulationRecord(em) {
+			return true
+		}
+	}
+	return false
 }
 
 type capabilityProviderEdge struct {
