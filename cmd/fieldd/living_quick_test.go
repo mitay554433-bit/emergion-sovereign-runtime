@@ -88,6 +88,14 @@ func TestLivingUniversePageIsReadOnlyProjection(t *testing.T) {
 		t.Fatal("governed-accept block missing")
 	}
 	rest := strings.Replace(src, acc, "", 1)
+	// A01-AUTO-1 (HUMAN_FINAL amendment, 2026-11-20): the auto panel's writes
+	// live in their own block and post only to the three /auto routes.
+	auto := regexp.MustCompile(`(?s)// <governed-auto>.*?// </governed-auto>`).FindString(src)
+	if auto == "" || strings.Count(auto, "fetch(") != 1 || strings.Contains(auto, "/decide") || strings.Contains(auto, "/authorize") ||
+		!strings.Contains(auto, "autoPost('/auto/policy'") || !strings.Contains(auto, "autoPost('/auto/worker'") || !strings.Contains(auto, "autoPost('/auto/undo'") {
+		t.Fatal("governed-auto block must post only to /auto/policy, /auto/worker and /auto/undo")
+	}
+	rest = strings.Replace(rest, auto, "", 1)
 	for _, banned := range []string{"/decide'", "/authorize", "method:'POST'", "method:\"POST\"", "localStorage", "parent_child", "hierarchy"} {
 		if strings.Contains(rest, banned) {
 			t.Fatalf("living-universe.html outside governed-accept must not contain %q", banned)
