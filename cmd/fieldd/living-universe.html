@@ -119,7 +119,7 @@ details.ver summary{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,Conso
   <div class="chip" role="listitem" style="--c:#5fe0b2"><b id="nRef">—</b><span>Verified references</span></div>
   <div class="chip" role="listitem" style="--c:#7fd1ff"><b id="nWave">—</b><span>Temporal states</span></div>
   <div class="chip gov" role="listitem" id="cGov" hidden><b id="nGov">—</b><span>AtGOV · pending</span></div>
-  <div class="chip gov" role="listitem" id="cGovRef" hidden><b id="nGovRef">—</b><span>Pending references</span></div>
+  <div class="chip gov" role="listitem" id="cGovRef" hidden><b id="nGovRef">—</b><span>Pending (AtGOV)</span></div>
  </div>
  <div id="extra" hidden>
   <div id="status" class="mono" role="status"><span class="live off" id="liveDot"></span><span id="statusText">FIELD not loaded · awaiting canonical projection</span></div>
@@ -132,7 +132,7 @@ details.ver summary{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,Conso
 <div id="foot">
  <section id="timeline" class="glass" aria-label="Recent accepted EmergIONs"><div class="tl-h"><span>Recent accepted · by capture time</span><span id="tlMeta"></span></div><div id="tl"></div></section>
  <div class="bar">
-  <div id="legend" class="glass" aria-label="Legend"><span class="lg"><i class="sw acc"></i>Accepted (REG)</span><span class="lg"><i class="sw fac"></i>Facet</span><span class="lg"><i class="sw ln"></i>Kin reference</span><span class="lg" id="lgGov" hidden><i class="sw gov"></i>AtGOV · pending</span><span class="lg" id="lgGovRef" hidden><i class="sw pl"></i><span id="lgGovRefT">Pending reference</span></span></div>
+  <div id="legend" class="glass" aria-label="Legend"><span class="lg"><i class="sw acc"></i>Accepted (REG)</span><span class="lg"><i class="sw fac"></i>Facet</span><span class="lg"><i class="sw ln"></i>Kin reference</span><span class="lg" id="lgGov" hidden><i class="sw gov"></i>AtGOV · pending</span><span class="lg" id="lgGovRef" hidden><i class="sw pl"></i><span id="lgGovRefT">Pending (AtGOV) reference</span></span></div>
   <div id="dock" class="glass"><button id="fit" title="Fit and centre (F)">Fit</button><button id="gov" aria-pressed="false" title="Show records awaiting HUMAN_FINAL">AtGOV</button><button id="labels" aria-pressed="true">Labels</button></div>
  </div>
  <div id="banner" class="glass"><i class="shield"></i><span><b>COSL + REG remain authoritative</b> · visualization only · read-only</span><span id="zoomv" class="mono">1.00×</span></div>
@@ -204,7 +204,7 @@ function rebuild(){
  accNodes=nodes.filter(n=>n.kind==='accepted');govNodes=nodes.filter(n=>n.kind==='pending');pendEdges=edges.filter(e=>!e.verified);
  for(const n of nodes)n.adj=[];for(const e of edges){e.a.adj.push(e);e.b.adj.push(e)}dataVer++;
  // Counts: verified = both ends REG-accepted; pending = touches an AtGOV record.
- const acc=field&&field.Accepted?Object.keys(field.Accepted).length:null,ver=edges.filter(e=>e.verified).length,pend=edges.length-ver;
+ const acc=field&&field.Accepted?Object.keys(field.Accepted).length:null,rc=refCounts(edges),ver=rc.verified,pend=rc.pending;
  $('nAcc').textContent=acc==null?'—':fmt(acc);subLine.v=[acc,ver,showGov?nGovAll():null];subLine();$('nRef').textContent=field?fmt(ver):'—';
  const nGov=field&&field.AtGOV?Object.keys(field.AtGOV).length:0;$('nGov').textContent=fmt(nGov);$('nGovRef').textContent=fmt(pend);
  for(const id of ['cGov','cGovRef','lgGov','lgGovRef'])$(id).hidden=!showGov;
@@ -213,6 +213,9 @@ function rebuild(){
 }
 
 /* ---------- view ---------- */
+// Verified references count only links whose two ends are both REG-accepted.
+// Any link touching an AtGOV (unaccepted) record is Pending (AtGOV), never verified.
+function refCounts(es){let verified=0,pending=0;for(const e of es){if(e.a&&e.b&&e.a.kind==='accepted'&&e.b.kind==='accepted')verified++;else pending++}return {verified,pending}}
 function nGovAll(){return field&&field.AtGOV?Object.keys(field.AtGOV).length:0}
 function subLine(){const v=subLine.v||[];$('sub').textContent=$('hdr').classList.contains('compact')&&v[0]!=null?`${fmt(v[0])} accepted · ${fmt(v[1])} verified references`+(v[2]!=null?` · ${fmt(v[2])} AtGOV pending`:''):'UNIFUSION · governed spatial projection'}
 function freeRect(){const h=$('hdr').getBoundingClientRect(),f=$('foot').getBoundingClientRect(),wide=W>=900;let top=wide?16:h.bottom+10,bot=f.top-10,left=wide?h.right+10:10,right=W-10;const so=$('sheet').classList.contains('open');if(so&&W>=900)right=W-410;else if(so)bot=H-$('sheet').offsetHeight-18;if(bot-top<160){top=10;bot=H-10}return {left,right,top,bot}}
