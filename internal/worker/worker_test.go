@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -305,5 +307,18 @@ func TestWorkerPausesWhenReasonerUnavailable(t *testing.T) {
 	_, err := (reason.LocalInsighter{Binary: "definitely-not-llama", Model: ""}).Insight(context.Background(), reason.InsightInput{})
 	if !errors.Is(err, reason.ErrUnavailable) {
 		t.Fatalf("missing local model: %v", err)
+	}
+}
+
+func TestLocalPrefersCompletionBesideCLI(t *testing.T) {
+	dir := t.TempDir()
+	for _, n := range []string{"llama-cli", "llama-completion"} {
+		if err := os.WriteFile(filepath.Join(dir, n), []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("GEMMA_BIN", filepath.Join(dir, "llama-cli"))
+	if got := reason.LocalInsighterFromEnv().Binary; got != filepath.Join(dir, "llama-completion") {
+		t.Fatalf("want llama-completion beside llama-cli, got %s", got)
 	}
 }
