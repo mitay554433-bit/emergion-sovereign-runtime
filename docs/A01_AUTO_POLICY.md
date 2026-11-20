@@ -26,7 +26,7 @@ is switched on and off only by HUMAN_FINAL.
 ## The policy
 
 File: `policy/auto-accept.json` (embedded in the binaries). Version
-`A01-AUTO-2`, sha256 `505e18d0b005794dc8d89bd5e1bf32a09132a8714a20264741dad6a4b0c9cee3` at this commit. Any edit to the file changes the
+`A01-AUTO-2`, sha256 `224a20d53ca5e1106c818032c050a5acd134ba3379534c8f9b662aeace3ac366` at this commit. Any edit to the file changes the
 hash; the old switch then shows "stale" and the policy stops deciding until a
 new HUMAN_FINAL switch-on names the new hash.
 
@@ -46,8 +46,16 @@ future version must keep this chain (or replay A01-AUTO-1 receipts itself).
 | `SOURCE_UPLOAD_VERIFIED` | APPROVE | `source_kind` SOURCE_UPLOAD from `governed_source_upload`; 64-hex `source_sha256`; the preserved descriptor's SHA256/PATH/TITLE/BYTES lines equal the record and the descriptor hash equals the record's source hash; if the file is present under `UNIFUSION_SOURCES_ROOT`, its sha256 must match; no Archonym; CAP exactly OBS; risk L; RECOIL+WVC passed; no facets, Supersedes, build graph, monetization or authority REL keys; no other record shares its sha256. |
 | `EXACT_DUPLICATE` | HOLD | Another record already carries the same upload sha256 or preserved source hash and is decided, or is AtGOV with a smaller IDN. |
 | `GENERATED_PROVIDER_COMBINATION` | HOLD | Generated provider-combination / trajectory record (`source_name = provider_population`). Never accepted. |
-| `SOURCE_KIN_LINK_WORKER` | APPROVE | Worker-derived topic/kin link (`worker_source_kin_link`) whose two distinct ends are existing SOURCE_UPLOAD records (`governed_source_upload`) in any state except rejected — they need not be accepted; descriptor FROM/TO match; same structural guard as above. Replaces A01-AUTO-1's `SOURCE_KIN_LINK_ACCEPTED_ENDS` (both ends REG-accepted). |
-| `SOURCE_INSIGHT_WORKER` | APPROVE | Worker `SOURCE_INSIGHT` (`worker_source_insight`) whose cited sources (`insight_of` and every `insight_kin` ID) are existing SOURCE_UPLOAD records in any state except rejected; descriptor `SOURCE_INSIGHT/1` OF and KIN match; same structural guard (OBS only, risk L, no Archonym, no facets, Supersedes, build graph, monetization or authority keys). |
+| `SOURCE_KIN_LINK_WORKER` | APPROVE | Worker-derived topic/kin link (`worker_source_kin_link`) whose two distinct ends are existing SOURCE_UPLOAD records (`governed_source_upload`) in any state except rejected (held ends are noise) — they need not be accepted; both ends pass the quality rules and share a real topic; descriptor FROM/TO match; same structural guard as above. Replaces A01-AUTO-1's `SOURCE_KIN_LINK_ACCEPTED_ENDS` (both ends REG-accepted). |
+| `SOURCE_INSIGHT_WORKER` | APPROVE | Worker `SOURCE_INSIGHT` (`worker_source_insight`) whose cited sources (`insight_of` and every `insight_kin` ID) are existing SOURCE_UPLOAD records in any state except rejected; its source passes the quality rules; descriptor `SOURCE_INSIGHT/1` OF and KIN match; same structural guard (OBS only, risk L, no Archonym, no facets, Supersedes, build graph, monetization or authority keys). |
+| `WORKER_NOISE` | HOLD | A worker link or insight with a safe shape that fails the quality rules: an end or source that is not a real document (empty title, an ID or hash, a raw path, or a `raw_title_markers` entry such as `|` or `/PHONE/`), is HELD, or is non-canon (`non_canon_title_terms`, e.g. `Fluid Registry`); or a link whose ends share neither a non-generic `source_topic` nor a meaningful title term (3+ characters, not in `generic_terms`). HOLD only; RESUME is one HUMAN_FINAL press and sticks (the policy never holds a HUMAN_FINAL-resumed record again). |
+
+**Quality rules** live in the `quality` section of the same file (so they are
+part of its sha256): `raw_title_markers`, `non_canon_title_terms`,
+`generic_topics`, `generic_terms`. The worker uses the same rules
+(`policy.SourceNoise`, `policy.LinkNoise`) to skip noisy sources, offer the
+model only real peers sharing a topic, and never propose a noisy link; the
+policy HOLDs any noisy worker record already waiting AtGOV.
 
 Never auto-decided: capabilities other than OBS; projections, facets, build
 graphs, monetization; anything that changes authority (Supersedes,
@@ -84,9 +92,12 @@ Once the policy has decided anything, run this build or newer.
 ## Nonstop worker
 
 `internal/worker`, run by fieldd's background loop (and `field work`). It
-walks REG-accepted SOURCE_UPLOAD records that have no insight yet, gives the
-reasoner the title, topic, mime and tags plus up to 8 related accepted sources
-(shared tags first, then same topic), and writes:
+walks REG-accepted SOURCE_UPLOAD records that have no insight yet (skipping
+sources that fail the quality rules), gives the reasoner the title, topic,
+mime and tags, the first 1,500 characters of the file's text when the file is
+under `UNIFUSION_SOURCES_ROOT` (plain text, .docx, and .pdf via `pdftotext`
+when installed; `UNIFUSION_WORKER_TEXT_CHARS`, 0 turns it off), plus up to 8
+related accepted sources that are real documents sharing a topic, and writes:
 
 - one `SOURCE_INSIGHT` per source (summary, combination, gaps) — low-risk
   under A01-AUTO-2, so the policy accepts it when it is ON (one-press
@@ -109,13 +120,16 @@ blaming any source. Control and checkpoint live in `<state>-work/`
 ## Reasoner switch
 
 - `local` (default): `llama-completion` (or `GEMMA_BIN`), all cores
-  (`GEMMA_THREADS` overrides), short 4-line prompt, `-no-cnv`, 120 tokens
-  (`UNIFUSION_WORKER_TOKENS`), 10-minute limit (`UNIFUSION_WORKER_TIMEOUT_SECONDS`).
+  (`GEMMA_THREADS` overrides), short 4-line prompt with the file text, kept loaded in one `llama-server`
+  (127.0.0.1:8897, `-c 2048`; falls back to `llama-completion -c 2048 -no-cnv`),
+  64 tokens (`UNIFUSION_WORKER_TOKENS`), 20-minute limit
+  (`UNIFUSION_WORKER_TIMEOUT_SECONDS`).
 - `online`: an OpenAI-compatible endpoint: `UNIFUSION_REASONER_URL` (base,
   e.g. `https://host/v1`), `UNIFUSION_REASONER_MODEL`, key from
   `UNIFUSION_REASONER_KEY` or the file named by `UNIFUSION_REASONER_KEY_FILE`.
   The key is never logged, stored or returned. Only titles, topics, mime types
-  and tags leave the phone, never file bytes.
+  and tags leave the phone, never file bytes or extracted text (the file
+  text goes only to the on-device model).
 - `auto`: online when configured and reachable (probe cached 60 s), else
   local; an online failure falls back to local for that call.
 
