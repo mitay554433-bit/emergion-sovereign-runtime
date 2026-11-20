@@ -37,12 +37,13 @@ type LinkedProjection struct {
 	// belongs to another sovereign EmergION. They stay visible by ID and
 	// summary; a HUMAN_FINAL APPROVE of them is refused at accept time.
 	ArchonymWaiting []string `json:"archonym_waiting_conflicts"`
-	// DerivedFacetGroups groups REG-accepted SOURCE_UPLOAD records that have
-	// no REG facet by their recorded REL source_topic. Display grouping only
-	// (facet_source "source_topic"); never a REG facet. Derived, read-only.
+	// DerivedFacetGroups groups REG-accepted records that have no REG facet
+	// into a display topic (SOURCE topic, or a group derived from kind or
+	// title keywords, or Other). Display grouping only; never a REG facet.
+	// Derived, read-only.
 	DerivedFacetGroups []LinkedDerivedFacetGroup `json:"derived_facet_groups"`
 	// RegUnassigned lists every accepted record with no REG facet, including
-	// those shown in a derived SOURCE topic group. Unassigned lists only the
+	// those shown in a derived topic group. Unassigned lists only the
 	// records with neither a REG facet nor a derived grouping.
 	RegUnassigned []string `json:"reg_unassigned"`
 	// SourceRefGroups lists accepted SOURCE records that name the same
@@ -133,15 +134,18 @@ func Linked(st core.State) LinkedProjection {
 	}
 	out.RegUnassigned = []string{}
 	byTopic := map[string][]string{}
+	srcByID := map[string]string{}
 	for _, em := range spatialUnassigned(spatial) {
 		out.RegUnassigned = append(out.RegUnassigned, em.ID)
-		if t := sourceTopicOf(st.Accepted[em.ID]); t != "" {
-			byTopic[t] = append(byTopic[t], em.ID)
+		topic, _, src := derivedDisplayGroup(st.Accepted[em.ID], nil)
+		if topic == "" {
+			out.Unassigned = append(out.Unassigned, em.ID)
 			continue
 		}
-		out.Unassigned = append(out.Unassigned, em.ID)
+		byTopic[topic] = append(byTopic[topic], em.ID)
+		srcByID[em.ID] = src
 	}
-	out.DerivedFacetGroups = derivedSourceTopicGroups(byTopic)
+	out.DerivedFacetGroups = derivedTopicGroups(byTopic, srcByID)
 	out.SourceRefGroups = sourceRefGroups(st)
 
 	for _, s := range spatial {
@@ -150,9 +154,9 @@ func Linked(st core.State) LinkedProjection {
 		for _, f := range s.Facets {
 			rec.Facets = append(rec.Facets, string(f))
 		}
-		if df := derivedSourceTopicFacet(em, s.Facets); df != "" {
+		if _, df, src := derivedDisplayGroup(em, s.Facets); df != "" {
 			rec.DerivedFacets = []string{df}
-			rec.FacetSource = FacetSourceTopic
+			rec.FacetSource = src
 		}
 		for _, c := range em.CAP {
 			if c != "" {

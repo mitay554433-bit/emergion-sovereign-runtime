@@ -27,8 +27,17 @@ func TestLinkedUsesEngineGroupsKinRootsAndAssemblies(t *testing.T) {
 	if len(lp.FacetGroups) != 12 || lp.FacetGroups[7].Facet != "GRANT_FUNDING" || len(lp.FacetGroups[7].Members) != 2 {
 		t.Fatalf("facet groups = %+v", lp.FacetGroups)
 	}
-	if len(lp.Unassigned) != 1 || lp.Unassigned[0] != "E-b1" {
-		t.Fatalf("unassigned = %v", lp.Unassigned)
+	if len(lp.Unassigned) != 0 {
+		t.Fatalf("unassigned = %v, want empty", lp.Unassigned)
+	}
+	foundOther := false
+	for _, g := range lp.DerivedFacetGroups {
+		if g.Topic == "other" && len(g.Members) == 1 && g.Members[0] == "E-b1" && g.Label == "Other" {
+			foundOther = true
+		}
+	}
+	if !foundOther {
+		t.Fatalf("E-b1 not in derived Other: %+v", lp.DerivedFacetGroups)
 	}
 	roots := map[string]string{}
 	for _, r := range lp.Records {

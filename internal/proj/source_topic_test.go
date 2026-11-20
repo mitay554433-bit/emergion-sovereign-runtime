@@ -30,8 +30,8 @@ func topicState() core.State {
 	st.Accepted["E-s1"] = sourceEm("E-s1", "inventions-ip", "TR-078,TR-079")
 	st.Accepted["E-s2"] = sourceEm("E-s2", "inventions-ip", "TR-078")
 	st.Accepted["E-s3"] = sourceEm("E-s3", "grants-funding", "TR-012")
-	st.Accepted["E-s4"] = sourceEm("E-s4", "", "")           // no topic: genuinely unassigned
-	st.Accepted["E-s5"] = sourceEm("E-s5", "bad topic!", "") // unsafe topic: unassigned
+	st.Accepted["E-s4"] = sourceEm("E-s4", "", "")           // no topic: Other derived group
+	st.Accepted["E-s5"] = sourceEm("E-s5", "bad topic!", "") // unsafe topic: Other derived group
 	// A SOURCE record that already has a REG facet keeps it and gets no derived facet.
 	s6 := sourceEm("E-s6", "investor", "")
 	s6.EVO.Metadata = &core.Metadata{Facets: []core.Facet{core.FacetPatentIP}}
@@ -52,21 +52,30 @@ func TestLinkedDerivesSourceTopicFacets(t *testing.T) {
 	lp := Linked(st)
 
 	got := map[string][]string{}
+	src := map[string]string{}
 	for _, g := range lp.DerivedFacetGroups {
-		if g.FacetSource != "source_topic" || g.Facet != "SOURCE_TOPIC:"+g.Topic {
-			t.Fatalf("group not marked derived: %+v", g)
+		if g.Facet != "SOURCE_TOPIC:"+g.Topic {
+			t.Fatalf("group facet key: %+v", g)
 		}
 		got[g.Topic] = g.Members
+		src[g.Topic] = g.FacetSource
 	}
-	want := map[string][]string{"inventions-ip": {"E-s1", "E-s2"}, "grants-funding": {"E-s3"}}
+	want := map[string][]string{
+		"inventions-ip":  {"E-s1", "E-s2"},
+		"other":          {"E-b1", "E-b2", "E-s4", "E-s5"},
+		"grants-funding": {"E-s3"},
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("derived groups = %v", got)
 	}
-	if lp.DerivedFacetGroups[0].Topic != "inventions-ip" || lp.DerivedFacetGroups[0].Label != "Inventions & IP" {
+	if src["inventions-ip"] != "source_topic" || src["grants-funding"] != "source_topic" || src["other"] != FacetSourceFallback {
+		t.Fatalf("group sources = %v", src)
+	}
+	if lp.DerivedFacetGroups[0].Topic != "other" || lp.DerivedFacetGroups[0].Label != "Other" {
 		t.Fatalf("order/label = %+v", lp.DerivedFacetGroups[0])
 	}
-	if !reflect.DeepEqual(lp.Unassigned, []string{"E-b1", "E-b2", "E-s4", "E-s5"}) {
-		t.Fatalf("unassigned = %v", lp.Unassigned)
+	if len(lp.Unassigned) != 0 {
+		t.Fatalf("unassigned = %v, want empty", lp.Unassigned)
 	}
 	if !reflect.DeepEqual(lp.RegUnassigned, []string{"E-b1", "E-b2", "E-s1", "E-s2", "E-s3", "E-s4", "E-s5"}) {
 		t.Fatalf("reg_unassigned = %v", lp.RegUnassigned)
@@ -81,7 +90,11 @@ func TestLinkedDerivesSourceTopicFacets(t *testing.T) {
 			if len(r.DerivedFacets) != 0 || r.FacetSource != "" || !reflect.DeepEqual(r.Facets, []string{"PATENT_IP"}) {
 				t.Fatalf("REG facet overridden: %+v", r)
 			}
-		case "E-a1", "E-b1", "E-b2", "E-s4", "E-s5":
+		case "E-b1", "E-b2", "E-s4", "E-s5":
+			if !reflect.DeepEqual(r.DerivedFacets, []string{"SOURCE_TOPIC:other"}) || r.FacetSource != FacetSourceFallback || len(r.Facets) != 0 {
+				t.Fatalf("record %s = %+v", r.ID, r)
+			}
+		case "E-a1":
 			if len(r.DerivedFacets) != 0 || r.FacetSource != "" {
 				t.Fatalf("record %s got derived facet: %+v", r.ID, r)
 			}

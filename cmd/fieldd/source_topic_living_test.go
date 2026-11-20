@@ -40,8 +40,9 @@ func TestLivingUniverseSourceTopicNavAndPalette(t *testing.T) {
 	src := livingUniverseHTML(t)
 	for _, want := range []string{
 		"FACET_LABEL[g.facet]=g.label",
-		"' accepted · SOURCE topic'",
-		"(SOURCE topic, not a REG facet)",
+		"accepted · '+derivedSub(g)",
+		"derivedNote(n)+', not a REG facet)",
+		"return 'SOURCE topic'",
 		"[/SOURCE/,'source','#c9d1e0']",
 	} {
 		if !strings.Contains(src, want) {

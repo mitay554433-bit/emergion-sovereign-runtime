@@ -346,8 +346,10 @@ function relax(items,springs,iters){const n=items.length;if(!n)return;
 function nodeSet(field,proj,facetOrder){
  const acc=(field&&field.Accepted)||{},gov=(field&&field.AtGOV)||{},out=[],by=new Map();
  // Engine output first; fall back to recorded facets only if /projection.json is unavailable.
- // A SOURCE_UPLOAD record with no REG facet is grouped by its recorded REL source_topic
- // (derived_facets, facet_source "source_topic"): a display grouping, never a REG facet.
+ // A record with no REG facet is grouped by /projection.json derived_facets
+ // (SOURCE topic, or a kind/title derived group): a display grouping, never a REG facet.
+ // When the projection is unavailable, only a recorded REL source_topic on a
+ // SOURCE_UPLOAD record is used as a fallback.
  const srcTopic=em=>{const r=(em&&em.r)||{},t=String(r.source_topic||'').trim().toLowerCase();return r.source_kind==='SOURCE_UPLOAD'&&/^[a-z0-9_-]{1,64}$/.test(t)?t:''};
  const recs=proj&&Array.isArray(proj.records)?proj.records:Object.values(acc).map(em=>{const f=meta(em).f||[],t=f.length?'':srcTopic(em);return {id:em.i,archonym:meta(em).h,facets:f,derived_facets:t?['SOURCE_TOPIC:'+t]:[],kin_root:em.i}});
  for(const r of recs){if(!r||!r.id)continue;const own=Array.isArray(r.facets)?r.facets:[],der=Array.isArray(r.derived_facets)?r.derived_facets:[],fs=[...own,...der.filter(f=>!own.includes(f))];
@@ -433,6 +435,10 @@ function groupFrame(ms){if(!ms.length)return null;const cx=ms.reduce((a,n)=>a+n.
 // </node-set>
 let clusters=[],fly=null,maxWeight=0,maxMembers=0,SHORT=12,threads=[],anchors=[],anchorEdges=[],lstats=null;
 function topicLabel(f){const t=String(f).slice(13);return t.split(/[-_]/).filter(Boolean).map(w=>w[0].toUpperCase()+w.slice(1)).join(' ')}
+// Display-only labels for derived groups. SOURCE topic stays the wording for
+// recorded upload topics; other origins are marked derived, never as a REG facet.
+function derivedSub(g){const src=g&&(g.src||g.facet_source)||'';if(src==='source_topic'||!src)return 'SOURCE topic';if(src==='derived_kind')return 'derived kind';if(src==='derived_keyword')return 'derived title';if(src==='derived_fallback')return 'derived group';return 'topic group'}
+function derivedNote(n){const s=n&&n.rec&&n.rec.facet_source;if(s==='source_topic'||!s)return 'SOURCE topic';if(s==='derived_kind')return 'derived kind';if(s==='derived_keyword')return 'derived title';return 'derived group'}
 function registerTopicLabels(){if(proj&&Array.isArray(proj.derived_facet_groups))for(const g of proj.derived_facet_groups)if(g&&g.facet&&g.label)FACET_LABEL[g.facet]=g.label;
  for(const n of nodes)for(const f of n.facets)if(String(f).startsWith('SOURCE_TOPIC:')&&!FACET_LABEL[f])FACET_LABEL[f]=topicLabel(f)}
 function build(){
@@ -512,8 +518,8 @@ function renderNav(){if($('bKind'))renderBatch();const nav=$('nav');nav.replaceC
  const govN=f=>nodes.filter(x=>x.kind==='pending'&&x.facets.includes(f)).length;
  const items=[{key:'ALL',title:'FIELD View',sub:fmt(nodes.filter(n=>n.kind==='accepted').length)+' accepted · all facets'}];
  for(const g of groups){if(!g.n&&!govN(g.key))continue;items.push({key:g.key,title:FACET_LABEL[g.key]||g.key,sub:fmt(g.n)+' accepted'+(govN(g.key)?' · '+fmt(govN(g.key))+' AtGOV':'')})}
- const dgroups=proj&&Array.isArray(proj.derived_facet_groups)?proj.derived_facet_groups.map(g=>({key:g.facet,n:(g.members||[]).length})):[...new Set(nodes.filter(x=>x.kind==='accepted').flatMap(x=>x.derived||[]))].map(f=>({key:f,n:nodes.filter(x=>x.kind==='accepted'&&x.facets.includes(f)).length})).sort((a,b)=>b.n-a.n);
- for(const g of dgroups){if(!g.n)continue;items.push({key:g.key,title:FACET_LABEL[g.key]||topicLabel(g.key),sub:fmt(g.n)+' accepted · SOURCE topic',icon:'SOURCE_TOPIC'})}
+ const dgroups=proj&&Array.isArray(proj.derived_facet_groups)?proj.derived_facet_groups.map(g=>({key:g.facet,n:(g.members||[]).length,src:g.facet_source})):[...new Set(nodes.filter(x=>x.kind==='accepted').flatMap(x=>x.derived||[]))].map(f=>({key:f,n:nodes.filter(x=>x.kind==='accepted'&&x.facets.includes(f)).length,src:'source_topic'})).sort((a,b)=>b.n-a.n);
+ for(const g of dgroups){if(!g.n)continue;items.push({key:g.key,title:FACET_LABEL[g.key]||topicLabel(g.key),sub:fmt(g.n)+' accepted · '+derivedSub(g),icon:'SOURCE_TOPIC'})}
  if(proj&&proj.unassigned&&proj.unassigned.length)items.push({key:'UNASSIGNED',title:'Unassigned',sub:fmt(proj.unassigned.length)+' accepted · no facet'});
  for(const it of items){const b=el('button','tile');b.setAttribute('aria-pressed',String(filter===it.key));const ic=el('span','ic');ic.innerHTML=svg(ICON[it.icon||it.key]||ICON.ALL);const t=el('span');t.append(el('div','tt',it.title),el('div','ts',it.sub));b.append(ic,t);b.onclick=()=>{showField();if(it.key==='ALL'){filter='ALL';renderNav();flyHome()}else flyToFacet(it.key)};nav.append(b)}heroSub()}
 function inFilter(n){if(filter==='ALL')return true;if(filter==='UNASSIGNED')return n.kind==='accepted'&&!n.facets.length;return n.facets.includes(filter)}
@@ -537,7 +543,7 @@ function renderTimeline(){const T=$('tl');T.replaceChildren();const ev=nodes.fil
 function select(n,focus){selected=n;const D=$('detail');D.replaceChildren();if(!n){D.classList.remove('on');heroSub();want();return}
  const h=el('div','dh'),t=el('div');t.append(el('span','badge'+(n.kind==='pending'?' g':''),n.kind==='pending'?'AtGOV · not accepted':'REG accepted'));const h3=el('h3',null,nameOf(n));h3.id='dTitle';t.append(h3);const x=el('button','x','Close');x.onclick=()=>select(null);h.append(t,x);D.append(h);
  const kv=(k,v,mono)=>{if(v==null||v==='')return;const r=el('div','kv');r.append(el('small',null,k));const d=el('div',mono?'mono':null);if(v instanceof Node)d.append(v);else d.textContent=v;r.append(d);D.append(r)};
- const em=n.em||{};kv('Identity',n.id,true);kv('Facets',n.facets.map(f=>(FACET_LABEL[f]||f)+((n.derived||[]).includes(f)?' (SOURCE topic, not a REG facet)':'')).join(' · ')||'unassigned');
+ const em=n.em||{};kv('Identity',n.id,true);kv('Facets',n.facets.map(f=>(FACET_LABEL[f]||f)+((n.derived||[]).includes(f)?' ('+derivedNote(n)+', not a REG facet)':'')).join(' · ')||'unassigned');
  if(n.kind==='accepted'){kv('Kin root',n.root===n.id?'itself (root)':n.root,true);const as=(proj&&proj.assemblies||[]).find(a=>(a.members||[]).includes(n.id));if(as)kv('Assembly',as.id,true);if(n.rec&&n.rec.capabilities)kv('Capability',n.rec.capabilities.join(', '))}
  if(n.t)kv('Captured',new Date(n.t).toLocaleString());if(em.m&&em.m.s)kv('Summary',em.m.s);if(em.m&&em.m.h)kv('Source hash',em.m.h.slice(0,16)+'…',true);
  const r=em.r||{},w=el('div');for(const k of Object.keys(KIN_KEYS)){const v=r[k];if(typeof v!=='string'||!v)continue;for(const id of (v.match(/E-[A-Fa-f0-9]+/g)||[])){const o=byID.get(id),pend=!o||o.kind!=='accepted'||n.kind!=='accepted',s=el('span','kin'+(pend?' p':''));s.append(el('em',null,KIN_KEYS[k]),document.createTextNode(shortID(id)));s.title=pend?'Pending (AtGOV) or outside view':'Verified · both REG-accepted';w.append(s)}}
