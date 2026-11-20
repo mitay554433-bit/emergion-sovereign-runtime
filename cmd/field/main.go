@@ -445,6 +445,13 @@ func main() {
 		if len(args) > 3 {
 			reasonText = args[3]
 		}
+		if strings.EqualFold(strings.TrimSpace(args[2]), string(gov.Approve)) {
+			// Strict Archonym uniqueness at accept time: refuse before any
+			// decision is written.
+			if err := livefield.CheckArchonymForAccept(st, em); err != nil {
+				fail(err)
+			}
+		}
 		em, receipt, err := gov.Decide(em, gov.Decision(args[2]), "HUMAN_FINAL", reasonText)
 		if err != nil {
 			fail(err)

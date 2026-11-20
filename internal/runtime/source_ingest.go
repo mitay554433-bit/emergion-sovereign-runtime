@@ -177,8 +177,11 @@ func (e SourceManifestEntry) result() reason.Result {
 		summary = "SOURCE upload (" + e.Topic + "): " + e.Title
 	}
 	return reason.Result{
-		Summary:       summary,
-		Archonym:      e.Title,
+		Summary: summary,
+		// No Archonym: an Archonym is a sovereign name that only a
+		// HUMAN_FINAL accept may claim. The title lives in REL source_title
+		// and the summary, so a waiting upload can never take or block an
+		// accepted record's name.
 		Relationships: rel,
 		Capabilities:  []string{"OBS"},
 		Facts:         []string{"source_upload_observed", "source_sha256:" + e.SHA256},
