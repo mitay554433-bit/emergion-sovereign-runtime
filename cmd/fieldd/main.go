@@ -16,6 +16,7 @@ import (
 	"syscall"
 
 	"emergion-sovereign-runtime/internal/reason"
+	"emergion-sovereign-runtime/internal/worker"
 	"emergion-sovereign-runtime/pkg/fieldapi"
 )
 
@@ -50,6 +51,7 @@ func main() {
 	socketPath := flag.String("socket", filepath.Join(os.TempDir(), "fieldd.sock"), "Path to Unix domain socket")
 	pidPath := flag.String("pid", filepath.Join(os.TempDir(), "fieldd.pid"), "Path to PID file")
 	httpAddr := flag.String("http", "", "HTTP listen address. Empty disables HTTP. Default operator bind is 127.0.0.1:8899 via field daemon start. Non-loopback requires FIELDD_TOKEN or a 0600 fieldd.token in the state directory.")
+	workDir := flag.String("work-dir", "", "Worker control and checkpoint directory (default <state>-work, outside the ledger)")
 	flag.IntVar(&batchCap, "batch-cap", batchCapFromEnv(), "Largest batch one HUMAN_FINAL press may accept via /decide-batch-human (env FIELDD_BATCH_CAP)")
 	flag.Parse()
 
@@ -62,6 +64,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to open field runtime state: %v", err)
 	}
+
+	if *workDir == "" {
+		*workDir = worker.WorkDir(*stateDir)
+	}
+	autoEng = newAutoEngine(rt, *workDir, nil)
 
 	token, loopback, err := resolveListenToken(*stateDir, *httpAddr)
 	if err != nil {
@@ -110,6 +117,9 @@ func main() {
 			}
 		}()
 	}
+
+	go autoEng.run(ctx)
+	log.Printf("A01-AUTO policy and worker loop running (both OFF until switched on); work dir %s", *workDir)
 
 	<-ctx.Done()
 	log.Println("Shutting down Field Sovereign Daemon gracefully...")
