@@ -111,12 +111,15 @@ func newHTTPMux(rt *fieldapi.Runtime, token string, loopback bool) *http.ServeMu
 		if err == nil && p.BatchID != "" && !fieldapi.ValidBatchID(p.BatchID) {
 			err = errors.New("invalid batch id")
 		}
+		if err == nil {
+			_, err = fieldapi.BatchDecision(p.Decision)
+		}
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			_ = json.NewEncoder(w).Encode(fieldapi.BatchResult{Requested: len(p.EmergIONIDs), Error: err.Error()})
 			return
 		}
-		res, _ := rt.DecideBatchHumanAs(p.EmergIONIDs, p.Reason, p.ConfirmCount, batchCap, p.BatchID)
+		res, _ := rt.DecideBatchHumanDecision(p.EmergIONIDs, p.Reason, p.ConfirmCount, batchCap, p.BatchID, p.Decision)
 		_ = json.NewEncoder(w).Encode(res)
 	})
 	mux.HandleFunc("/decide-batch-human", func(w http.ResponseWriter, req *http.Request) {

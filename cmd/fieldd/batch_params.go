@@ -15,6 +15,8 @@ type BatchParams struct {
 	ConfirmCount int      `json:"confirm_count"`
 	// BatchID continues an earlier chunk of the same human press (optional).
 	BatchID string `json:"batch_id,omitempty"`
+	// Decision is APPROVE (default when empty) or HOLD.
+	Decision string `json:"decision,omitempty"`
 }
 
 // batchCap is the server-side batch limit (flag -batch-cap, env FIELDD_BATCH_CAP).

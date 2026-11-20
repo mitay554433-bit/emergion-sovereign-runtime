@@ -2,6 +2,7 @@ package fieldapi
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,7 +18,7 @@ import (
 // seedAtGOV captures one real record, then writes n-1 more AtGOV candidates
 // cloned from it, each with its own preserved evidence, chained directly into
 // the COSL ledger so a large ledger does not cost n full-ledger appends.
-func seedAtGOV(t testing.TB, n int) (*Runtime, []string) {
+func seedAtGOV(t testing.TB, n int, rel ...func(i int, r map[string]string)) (*Runtime, []string) {
 	t.Helper()
 	root := t.TempDir()
 	src := filepath.Join(root, "seed.txt")
@@ -58,6 +59,9 @@ func seedAtGOV(t testing.TB, n int) (*Runtime, []string) {
 		}
 		if i%2 == 0 {
 			em.REL["source_kind"] = "EVEN"
+		}
+		for _, f := range rel {
+			f(i, em.REL)
 		}
 		line, err := cosl.Encode(core.Event{Type: "C", ID: fmt.Sprintf("EV-B%015X", i), At: at, EmergION: &em, PrevHash: prev})
 		if err != nil {
@@ -264,4 +268,93 @@ func TestBatchHumanFinalChunksShareBatchID(t *testing.T) {
 		t.Fatalf("receipts cover %d records", len(seen))
 	}
 	verifyReplay(t, rt, 5)
+}
+
+// HOLD is the other existing decision a batch may carry: each record gets
+// its own HUMAN_FINAL HOLD receipt and no REG acceptance; re-runs skip.
+func TestBatchHumanFinalHold(t *testing.T) {
+	rt, ids := seedAtGOV(t, 4)
+	before := len(ledger(t, rt))
+	res, err := rt.DecideBatchHumanDecision(ids[1:], "hold the rest", 3, 500, "", "HOLD")
+	if err != nil || res.Held != 3 || res.Accepted != 0 {
+		t.Fatalf("hold: %+v %v", res, err)
+	}
+	events := ledger(t, rt)[before:]
+	if len(events) != 3 {
+		t.Fatalf("want 3 D events, got %d", len(events))
+	}
+	for _, ev := range events {
+		if ev.Type != "D" || ev.Decision.Decision != "HOLD" || ev.Decision.Authority != "HUMAN_FINAL" ||
+			!strings.Contains(ev.Decision.Reason, "hold the rest [HUMAN_FINAL HOLD batch "+res.BatchID+", 3 records]") {
+			t.Fatalf("hold receipt: %+v", ev)
+		}
+	}
+	st, err := livefield.Rebuild(ledger(t, rt))
+	if err != nil || len(st.Held) != 3 || len(st.AtGOV) != 1 || len(st.Accepted) != 0 {
+		t.Fatalf("rebuild: held=%d atgov=%d accepted=%d err=%v", len(st.Held), len(st.AtGOV), len(st.Accepted), err)
+	}
+	again, err := rt.DecideBatchHumanDecision(ids[1:], "hold the rest", 3, 500, "", "HOLD")
+	if err != nil || again.Skipped != 3 || again.Held != 0 {
+		t.Fatalf("re-run: %+v %v", again, err)
+	}
+	if _, err := rt.DecideBatchHumanDecision(ids[:1], "x", 1, 500, "", "REJECT"); err == nil {
+		t.Fatal("decision other than APPROVE/HOLD accepted")
+	}
+	if _, err := rt.store.VerifyEvidence(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// /projection.json trajectories: AtGOV provider_population candidates keyed
+// by (required_capability, composition, first provider), with count,
+// first/last capture time, newest ID and members. Nothing is written.
+func TestLinkedProjectionTrajectories(t *testing.T) {
+	rt, ids := seedAtGOV(t, 6, func(i int, r map[string]string) {
+		if i == 5 {
+			return
+		}
+		r["source_name"] = "provider_population"
+		r["required_capability"] = "DERIVE_CAPABILITY"
+		r["capability_composition"] = "ANALYZE+CMP+RLT"
+		first := "E-AAAAAAAAAAAAAAA1"
+		if i == 4 {
+			first = "E-AAAAAAAAAAAAAAA2"
+		}
+		r["capability_providers"] = fmt.Sprintf("ANALYZE:%s,CMP:E-C%015X,RLT:E-D%015X", first, i, i)
+	})
+	n := len(ledger(t, rt))
+	js, err := rt.LinkedProjectionJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ledger(t, rt)) != n {
+		t.Fatal("projection wrote events")
+	}
+	var lp struct {
+		Trajectories []struct {
+			Key           string    `json:"key"`
+			FirstProvider string    `json:"first_provider"`
+			NewestID      string    `json:"newest_id"`
+			Count         int       `json:"count"`
+			Members       []string  `json:"members"`
+			FirstAt       time.Time `json:"first_at"`
+			LastAt        time.Time `json:"last_at"`
+		} `json:"trajectories"`
+	}
+	if err := json.Unmarshal([]byte(js), &lp); err != nil {
+		t.Fatal(err)
+	}
+	if len(lp.Trajectories) != 2 {
+		t.Fatalf("trajectories = %+v", lp.Trajectories)
+	}
+	a := lp.Trajectories[0]
+	if a.Key != "DERIVE_CAPABILITY|ANALYZE+CMP+RLT|E-AAAAAAAAAAAAAAA1" || a.Count != 3 || len(a.Members) != 3 || a.FirstAt.IsZero() || a.LastAt.Before(a.FirstAt) {
+		t.Fatalf("trajectory = %+v", a)
+	}
+	if a.FirstProvider != "E-AAAAAAAAAAAAAAA1" || a.NewestID != ids[3] {
+		t.Fatalf("newest = %s want %s", a.NewestID, ids[3])
+	}
+	if lp.Trajectories[1].Count != 1 || lp.Trajectories[1].Members[0] != ids[4] {
+		t.Fatalf("second trajectory = %+v", lp.Trajectories[1])
+	}
 }
