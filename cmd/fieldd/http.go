@@ -115,14 +115,17 @@ func newHTTPMux(rt *fieldapi.Runtime, token string, loopback bool) *http.ServeMu
 		http.ServeFile(w, req, filepath.Join("outputs", "real_temporal_wave.json"))
 	}))
 
-	mux.HandleFunc("/living-universe", protect(func(w http.ResponseWriter, req *http.Request) {
+	livingUniverse := protect(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		http.ServeFile(w, req, filepath.Join("cmd", "fieldd", "living-universe.html"))
-	}))
+	})
+	mux.HandleFunc("/living-universe", livingUniverse)
+	// /living is a read-only alias for the same page (the phone uses /living).
+	mux.HandleFunc("/living", livingUniverse)
 
 	mux.HandleFunc("/field.html", protect(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodGet {
