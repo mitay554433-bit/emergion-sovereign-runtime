@@ -272,13 +272,45 @@ func TestLocalArgsUseAllCoresAndNoConversation(t *testing.T) {
 			t.Fatalf("args %q lack %q", args, want)
 		}
 	}
-	// llama-completion is one-shot and some builds reject -no-cnv.
-	if strings.Contains(args, "-no-cnv") {
-		t.Fatalf("llama-completion args must not carry -no-cnv: %q", args)
+	// llama-completion waits in chat mode without -no-cnv; llama-cli rejects it.
+	if !strings.Contains(args, "-no-cnv") || !strings.Contains(args, "-n 64") {
+		t.Fatalf("llama-completion args need -no-cnv and -n 64: %q", args)
 	}
 	cli := strings.Join(reason.LocalInsighter{Binary: "/usr/bin/llama-cli", Model: "m.gguf", Threads: 8}.Args("p"), " ")
-	if !strings.Contains(cli, "-no-cnv") {
-		t.Fatalf("llama-cli args need -no-cnv: %q", cli)
+	if strings.Contains(cli, "-no-cnv") {
+		t.Fatalf("llama-cli rejects -no-cnv: %q", cli)
+	}
+}
+
+func TestLocalPromptIsShort(t *testing.T) {
+	in := reason.InsightInput{Title: strings.Repeat("t", 300), Topic: "grants"}
+	for i := 1; i <= 8; i++ {
+		in.Peers = append(in.Peers, reason.InsightPeer{N: i, ID: fmt.Sprint("E-", i), Title: strings.Repeat("p", 200), Topic: "grants"})
+	}
+	p := reason.LocalPrompt(in)
+	if strings.Contains(p, "\n5 ") || len(p) > len(reason.InsightPrompt(in))/2 {
+		t.Fatalf("local prompt too long (%d bytes):\n%s", len(p), p)
+	}
+}
+
+type runFailInsighter struct{}
+
+func (runFailInsighter) Name() string { return "runfail" }
+func (runFailInsighter) Insight(context.Context, reason.InsightInput) (reason.Insight, error) {
+	return reason.Insight{}, fmt.Errorf("%w: local model timed out after 20m0s", reason.ErrModelRun)
+}
+
+func TestModelRunErrorsDoNotBlameSources(t *testing.T) {
+	s, _ := setup(t, 3)
+	w := &Worker{Store: s, Insighter: runFailInsighter{}, Dir: t.TempDir()}
+	for i := 0; i < 3; i++ {
+		if _, err := w.Step(context.Background(), 3); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cp := w.LoadCheckpoint()
+	if len(cp.Failures) != 0 || !strings.Contains(cp.LastError, "timed out") {
+		t.Fatalf("model-run errors must not count against sources: %+v", cp)
 	}
 }
 
