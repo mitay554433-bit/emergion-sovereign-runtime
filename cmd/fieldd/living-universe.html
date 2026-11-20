@@ -131,6 +131,8 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .acc.hold{background:none;border-color:var(--line)}
 .bin:has(#bHold:not([hidden])){grid-template-columns:minmax(0,1fr) auto auto}
 @media(max-width:440px){.bin:has(#bHold:not([hidden])){grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.bin:has(#bHold:not([hidden])) input{grid-column:1/-1}}
+#bHoldAll{width:100%;margin-top:6px;white-space:normal}
+#bAll{margin:4px 0 0;font-size:12px;color:var(--ink2)}#bAll b{font-family:var(--mono);color:var(--ink)}
 .bres{margin-top:8px;font-size:12px;overflow-wrap:anywhere}
 .tok{display:flex;gap:6px;min-width:0}.tok input{flex:1;min-width:0;font:inherit;font-size:11px;padding:6px 8px;border-radius:8px;border:1px solid var(--line2);background:#05070d;color:var(--ink)}
 .row{min-width:0;display:flex;justify-content:space-between;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--line2);font-size:12px;text-align:left;width:100%}
@@ -574,6 +576,10 @@ function batchBody(ids,reason,bid,decision){const b={emergion_ids:ids,reason:rea
 // What one press sends. A trajectory row accepts its newest member only; 'Hold the rest' HOLDs
 // the other members (existing HUMAN_FINAL HOLD, reversible by RESUME). Anything else: as shown.
 function batchPlan(s,f,idx){const g=f.kind==='group'&&idx&&idx.groups.find(g=>g.key===f.value),t=g&&g.traj;if(!t)return {traj:null,accept:s.ids,hold:[]};const nid=s.ids.includes(t.newest_id)?t.newest_id:s.ids[s.ids.length-1];return {traj:t,accept:nid?[nid]:[],hold:s.ids.filter(id=>id!==nid)}}
+// Hold all trajectories: every current trajectory's members except its newest (newest stays AtGOV).
+// N is the number of records to hold. Nothing is accepted.
+const HOLD_ALL_REASON='Trajectory HUMAN_FINAL hold-all: keep newest of each, hold rest';
+function holdAllPlan(trs){const hold=[];let trajCount=0;for(const t of (trs||[])){const m=t.members||[];if(!m.length)continue;trajCount++;const nid=m.includes(t.newest_id)?t.newest_id:m[m.length-1];for(const id of m)if(id!==nid)hold.push(id)}return {trajCount,hold}}
 function batchTitle(em,id){const m=(em&&em.e&&em.e.m)||{};return m.h||(em&&em.m&&em.m.s)||id}
 function facetName(f){return (typeof FACET_LABEL!=='undefined'&&FACET_LABEL[f])||f}
 function batchLabel(f,idx){if(f.kind==='group'){const g=idx&&idx.groups.find(g=>g.key===f.value);return 'group '+(g?g.label:f.value)}return f.kind==='all'?'all AtGOV':f.kind==='facet'?'facet '+facetName(f.value):f.kind==='class'?'class '+f.value:'target '+f.value}
@@ -603,7 +609,7 @@ async function batchAccept(ids,reason,out,decision){const tok=savedToken();const
    out.textContent=prog()}
   out.textContent='Done · '+prog()+' · next batch loaded'}
  catch(e){out.textContent='Batch result could not be confirmed after '+prog()+'. Refresh before retrying.'}
- finally{batchBusy=false;for(let i=0;i<20&&loading;i++)await new Promise(r=>setTimeout(r,150));await refresh().catch(()=>{});renderBatch()}}
+ finally{batchBusy=false;await refresh(true).catch(()=>{});renderBatch()}}
 function disarm(){batchArm=null;clearTimeout(batchArmTimer);renderBatch()}
 function renderBatch(){const P=$('hfbP'),B=$('hfb');if(!P||!B)return;const gov=(field&&field.AtGOV)||{},n=Object.keys(gov).length;P.hidden=!n;if(!n)return;readBatchCap();
  if(!$('bKind')){const sel=el('div','bsel'),k=el('select'),v=el('select');k.id='bKind';v.id='bVal';k.setAttribute('aria-label','Batch filter');v.setAttribute('aria-label','Batch filter value');
@@ -614,6 +620,7 @@ function renderBatch(){const P=$('hfbP'),B=$('hfb');if(!P||!B)return;const gov=(
   rs.oninput=()=>{rs.dataset.auto='';storeReason(rs.value.trim())};
   const res=el('div','bres');res.id='bRes';
   const hb=el('button','acc hold','Hold the rest');hb.id='bHold';hb.hidden=true;const warn=el('div','twarn',TRAJ_WARN);warn.id='bWarn';warn.hidden=true;
+  const allHint=el('div','');allHint.id='bAll';const ha=el('button','acc hold','Hold all trajectories');ha.id='bHoldAll';ha.hidden=true;
   const plan=()=>{const g=(field&&field.AtGOV)||{},f=batchFilter(BS.kind,BS.value,filter),idx=batchIndex(g,(field&&field.Accepted)||{},trajNow(proj,g));return batchPlan(batchSelect(g,f,batchCap,idx),f,idx)};
   go.onclick=()=>{if(batchBusy)return;const pl=plan(),ids=pl.accept;if(!ids.length)return;
    const st=batchStep(batchArm,'A|'+batchKey(ids),Date.now());batchArm=st.arm;clearTimeout(batchArmTimer);
@@ -623,7 +630,11 @@ function renderBatch(){const P=$('hfbP'),B=$('hfb');if(!P||!B)return;const gov=(
    const st=batchStep(batchArm,'H|'+batchKey(ids),Date.now());batchArm=st.arm;clearTimeout(batchArmTimer);
    if(!st.send){batchArmTimer=setTimeout(disarm,BATCH_ARM_MS);renderBatch();return}
    renderBatch();batchAccept(ids,rs.value,res,'HOLD')};
-  inp.append(rs,go,hb);B.append(sel,sum,warn,sam,inp,res)}
+  ha.onclick=()=>{if(batchBusy)return;const ids=holdAllPlan(trajNow(proj,(field&&field.AtGOV)||{})).hold;if(!ids.length)return;
+   const st=batchStep(batchArm,'HA|'+batchKey(ids),Date.now());batchArm=st.arm;clearTimeout(batchArmTimer);
+   if(!st.send){batchArmTimer=setTimeout(disarm,BATCH_ARM_MS);renderBatch();return}
+   renderBatch();batchAccept(ids,HOLD_ALL_REASON,res,'HOLD')};
+  inp.append(rs,go,hb);B.append(sel,sum,warn,allHint,sam,inp,ha,res)}
  const k=$('bKind'),v=$('bVal');k.value=BS.kind;const idx=batchIndex(gov,(field&&field.Accepted)||{},trajNow(proj,gov)),opts=batchOptions(gov,idx),fc=new Map(opts.facet);opts.group=idx.groups.map(g=>[g.key,g.count,g.label]);
  if(BS.kind==='group'||BS.kind==='facet'||BS.kind==='class'||BS.kind==='target'){const list=opts[BS.kind].slice(0,BS.kind==='group'?200:60);if(!BS.value||!list.some(x=>x[0]===BS.value))BS.value=list.length?list[0][0]:'';
   if(document.activeElement!==v){v.replaceChildren();for(const [x,c,lb] of list){const o=el('option',null,(BS.kind==='group'?(String(x).startsWith('traj:')?lb:lb+' · '+fmt(c)):BS.kind==='facet'?facetName(x)+' · '+fmt(c)+' waiting':x+' · '+fmt(c)));o.value=x;v.append(o)}v.value=BS.value}v.disabled=false}
@@ -635,10 +646,12 @@ function renderBatch(){const P=$('hfbP'),B=$('hfb');if(!P||!B)return;const gov=(
  if(!s.ids.length)sam.append(el('li','bhint',f.kind==='facet'?'No waiting records point at this facet':'No waiting records match this filter'));
  if(s.whole&&s.ids.length>10)sam.lastChild.textContent='… and '+fmt(s.ids.length-10)+' more in this group';
  const rs=$('bReason');if(document.activeElement!==rs){const kept=savedReason();rs.value=kept||(pl.traj?'Trajectory HUMAN_FINAL: '+trajLabel(pl.traj)+' · newest '+(pl.accept[0]||''):autoReason(gov,f,s.ids,idx));rs.dataset.auto=kept?'':'1'}
- const ka='A|'+batchKey(pl.accept),kh='H|'+batchKey(pl.hold);if(batchArm&&batchArm.key!==ka&&batchArm.key!==kh)batchArm=null;
- const go=$('bGo'),hb=$('bHold'),armA=!!batchArm&&batchArm.key===ka,armH=!!batchArm&&batchArm.key===kh;
+ const ha=holdAllPlan(trajNow(proj,gov)),ka='A|'+batchKey(pl.accept),kh='H|'+batchKey(pl.hold),kha='HA|'+batchKey(ha.hold);if(batchArm&&batchArm.key!==ka&&batchArm.key!==kh&&batchArm.key!==kha)batchArm=null;
+ const go=$('bGo'),hb=$('bHold'),haBtn=$('bHoldAll'),allHint=$('bAll'),armA=!!batchArm&&batchArm.key===ka,armH=!!batchArm&&batchArm.key===kh,armHA=!!batchArm&&batchArm.key===kha;
  go.textContent=armA?(pl.traj?'Confirm accept newest':'Confirm accept '+fmt(pl.accept.length)):(pl.traj?'Accept newest':'Accept batch');go.classList.toggle('arm',armA);go.disabled=!pl.accept.length||batchBusy;
  hb.hidden=!pl.traj||!pl.hold.length;hb.textContent=armH?'Confirm hold '+fmt(pl.hold.length):'Hold the rest ('+fmt(pl.hold.length)+')';hb.classList.toggle('arm',armH);hb.disabled=!pl.hold.length||batchBusy;
+ if(allHint){allHint.hidden=!ha.hold.length;if(ha.hold.length){allHint.replaceChildren();allHint.append(el('b',null,fmt(ha.trajCount)),document.createTextNode(' trajector'+(ha.trajCount===1?'y':'ies')+' · hold rest of each = '),el('b',null,fmt(ha.hold.length)),document.createTextNode(' (newest of each stays AtGOV)'))}}
+ if(haBtn){haBtn.hidden=!ha.hold.length;haBtn.textContent=armHA?'CONFIRM HOLD '+fmt(ha.hold.length):'Hold all trajectories ('+fmt(ha.hold.length)+')';haBtn.title=fmt(ha.trajCount)+' trajectories · hold '+fmt(ha.hold.length)+' records, keep newest of each';haBtn.classList.toggle('arm',armHA);haBtn.disabled=!ha.hold.length||batchBusy}
  setText('hfbPill',pl.traj?'1 TRAJECTORY':fmt(s.ids.length)+' IN BATCH')}
 // </governed-accept>
 
@@ -833,7 +846,8 @@ reduced.addEventListener&&reduced.addEventListener('change',want);
 const ax=$('ax');for(const [k,v] of AXIOMS){const d=el('div');d.append(el('b',null,k),el('span',null,v));ax.append(d)}
 async function getJSON(u){const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw Error(u+' HTTP '+r.status);return r.json()}
 let loading=false;
-async function refresh(){if(loading||document.hidden)return;loading=true;
+async function refresh(force){if(loading){if(!force)return;for(let i=0;i<40&&loading;i++)await new Promise(r=>setTimeout(r,50))}else if(!force&&document.hidden)return;
+ loading=true;if(force){trajCache=null;batchIdxCache=null}
  try{const f=await getJSON('/field.json');if(!f||typeof f.Accepted!=='object')throw Error('not a FIELD state');field=f;live=true}catch(e){live=false}
  try{proj=await getJSON('/projection.json')}catch(e){proj=null}
  try{build();renderPanels()}finally{loading=false}want()}

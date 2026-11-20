@@ -372,3 +372,67 @@ func TestDecideBatchHumanRouteHold(t *testing.T) {
 		t.Fatalf("rebuild: %v", err)
 	}
 }
+
+// Hold all trajectories holds, across every current trajectory, every member
+// except that trajectory's newest (the newest stays AtGOV). N is the hold
+// count; the page shows the trajectory count too. The body is decision HOLD
+// with the pre-filled hold-all reason, chunked by the existing cap.
+func TestLivingHoldAllTrajectoriesPlanAndConfirm(t *testing.T) {
+	src := livingUniverseHTML(t)
+	if !strings.Contains(src, `haBtn.textContent=armHA?'CONFIRM HOLD '+fmt(ha.hold.length):'Hold all trajectories ('+fmt(ha.hold.length)+')'`) {
+		t.Fatal("Hold all trajectories must use the two-press CONFIRM HOLD N label")
+	}
+	if !strings.Contains(src, "batchStep(batchArm,'HA|'+batchKey(ids)") || !strings.Contains(src, "batchAccept(ids,HOLD_ALL_REASON,res,'HOLD')") {
+		t.Fatal("Hold all must arm with HA| and send HOLD_ALL_REASON via the existing batch route")
+	}
+	if strings.Contains(src, "Accept all") {
+		t.Fatal("Accept all must not be added")
+	}
+	out := runNode(t, batchBlocks(t, src)+`
+const gov={};
+const m1=[],m2=[],m3=["E-C00001"];
+for(let i=1;i<=4;i++){const id="E-A0000"+i;m1.push(id);gov[id]={r:{source_name:"provider_population"}}}
+for(let i=1;i<=3;i++){const id="E-B0000"+i;m2.push(id);gov[id]={r:{source_name:"provider_population"}}}
+gov["E-C00001"]={r:{source_name:"provider_population"}};
+const trs=trajList({trajectories:[
+ {key:"k1",newest_id:"E-A00003",members:m1.concat(["E-GONE"])},
+ {key:"k2",newest_id:"E-B00003",members:m2},
+ {key:"k3",newest_id:"E-C00001",members:m3}
+]},gov);
+const ha=holdAllPlan(trs),body=JSON.parse(batchBody(ha.hold,HOLD_ALL_REASON,"","HOLD"));
+const st1=batchStep(null,'HA|'+batchKey(ha.hold),1000),st2=batchStep(st1.arm,'HA|'+batchKey(ha.hold),1000+1000),stLate=batchStep(st1.arm,'HA|'+batchKey(ha.hold),1000+4001);
+process.stdout.write(JSON.stringify({trajCount:ha.trajCount,hold:ha.hold,n:ha.hold.length,
+ chunks:batchChunks(ha.hold,2).map(c=>c.length),body,reason:HOLD_ALL_REASON,
+ send2:st2.send,sendLate:stLate.send,send1:st1.send}));`)
+	var r struct {
+		TrajCount int `json:"trajCount"`
+		Hold      []string
+		N         int
+		Chunks    []int
+		Body      map[string]any
+		Reason    string
+		Send2     bool `json:"send2"`
+		SendLate  bool `json:"sendLate"`
+		Send1     bool `json:"send1"`
+	}
+	if err := json.Unmarshal([]byte(out), &r); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	// newest of each stays out: A00003, B00003, C00001. E-GONE is not in AtGOV.
+	if r.TrajCount != 3 || r.N != 5 || strings.Join(r.Hold, ",") != "E-A00001,E-A00002,E-A00004,E-B00001,E-B00002" {
+		t.Fatalf("holdAllPlan = trajCount %d hold %v", r.TrajCount, r.Hold)
+	}
+	if strings.Contains(strings.Join(r.Hold, ","), "E-A00003") || strings.Contains(strings.Join(r.Hold, ","), "E-C00001") || strings.Contains(strings.Join(r.Hold, ","), "E-GONE") {
+		t.Fatalf("newest or absent members must not be held: %v", r.Hold)
+	}
+	if fmt.Sprint(r.Chunks) != "[2 2 1]" {
+		t.Fatalf("chunks = %v want cap-sized [2 2 1]", r.Chunks)
+	}
+	if r.Body["decision"] != "HOLD" || r.Body["confirm_count"] != float64(5) || r.Body["reason"] != r.Reason ||
+		r.Reason != "Trajectory HUMAN_FINAL hold-all: keep newest of each, hold rest" {
+		t.Fatalf("hold-all body/reason = %+v %q", r.Body, r.Reason)
+	}
+	if r.Send1 || !r.Send2 || r.SendLate {
+		t.Fatalf("two-press: first=%v second=%v late=%v", r.Send1, r.Send2, r.SendLate)
+	}
+}
