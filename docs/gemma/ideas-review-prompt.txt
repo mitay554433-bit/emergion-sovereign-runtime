@@ -1,0 +1,25 @@
+You are reviewing a small software project. Answer in plain numbered lines only. No headings, no tables, no extra talk.
+
+WHAT UNIFUSION DOES
+UNIFUSION is offline software on one Android phone. It takes in files and notes as SOURCE records and finds how they relate (KIN). A local AI model may only propose summaries and links. Nothing becomes an official record until a person approves it (HUMAN_FINAL). Approved records go into one registry (REG) with SHA-256 fingerprints and an append-only log, so a later check can show if something was changed or swapped. A visual view (Living Universe) shows the records and their links. Today it is a working prototype (TRL 4) on one phone with 104 approved records, no outside users yet, and three Canadian patent applications filed (none granted).
+
+TOP IDEAS (ranked by the builder)
+1. Offline, human-approved, tamper-evident evidence review as a paid pilot for sensitive or regulated teams.
+2. The approval gate: no score or AI answer can make a record official without a person.
+3. Append-only log plus SHA-256 identity for every record and evidence file.
+4. Tamper demo on the phone: a flipped or swapped file fails the check.
+5. Replaceable local model: the state lives outside the model, so the model can be swapped.
+6. SOURCE and KIN lineage for every uploaded file.
+7. BRIDGEGAP: list only the real gaps between what exists and what is needed.
+8. Installable phone app that shows the registry as views.
+9. Crystallization: approved patterns become reusable rules, so the model is needed less.
+10. CONTINUITY Recovery: a small paid file-recovery and evidence report service.
+11. Tax-credit (SR&ED) records rebuilt from the code history.
+12. HarvestSkin energy-harvesting patches: measured lab tests (Build #3).
+13. Government grant brief (NRC IRAP) for the Helix fabricator, with honest readiness.
+
+YOUR TASK
+Pick the 3 ideas you think are strongest. For each one, write one line in this form:
+N. Idea number and name - why it is strong - what is missing - one next step.
+Then write one final line starting with "Missing overall:" naming the single biggest gap in the whole list.
+Use at most 5 lines in total.
