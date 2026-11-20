@@ -36,6 +36,10 @@ func newHTTPMuxOn(rt *fieldapi.Runtime, token string, loopback bool, bindAddr st
 		_ = json.NewEncoder(w).Encode(dispatch(rt, Request{Method: "status"}))
 	}))
 
+	if autoEng != nil {
+		registerAutoRoutes(mux, autoEng, protect, mutate)
+	}
+
 	mux.HandleFunc("/actions", protect(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

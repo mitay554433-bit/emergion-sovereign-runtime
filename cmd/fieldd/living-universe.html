@@ -143,6 +143,7 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 #hfGenShow{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2);border:1px solid var(--line);border-radius:6px;padding:5px 10px;min-height:30px}
 #hfGenRes{margin-top:6px;font-size:12px;overflow-wrap:anywhere}
 .bres{margin-top:8px;font-size:12px;overflow-wrap:anywhere}
+.aurow{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px;padding:0 14px}.aurow select{font:inherit;font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:#05070d;color:var(--ink);min-height:32px}.acc.on{background:var(--royal);border-color:var(--royal)}.acc.arm{background:#05070d;border-color:var(--pale);color:var(--pale)}#auLine{display:block;margin-top:8px;padding:0 14px 13px;line-height:1.45;white-space:normal}
 .tok{display:flex;gap:6px;min-width:0}.tok input{flex:1;min-width:0;font:inherit;font-size:11px;padding:6px 8px;border-radius:8px;border:1px solid var(--line2);background:#05070d;color:var(--ink)}
 .row{min-width:0;display:flex;justify-content:space-between;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--line2);font-size:12px;text-align:left;width:100%}
 .row:first-child{border-top:0}
@@ -231,6 +232,20 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
     <div class="st"><small>Last update · latest capture</small><b class="sm" id="sLast">—</b></div>
    </div>
   </section>
+  <section class="panel" id="autoP" aria-label="UNIFUSION auto: policy, worker and reasoner">
+   <div class="ph"><span class="pt">Auto · A01-AUTO-1</span><span class="ps mono">/auto/status</span></div>
+   <div class="status" style="margin-top:9px">
+    <div class="st" title="A01-AUTO auto-accept policy. OFF until a HUMAN_FINAL double-press switches it on."><small>Auto-accept policy</small><b id="auPol">—</b></div>
+    <div class="st" title="Nonstop worker: reads accepted SOURCE records and proposes summaries, kin links, combinations and gaps"><small>Worker</small><b id="auWk">—</b></div>
+    <div class="st"><small>Reasoner</small><b class="sm" id="auMode">—</b></div>
+    <div class="st" title="Records accepted by AUTO_POLICY (each has its own receipt and a one-press undo)"><small>Auto-accepted</small><b id="auAcc">—</b></div>
+    <div class="st" title="Duplicates and generated combinations held by AUTO_POLICY"><small>Auto-held</small><b id="auHeld">—</b></div>
+    <div class="st" title="AtGOV records waiting for a decision"><small>AtGOV to decide</small><b id="auWait">—</b></div>
+    <div class="st" title="SOURCE records the worker has written an insight for (any GOV state)"><small>Insights</small><b id="auIns">—</b></div>
+   </div>
+   <div class="aurow"><button class="acc" id="auPolB" type="button">Policy</button><button class="acc" id="auWkB" type="button">Worker</button><select id="auModeS" aria-label="Reasoner mode"><option value="local">Local (phone)</option><option value="auto">Auto (online if reachable)</option><option value="online">Online</option></select></div>
+   <small class="ps" id="auLine" aria-live="polite"></small>
+  </section>
  </aside>
 
  <main class="center">
@@ -283,12 +298,12 @@ const $=id=>document.getElementById(id);
 const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
 const fmt=n=>Number(n).toLocaleString('en-US');
 const shortID=id=>{id=String(id||'');return id.length>SHORT?id.slice(0,SHORT)+'…':id};
-const AXIOMS=[['A01','HUMAN_FINAL authority cannot be bypassed'],['A02','self-building does not imply self-authorizing'],['A03','SOURCE evidence is distinct from accepted truth'],['A04','GOV decides'],['A05','REG accepts'],['A06','PROJ is not authority'],['A07','invalid candidates fail closed and preserve evidence'],['A08','sovereign kin remain distinct during composition'],['A09','indexes and projections are rebuildable and non-authoritative'],['A10','architecture changes require HUMAN_FINAL']];
+const AXIOMS=[['A01','HUMAN_FINAL authority cannot be bypassed. Amended 2026-11-20 (A01-AUTO-1): low-risk classes may be decided by AUTO_POLICY, only after a HUMAN_FINAL switch-on; every auto decision has its own receipt and one-press undo'],['A02','self-building does not imply self-authorizing'],['A03','SOURCE evidence is distinct from accepted truth'],['A04','GOV decides'],['A05','REG accepts'],['A06','PROJ is not authority'],['A07','invalid candidates fail closed and preserve evidence'],['A08','sovereign kin remain distinct during composition'],['A09','indexes and projections are rebuildable and non-authoritative'],['A10','architecture changes require HUMAN_FINAL']];
 const FACET_LABEL={FIELD_COMMAND:'FIELD Command',EMERGENCE_CAPTURE:'Emergence Capture',PROGRAM_FORGE:'Program Forge',PRODUCT_STORE:'Product Store',CUSTOMERS_SALES:'Customers & Sales',COMMUNICATIONS:'Communications',PAYMENTS_FINANCE:'Payments & Finance',GRANT_FUNDING:'Grant Funding',PATENT_IP:'Patent & IP',MA_PARTNERSHIPS:'M&A Partnerships',DOCS_PROJECTION:'Docs & Projection',ANALYTICS_FORECAST:'Analytics & Forecast'};
 const ICON={ALL:'M12 3l8 9-8 9-8-9z M12 8l4 4-4 4-4-4z',FIELD_COMMAND:'M4 5h16v11H4z M8 20h8 M12 16v4 M7 9l3 2-3 2',EMERGENCE_CAPTURE:'M12 4a8 8 0 1 0 0 16a8 8 0 1 0 0-16 M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6',PROGRAM_FORGE:'M9 7l-5 5 5 5 M15 7l5 5-5 5 M13 5l-2 14',PRODUCT_STORE:'M4 8l8-4 8 4v8l-8 4-8-4z M4 8l8 4 8-4 M12 12v8',CUSTOMERS_SALES:'M9 11a3 3 0 1 0 0-6a3 3 0 1 0 0 6 M3 19c1-3 3.5-5 6-5s5 2 6 5 M16 6a3 3 0 0 1 0 5 M18 14c1.5.8 2.5 2.5 3 5',COMMUNICATIONS:'M4 5h16v10H9l-5 4z M8 9h8 M8 12h5',PAYMENTS_FINANCE:'M3 7h18v10H3z M3 11h18 M7 15h3',GRANT_FUNDING:'M12 3l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z',PATENT_IP:'M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z M9 12l2 2 4-4',MA_PARTNERSHIPS:'M9 12a4 4 0 1 0 0-.01 M15 12a4 4 0 1 0 0-.01',DOCS_PROJECTION:'M6 3h8l4 4v14H6z M14 3v4h4 M9 12h6 M9 16h6',ANALYTICS_FORECAST:'M4 20V10 M10 20V4 M16 20v-7 M3 20h18',UNASSIGNED:'M12 4a8 8 0 1 0 0 16a8 8 0 1 0 0-16 M8 12h8',SOURCE_TOPIC:'M4 6h6l2 2h8v11H4z M8 13h8'};
 const svg=d=>'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="'+d+'"/></svg>';
 // REL keys that name another EmergION, shown with kin words only.
-const KIN_KEYS={kin_emergion:'KIN',parent_emergion:'KIN',COMPOSITION_KIN:'COMPOSED_WITH',transition_emergion:'SUCCESSOR_KIN',origin:'ORIGIN_KIN',capability_providers:'CAPABILITY_KIN'};
+const KIN_KEYS={kin_emergion:'KIN',kin_link_from:'KIN',kin_link_to:'KIN',parent_emergion:'KIN',COMPOSITION_KIN:'COMPOSED_WITH',transition_emergion:'SUCCESSOR_KIN',origin:'ORIGIN_KIN',capability_providers:'CAPABILITY_KIN'};
 
 let field=null,proj=null,wave=null,live=false;
 let nodes=[],byID=new Map(),links=[],facetOrder=[],filter='ALL',showGov=true,selected=null,asmIdx=0,asmSel=null;
@@ -300,7 +315,7 @@ let nodes=[],byID=new Map(),links=[],facetOrder=[],filter='ALL',showGov=true,sel
 function relRefs(f){const acc=(f&&f.Accepted)||{},gov=(f&&f.AtGOV)||{},out=[],seen=new Set();
  const add=(u,v,k)=>{if(!v||u===v)return;const a=acc[u]?'accepted':gov[u]?'pending':null,b=acc[v]?'accepted':gov[v]?'pending':null;if(!a||!b)return;const key=u+'|'+v+'|'+k;if(seen.has(key))return;seen.add(key);out.push({u,v,k,a:{kind:a},b:{kind:b}})};
  for(const m of [acc,gov])for(const [id,em] of Object.entries(m)){const r=(em&&em.r)||{};
-  for(const k of ['kin_emergion','parent_emergion','transition_emergion','origin','COMPOSITION_KIN'])if(typeof r[k]==='string')add(id,r[k].trim(),k==='parent_emergion'?'kin_emergion':k);
+  for(const k of ['kin_emergion','parent_emergion','transition_emergion','origin','COMPOSITION_KIN','kin_link_from','kin_link_to'])if(typeof r[k]==='string')add(id,r[k].trim(),(k==='parent_emergion'||k==='kin_link_from'||k==='kin_link_to')?'kin_emergion':k);
   if(typeof r.capability_providers==='string')for(const m2 of r.capability_providers.matchAll(/E-[A-Fa-f0-9]+/g))add(id,m2[0],'capability_providers')}
  return out}
 function refCounts(es){let verified=0,pending=0;for(const e of es){if(e.a&&e.b&&e.a.kind==='accepted'&&e.b.kind==='accepted')verified++;else pending++}return {verified,pending}}
@@ -315,7 +330,7 @@ function meta(em){return (em&&em.e&&em.e.m)||{}}
 // <ref-resolve>
 const IDN_G=/E-[0-9A-Fa-f]{6,}/g;
 // </ref-resolve>
-const REL_KIN={kin_emergion:'KIN',parent_emergion:'KIN',COMPOSITION_KIN:'COMPOSED_WITH',transition_emergion:'SUCCESSOR_KIN',origin:'ORIGIN_KIN',capability_providers:'CAPABILITY_KIN'};
+const REL_KIN={kin_emergion:'KIN',kin_link_from:'KIN',kin_link_to:'KIN',parent_emergion:'KIN',COMPOSITION_KIN:'COMPOSED_WITH',transition_emergion:'SUCCESSOR_KIN',origin:'ORIGIN_KIN',capability_providers:'CAPABILITY_KIN'};
 // point in a ball by hash (direction + cube-root radius), never on a shell or ring
 function ball(key,r){const u=rnd(key+'u')*2-1,a=rnd(key+'v')*Math.PI*2,q=Math.sqrt(1-u*u),rr=r*Math.cbrt(.05+.95*rnd(key+'w'));return [Math.cos(a)*q*rr,u*rr*.7,Math.sin(a)*q*rr]}
 function gauss(key){const u=Math.max(1e-6,rnd(key+'g1')),v=rnd(key+'g2');return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
@@ -527,7 +542,7 @@ function select(n,focus){selected=n;const D=$('detail');D.replaceChildren();if(!
  if(n.t)kv('Captured',new Date(n.t).toLocaleString());if(em.m&&em.m.s)kv('Summary',em.m.s);if(em.m&&em.m.h)kv('Source hash',em.m.h.slice(0,16)+'…',true);
  const r=em.r||{},w=el('div');for(const k of Object.keys(KIN_KEYS)){const v=r[k];if(typeof v!=='string'||!v)continue;for(const id of (v.match(/E-[A-Fa-f0-9]+/g)||[])){const o=byID.get(id),pend=!o||o.kind!=='accepted'||n.kind!=='accepted',s=el('span','kin'+(pend?' p':''));s.append(el('em',null,KIN_KEYS[k]),document.createTextNode(shortID(id)));s.title=pend?'Pending (AtGOV) or outside view':'Verified · both REG-accepted';w.append(s)}}
  if(w.childNodes.length)kv('Recorded kin',w);
- if(n.kind==='accepted')kv('Weight',fmt(n.weight)+': '+fmt(n.nl)+' links, '+fmt(n.gov)+' AtGOV refs, '+fmt(n.asm)+' assemblies');if(n.kind==='accepted')kv('Kind',kindOf(n)||'REG_ACCEPTED');if(n.kind==='accepted'&&n.gov)kv('AtGOV refs',fmt(n.gov)+' AtGOV records reference this record');if(n.kind==='pending'&&n.target)kv('References',n.target.id,true);if(n.kind==='pending'){kv('Governance','Awaiting HUMAN_FINAL. Not verified, not counted in verified references.');kv('HUMAN_FINAL',acceptControls(n.id))}
+ if(n.kind==='accepted'&&field&&field.AutoDecided&&field.AutoDecided[n.id]==='APPROVE'){const u=el('div','tok');u.append(document.createTextNode('Accepted by AUTO_POLICY (A01-AUTO-1). '),undoAutoButton(n.id));kv('Auto decision',u)}if(n.kind==='accepted')kv('Weight',fmt(n.weight)+': '+fmt(n.nl)+' links, '+fmt(n.gov)+' AtGOV refs, '+fmt(n.asm)+' assemblies');if(n.kind==='accepted')kv('Kind',kindOf(n)||'REG_ACCEPTED');if(n.kind==='accepted'&&n.gov)kv('AtGOV refs',fmt(n.gov)+' AtGOV records reference this record');if(n.kind==='pending'&&n.target)kv('References',n.target.id,true);if(n.kind==='pending'){kv('Governance','Awaiting HUMAN_FINAL. Not verified, not counted in verified references.');kv('HUMAN_FINAL',acceptControls(n.id))}
  heroSub();D.classList.add('on');if(focus)$('c').scrollIntoView({block:'nearest',behavior:'smooth'});want()}
 
 /* ---------- governed accept ---------- */
@@ -912,6 +927,40 @@ addEventListener('resize',resize);document.addEventListener('visibilitychange',(
 if('IntersectionObserver' in window)new IntersectionObserver(es=>{visible=es[0].isIntersecting;if(visible){lastT=0;want()}}).observe(c);
 reduced.addEventListener&&reduced.addEventListener('change',want);
 
+/* ---------- auto: A01-AUTO policy, worker, reasoner ---------- */
+// <governed-auto> The only other writes: POST /auto/policy (HUMAN_FINAL switch, reason required),
+// POST /auto/worker (worker on/off and reasoner mode; not authority) and POST /auto/undo (HUMAN_FINAL undo).
+// Policy and worker both start OFF. Every switch is a double-press: the first tap arms the button,
+// a second tap within 4 s acts. Switching the policy is a HUMAN_FINAL press and needs a reason.
+let autoSt=null;
+function armTap(b,label,fn){if(b.dataset.armed==='1'){b.dataset.armed='';b.classList.remove('arm');clearTimeout(b._t);fn();return}
+ b.dataset.armed='1';b.classList.add('arm');const old=b.textContent;b.textContent='Tap again: '+label;b._t=setTimeout(()=>{b.dataset.armed='';b.classList.remove('arm');b.textContent=old},4000)}
+function autoLine(a){const p=a.policy||{},w=a.worker||{};return 'Policy '+(p.effective?'ON':(p.on&&p.stale?'ON (stale, switch again)':'OFF'))+' · Worker '+(w.on?'ON':'OFF')+' · '+(w.mode||'local')+(w.last_reasoner?' ('+w.last_reasoner+')':'')+' · '+fmt(p.auto_accepted||0)+' auto-accepted · '+fmt(p.auto_held||0)+' auto-held · '+fmt(p.waiting||0)+' waiting'+(p.eligible&&!p.effective?' · '+fmt(p.eligible)+' would auto-decide':'')+(w.on?' · '+fmt(w.pending||0)+' sources left':'')+(a.worker_error?' · worker error: '+a.worker_error:'')+((w.checkpoint&&w.checkpoint.last_error)?' · last reasoner error: '+w.checkpoint.last_error:'')}
+function renderAuto(){const a=autoSt;if(!a){setText('auPol','—');setText('auLine','');return}const p=a.policy||{},w=a.worker||{};
+ setText('auPol',p.effective?'ON':'OFF');setText('auWk',w.on?'ON':'OFF');setText('auMode',(w.mode||'local')+(w.mode!=='local'&&!w.online_configured?' · online not set':''));
+ setText('auAcc',fmt(p.auto_accepted||0));setText('auHeld',fmt(p.auto_held||0));setText('auWait',fmt(p.waiting||0));setText('auIns',fmt(w.insight_records||0));setText('auLine',autoLine(a));
+ const pb=$('auPolB'),wb=$('auWkB'),ms=$('auModeS');
+ if(pb&&pb.dataset.armed!=='1'){pb.textContent=p.effective?'Policy ON · turn off':'Policy OFF · turn on';pb.classList.toggle('on',!!p.effective)}
+ if(wb&&wb.dataset.armed!=='1'){wb.textContent=w.on?'Worker ON · stop':'Worker OFF · start';wb.classList.toggle('on',!!w.on)}
+ if(ms&&document.activeElement!==ms)ms.value=w.mode||'local'}
+async function pollAuto(){try{autoSt=await getJSON('/auto/status')}catch(e){autoSt=null}renderAuto()}
+async function autoPost(path,body){const tok=savedToken();if(!tok){alert('The fieldd token is needed. Open /living from this phone (127.0.0.1) or paste the token on a record.');return null}
+ try{const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:JSON.stringify(body)});const j=await r.json().catch(()=>({error:'HTTP '+r.status}));if(!r.ok||j.error){alert(j.error||('HTTP '+r.status));return null}return j}
+ catch(e){alert('Could not reach fieldd. Refresh before retrying.');return null}}
+function autoPolicyPress(){const on=!(autoSt&&autoSt.policy&&autoSt.policy.effective);
+ const why=prompt('HUMAN_FINAL reason for turning the A01-AUTO auto-accept policy '+(on?'ON':'OFF')+' (required):',on?'Michael: low-risk records auto-accept under A01-AUTO-1':'Michael: pause auto-accept');if(why===null)return;if(!why.trim()){alert('A HUMAN_FINAL press needs a reason.');return}
+ autoPost('/auto/policy',{state:on?'on':'off',reason:why.trim()}).then(j=>{if(j){pollAuto();refresh(true)}})}
+function autoWorkerPress(){const on=!(autoSt&&autoSt.worker&&autoSt.worker.on);autoPost('/auto/worker',{on:on}).then(j=>{if(j)pollAuto()})}
+{const pb=$('auPolB'),wb=$('auWkB'),ms=$('auModeS');
+ if(pb)pb.onclick=()=>armTap(pb,(autoSt&&autoSt.policy&&autoSt.policy.effective)?'policy OFF':'policy ON',autoPolicyPress);
+ if(wb)wb.onclick=()=>armTap(wb,(autoSt&&autoSt.worker&&autoSt.worker.on)?'stop worker':'start worker',autoWorkerPress);
+ if(ms)ms.onchange=()=>{const m=ms.value;autoPost('/auto/worker',{mode:m}).then(j=>{if(!j&&autoSt)ms.value=autoSt.worker.mode;pollAuto()})}}
+// One-press HUMAN_FINAL undo of an AUTO_POLICY accept (REVERT to HELD), shown on the record.
+function undoAutoButton(id){const b=el('button','acc hold','Undo auto-accept');b.title='HUMAN_FINAL REVERT: move '+id+' from REG-accepted to HELD (append-only)';
+ b.onclick=e=>{e.stopPropagation();armTap(b,'undo',()=>{const why=prompt('HUMAN_FINAL reason for undoing the auto-accept of '+id+' (required):');if(why===null||!why.trim())return;
+  autoPost('/auto/undo',{emergion_id:id,reason:why.trim()}).then(j=>{if(j){pollAuto();refreshAfterDecision([id]).then(()=>select(null))}})})};return b}
+// </governed-auto>
+
 /* ---------- data ---------- */
 const ax=$('ax');for(const [k,v] of AXIOMS){const d=el('div');d.append(el('b',null,k),el('span',null,v));ax.append(d)}
 async function getJSON(u){const q=u+(u.indexOf('?')>=0?'&':'?')+'_='+Date.now();const r=await fetch(q,{cache:'no-store'});if(!r.ok)throw Error(u+' HTTP '+r.status);return r.json()}
@@ -924,5 +973,5 @@ async function refresh(force){const gen=++refreshGen;if(loading){if(!force)retur
   if(gen!==refreshGen)return;if(got){field=nextField;live=true}else live=false;proj=nextProj;build();renderPanels()}
  finally{if(gen===refreshGen)loading=false}if(gen===refreshGen)want()}
 getJSON('/real_temporal_wave.json').then(d=>{wave=d;renderPanels()}).catch(()=>{wave=null});
-sprites0();resize();renderPanels();refresh().then(pollEvents);setInterval(refresh,120000);setInterval(pollEvents,7000);
+sprites0();resize();renderPanels();refresh().then(pollEvents);pollAuto();setInterval(pollAuto,10000);setInterval(refresh,120000);setInterval(pollEvents,7000);
 </script></body></html>

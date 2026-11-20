@@ -238,8 +238,24 @@ type State struct {
 	// the ledger keeps every event, the refused record stays Approved (not
 	// Accepted) and the existing owner keeps the Archonym.
 	ArchonymConflicts []ArchonymConflict `json:",omitempty"`
-	Events            int
-	TipHash           string
+	// AutoPolicy is the A01-AUTO auto-accept switch derived on replay from
+	// the last REG-accepted AUTO_POLICY_SWITCH record. Nil means never
+	// switched (OFF). Derived, never written.
+	AutoPolicy *AutoPolicyState `json:",omitempty"`
+	// AutoDecided maps a record ID to the AUTO_POLICY decision currently in
+	// force on it (APPROVE for REG-accepted, HOLD for held). A HUMAN_FINAL
+	// REVERT or RESUME removes the entry. Derived, never written.
+	AutoDecided map[string]string `json:",omitempty"`
+	Events      int
+	TipHash     string
+}
+
+// AutoPolicyState is the effective auto-accept switch. Derived, read-only.
+type AutoPolicyState struct {
+	On       bool   `json:"on"`
+	Version  string `json:"version"`
+	SHA256   string `json:"sha256"`
+	SwitchID string `json:"switch_id"`
 }
 
 // ArchonymConflict is one REG receipt refused on replay by Archonym
