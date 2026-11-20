@@ -225,6 +225,8 @@ func newHTTPMuxOn(rt *fieldapi.Runtime, token string, loopback bool, bindAddr st
 	mux.HandleFunc("/living-universe", livingUniverse)
 	// /living is a read-only alias for the same page (the phone uses /living).
 	mux.HandleFunc("/living", livingUniverse)
+	// Installable app shell (manifest, service worker, icons). See pwa.go.
+	registerPWARoutes(mux, protect)
 
 	mux.HandleFunc("/field.html", protect(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodGet {
