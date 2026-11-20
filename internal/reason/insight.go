@@ -237,7 +237,7 @@ func (l LocalInsighter) Args(prompt string) []string {
 	if n <= 0 {
 		n = 120
 	}
-	return []string{"-m", l.Model, "-p", prompt, "-n", strconv.Itoa(n), "-c", "1024",
+	return []string{"-m", l.Model, "-p", prompt, "-n", strconv.Itoa(n), "-c", "2048",
 		"-t", strconv.Itoa(threads), "--temp", "0", "-no-cnv", "--no-display-prompt"}
 }
 
@@ -263,7 +263,7 @@ func (l LocalInsighter) Insight(ctx context.Context, in InsightInput) (Insight, 
 		if errors.Is(cctx.Err(), context.DeadlineExceeded) {
 			return Insight{}, fmt.Errorf("local model timed out after %s", timeout)
 		}
-		return Insight{}, fmt.Errorf("local model failed: %v", err)
+		return Insight{}, fmt.Errorf("local model failed: %v: %s", err, stderrTail(errb.String(), 240))
 	}
 	return ParseInsight(out.String(), in)
 }
@@ -475,4 +475,28 @@ func (s *SwitchInsighter) Insight(ctx context.Context, in InsightInput) (Insight
 	}
 	s.use(s.Local.Name())
 	return s.Local.Insight(ctx, in)
+}
+
+// stderrTail keeps the last non-banner lines of llama.cpp stderr (at most n
+// bytes, one line) so the Auto panel shows why the local model failed.
+func stderrTail(s string, n int) string {
+	var keep []string
+	for _, ln := range strings.Split(s, "\n") {
+		ln = strings.TrimSpace(ln)
+		if ln == "" || strings.HasPrefix(ln, "llama_model_loader") || strings.HasPrefix(ln, "print_info") || strings.HasPrefix(ln, "load_tensors") {
+			continue
+		}
+		keep = append(keep, ln)
+	}
+	if len(keep) > 3 {
+		keep = keep[len(keep)-3:]
+	}
+	out := strings.Join(keep, " | ")
+	if len(out) > n {
+		out = out[len(out)-n:]
+	}
+	if out == "" {
+		return "no error text"
+	}
+	return out
 }
