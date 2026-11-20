@@ -2,6 +2,7 @@ package field
 
 import (
 	"emergion-sovereign-runtime/internal/core"
+	"strings"
 	"testing"
 	"time"
 )
@@ -485,7 +486,7 @@ func TestAcceptedKinRootStopsAtGovernedReturnedPredecessor(t *testing.T) {
 	}
 }
 
-func TestREGReplayRejectsArchonymCollisionAcrossSovereignEmergIONs(t *testing.T) {
+func TestREGReplayRefusesArchonymCollisionAcrossSovereignEmergIONs(t *testing.T) {
 	first := core.EmergION{
 		IDN: "E-ARCHONYM-FIRST",
 		STA: core.StateAtGOV,
@@ -555,8 +556,44 @@ func TestREGReplayRejectsArchonymCollisionAcrossSovereignEmergIONs(t *testing.T)
 		},
 	}
 
-	if _, err := Rebuild(events); err == nil {
+	// Replay refuses the colliding REG receipt without failing the whole
+	// field: the first owner keeps the Archonym, the second stays Approved
+	// and the conflict is reported. The ledger itself is untouched.
+	st, err := Rebuild(events)
+	if err != nil {
+		t.Fatalf("Archonym collision failed replay: %v", err)
+	}
+	if _, ok := st.Accepted[second.IDN]; ok {
 		t.Fatal("duplicate sovereign Archonym unexpectedly entered REG")
+	}
+	if _, ok := st.Accepted[first.IDN]; !ok {
+		t.Fatal("Archonym owner lost REG acceptance")
+	}
+	if _, ok := st.Approved[second.IDN]; !ok {
+		t.Fatal("refused record not kept as Approved")
+	}
+	if len(st.ArchonymConflicts) != 1 ||
+		st.ArchonymConflicts[0] != (core.ArchonymConflict{
+			EmergIONID: second.IDN,
+			Archonym:   "VERITEX CORE",
+			OwnerID:    first.IDN,
+			OwnerState: OwnerREGAccepted,
+			REGEventID: "EV-R-SECOND",
+		}) {
+		t.Fatalf("conflicts = %+v", st.ArchonymConflicts)
+	}
+	// The write-time gate stays strict for the same pair.
+	pending := second
+	pending.STA = core.StateAtGOV
+	if err := CheckArchonymForAccept(st, pending); err == nil ||
+		!strings.Contains(err.Error(), "already belongs to REG-accepted sovereign EmergION "+first.IDN) {
+		t.Fatalf("strict accept gate = %v", err)
+	}
+	// A waiting candidate with the colliding name is fine on replay.
+	waiting := core.EmergION{IDN: "E-ARCHONYM-WAITING", STA: core.StateAtGOV, EVO: core.Evolution{Version: 1, Metadata: &core.Metadata{Archonym: "veritex core"}}}
+	st, err = Rebuild(append(events[:3:3], core.Event{Type: "C", ID: "EV-C-WAITING", EmergION: &waiting}))
+	if err != nil || len(st.AtGOV) != 1 || len(st.ArchonymConflicts) != 0 {
+		t.Fatalf("waiting colliding candidate: err=%v atgov=%d conflicts=%d", err, len(st.AtGOV), len(st.ArchonymConflicts))
 	}
 }
 
@@ -851,7 +888,7 @@ func TestREGReplayAllowsArchonymContinuationFromGovernedReturnedPredecessor(t *t
 	}
 }
 
-func TestREGReplayRejectsArchonymReuseAfterReturnWithoutReturnedKinLink(t *testing.T) {
+func TestREGReplayRefusesArchonymReuseAfterReturnWithoutReturnedKinLink(t *testing.T) {
 	returned := core.EmergION{
 		IDN: "E-ARCHONYM-RETURNED-OWNER",
 		STA: core.StateAtGOV,
@@ -913,8 +950,17 @@ func TestREGReplayRejectsArchonymReuseAfterReturnWithoutReturnedKinLink(t *testi
 		},
 	}
 
-	if _, err := Rebuild(events); err == nil {
+	st, err := Rebuild(events)
+	if err != nil {
+		t.Fatalf("Archonym collision failed replay: %v", err)
+	}
+	if _, ok := st.Accepted[unlinked.IDN]; ok {
 		t.Fatal("unlinked EmergION reused governed returned Archonym")
+	}
+	if len(st.ArchonymConflicts) != 1 ||
+		st.ArchonymConflicts[0].EmergIONID != unlinked.IDN ||
+		st.ArchonymConflicts[0].OwnerState != OwnerReturned {
+		t.Fatalf("conflicts = %+v", st.ArchonymConflicts)
 	}
 }
 

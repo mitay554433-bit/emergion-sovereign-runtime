@@ -29,6 +29,14 @@ type LinkedProjection struct {
 	// Trajectories is filled by the caller that holds the events (capture
 	// times); Linked(st) leaves it empty. Derived, read-only.
 	Trajectories []LinkedTrajectory `json:"trajectories"`
+	// ArchonymConflicts lists REG receipts that replay refused because the
+	// Archonym already belongs to another sovereign EmergION (the owner keeps
+	// it; the refused record stays Approved). Derived, read-only.
+	ArchonymConflicts []core.ArchonymConflict `json:"archonym_conflicts"`
+	// ArchonymWaiting lists AtGOV records whose proposed Archonym already
+	// belongs to another sovereign EmergION. They stay visible by ID and
+	// summary; a HUMAN_FINAL APPROVE of them is refused at accept time.
+	ArchonymWaiting []string `json:"archonym_waiting_conflicts"`
 }
 
 type LinkedFacetGroup struct {
@@ -91,6 +99,10 @@ func Linked(st core.State) LinkedProjection {
 		Realizations:    []LinkedRealization{},
 		HumanFinalQueue: []LinkedHumanFinalItem{},
 		Trajectories:    []LinkedTrajectory{},
+		ArchonymConflicts: append(
+			[]core.ArchonymConflict{},
+			st.ArchonymConflicts...,
+		),
 	}
 	for _, f := range spatialFacetOrder() {
 		out.FacetOrder = append(out.FacetOrder, string(f))
@@ -162,6 +174,14 @@ func Linked(st core.State) LinkedProjection {
 	for _, r := range realizationRows(st) {
 		out.Realizations = append(out.Realizations, LinkedRealization(r))
 	}
+
+	out.ArchonymWaiting = []string{}
+	for id, em := range st.AtGOV {
+		if owner, _, err := livefield.ArchonymOwner(st, em); err != nil || owner != "" {
+			out.ArchonymWaiting = append(out.ArchonymWaiting, id)
+		}
+	}
+	sort.Strings(out.ArchonymWaiting)
 
 	lifecycle := rows(st)
 	sort.Slice(lifecycle, func(i, j int) bool { return lifecycle[i].ID < lifecycle[j].ID })

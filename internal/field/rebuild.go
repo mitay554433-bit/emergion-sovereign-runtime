@@ -157,98 +157,24 @@ func Rebuild(events []core.Event) (core.State, error) {
 			if err != nil {
 				return st, err
 			}
-			if em.EVO.Metadata != nil {
-				archonym := strings.TrimSpace(em.EVO.Metadata.Archonym)
-				if archonym != "" {
-					for acceptedID, accepted := range st.Accepted {
-						if accepted.EVO.Metadata == nil {
-							continue
-						}
-
-						acceptedArchonym := strings.TrimSpace(accepted.EVO.Metadata.Archonym)
-						if acceptedArchonym == "" || !strings.EqualFold(archonym, acceptedArchonym) {
-							continue
-						}
-
-						predecessor := strings.TrimSpace(em.EVO.Supersedes)
-						seen := map[string]bool{}
-						sameKin := false
-
-						for predecessor != "" {
-							if seen[predecessor] {
-								return st, fmt.Errorf("Kin lineage cycle at %s", predecessor)
-							}
-							seen[predecessor] = true
-
-							if predecessor == acceptedID {
-								sameKin = true
-								break
-							}
-
-							ancestor, ok := st.Accepted[predecessor]
-							if !ok {
-								return st, fmt.Errorf("Kin predecessor not REG-accepted: %s", predecessor)
-							}
-
-							predecessor = strings.TrimSpace(ancestor.EVO.Supersedes)
-						}
-
-						if sameKin {
-							continue
-						}
-
-						return st, fmt.Errorf(
-							"Archonym %q already belongs to REG-accepted sovereign EmergION %s",
-							archonym,
-							acceptedID,
-						)
-
-					}
-
-					for returnedID, returned := range st.Returned {
-						if returned.EVO.Metadata == nil {
-							continue
-						}
-
-						returnedArchonym := strings.TrimSpace(returned.EVO.Metadata.Archonym)
-						if returnedArchonym == "" || !strings.EqualFold(archonym, returnedArchonym) {
-							continue
-						}
-
-						predecessor := strings.TrimSpace(em.EVO.Supersedes)
-						seen := map[string]bool{}
-						sameKin := false
-
-						for predecessor != "" {
-							if seen[predecessor] {
-								return st, fmt.Errorf("Kin lineage cycle at %s", predecessor)
-							}
-							seen[predecessor] = true
-
-							if predecessor == returnedID {
-								sameKin = true
-								break
-							}
-
-							ancestor, ok := st.Accepted[predecessor]
-							if !ok {
-								break
-							}
-
-							predecessor = strings.TrimSpace(ancestor.EVO.Supersedes)
-						}
-
-						if sameKin {
-							continue
-						}
-
-						return st, fmt.Errorf(
-							"Archonym %q already belongs to HUMAN_FINAL RETURNED sovereign EmergION %s",
-							archonym,
-							returnedID,
-						)
-					}
-				}
+			ownerID, ownerState, err := ArchonymOwner(st, em)
+			if err != nil {
+				return st, err
+			}
+			if ownerID != "" {
+				// The Archonym already belongs to another sovereign
+				// EmergION. The receipt stays in the ledger untouched, but
+				// replay refuses it: the record stays Approved, the owner
+				// keeps the name, and the conflict is reported instead of
+				// failing every read of the field.
+				st.ArchonymConflicts = append(st.ArchonymConflicts, core.ArchonymConflict{
+					EmergIONID: em.IDN,
+					Archonym:   strings.TrimSpace(em.EVO.Metadata.Archonym),
+					OwnerID:    ownerID,
+					OwnerState: ownerState,
+					REGEventID: ev.ID,
+				})
+				continue
 			}
 
 			delete(st.Approved, em.IDN)
@@ -349,4 +275,107 @@ func AcceptedKinRoot(
 			predecessor,
 		)
 	}
+}
+
+// Archonym owner states reported by ArchonymOwner.
+const (
+	OwnerREGAccepted = "REG_ACCEPTED"
+	OwnerReturned    = "HUMAN_FINAL_RETURNED"
+)
+
+// ArchonymOwner reports which other sovereign EmergION already owns em's
+// Archonym: a REG-accepted record (OwnerREGAccepted) or a HUMAN_FINAL
+// RETURNED one (OwnerReturned). Continuation through em's
+// own Supersedes Kin lineage is not a conflict. ownerID is empty when the
+// name is free. err reports a broken Kin lineage.
+func ArchonymOwner(st core.State, em core.EmergION) (ownerID string, ownerState string, err error) {
+	if em.EVO.Metadata == nil {
+		return "", "", nil
+	}
+	archonym := strings.TrimSpace(em.EVO.Metadata.Archonym)
+	if archonym == "" {
+		return "", "", nil
+	}
+	for acceptedID, accepted := range st.Accepted {
+		if accepted.EVO.Metadata == nil {
+			continue
+		}
+		acceptedArchonym := strings.TrimSpace(accepted.EVO.Metadata.Archonym)
+		if acceptedArchonym == "" || !strings.EqualFold(archonym, acceptedArchonym) {
+			continue
+		}
+		predecessor := strings.TrimSpace(em.EVO.Supersedes)
+		seen := map[string]bool{}
+		sameKin := false
+		for predecessor != "" {
+			if seen[predecessor] {
+				return "", "", fmt.Errorf("Kin lineage cycle at %s", predecessor)
+			}
+			seen[predecessor] = true
+			if predecessor == acceptedID {
+				sameKin = true
+				break
+			}
+			ancestor, ok := st.Accepted[predecessor]
+			if !ok {
+				return "", "", fmt.Errorf("Kin predecessor not REG-accepted: %s", predecessor)
+			}
+			predecessor = strings.TrimSpace(ancestor.EVO.Supersedes)
+		}
+		if sameKin {
+			continue
+		}
+		return acceptedID, OwnerREGAccepted, nil
+	}
+	for returnedID, returned := range st.Returned {
+		if returned.EVO.Metadata == nil {
+			continue
+		}
+		returnedArchonym := strings.TrimSpace(returned.EVO.Metadata.Archonym)
+		if returnedArchonym == "" || !strings.EqualFold(archonym, returnedArchonym) {
+			continue
+		}
+		predecessor := strings.TrimSpace(em.EVO.Supersedes)
+		seen := map[string]bool{}
+		sameKin := false
+		for predecessor != "" {
+			if seen[predecessor] {
+				return "", "", fmt.Errorf("Kin lineage cycle at %s", predecessor)
+			}
+			seen[predecessor] = true
+			if predecessor == returnedID {
+				sameKin = true
+				break
+			}
+			ancestor, ok := st.Accepted[predecessor]
+			if !ok {
+				break
+			}
+			predecessor = strings.TrimSpace(ancestor.EVO.Supersedes)
+		}
+		if sameKin {
+			continue
+		}
+		return returnedID, OwnerReturned, nil
+	}
+	return "", "", nil
+}
+
+// CheckArchonymForAccept is the strict write-time gate: it refuses a
+// HUMAN_FINAL APPROVE (and so its REG receipt) when em's Archonym already
+// belongs to another sovereign EmergION. Callers run it before writing any
+// decision, so a colliding record is refused and nothing is appended.
+func CheckArchonymForAccept(st core.State, em core.EmergION) error {
+	ownerID, ownerState, err := ArchonymOwner(st, em)
+	if err != nil {
+		return err
+	}
+	if ownerID == "" {
+		return nil
+	}
+	archonym := strings.TrimSpace(em.EVO.Metadata.Archonym)
+	if ownerState == OwnerReturned {
+		return fmt.Errorf("Archonym %q already belongs to HUMAN_FINAL RETURNED sovereign EmergION %s", archonym, ownerID)
+	}
+	return fmt.Errorf("Archonym %q already belongs to REG-accepted sovereign EmergION %s", archonym, ownerID)
 }
