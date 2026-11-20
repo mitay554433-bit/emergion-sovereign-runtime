@@ -72,19 +72,43 @@ func livingUniverseHTML(t *testing.T) string {
 	return string(b)
 }
 
-// The page keeps the authority banner, reads only the read-only projection
-// routes, and never posts to a mutating route.
+// The page keeps the authority banner and reads only the read-only projection
+// routes. Its single write is the governed Accept block: a human press posts
+// a HUMAN_FINAL APPROVE to the existing /decide route with a pasted token.
+// Outside that block nothing posts, authorizes or touches storage.
 func TestLivingUniversePageIsReadOnlyProjection(t *testing.T) {
 	src := livingUniverseHTML(t)
-	for _, want := range []string{"COSL + REG remain authoritative", "visualization only", "/field.json", "/projection.json", "/real_temporal_wave.json", "Verified references", "Pending (AtGOV)", "NOT_FOUND_YET"} {
+	for _, want := range []string{"COSL + REG remain authoritative", "visualization", "/field.json", "/projection.json", "/real_temporal_wave.json", "Verified references", "NOT_FOUND_YET"} {
 		if !strings.Contains(src, want) {
 			t.Fatalf("living-universe.html missing %q", want)
 		}
 	}
-	for _, banned := range []string{"/decide", "/authorize", "method:'POST'", "method:\"POST\"", "localStorage", "parent_child", "hierarchy"} {
-		if strings.Contains(src, banned) {
-			t.Fatalf("living-universe.html must not contain %q", banned)
+	acc := regexp.MustCompile(`(?s)// <governed-accept>.*?// </governed-accept>`).FindString(src)
+	if acc == "" {
+		t.Fatal("governed-accept block missing")
+	}
+	rest := strings.Replace(src, acc, "", 1)
+	for _, banned := range []string{"/decide'", "/authorize", "method:'POST'", "method:\"POST\"", "localStorage", "parent_child", "hierarchy"} {
+		if strings.Contains(rest, banned) {
+			t.Fatalf("living-universe.html outside governed-accept must not contain %q", banned)
 		}
+	}
+	if strings.Contains(acc, "/authorize") || strings.Count(acc, "fetch(") != 1 || !strings.Contains(acc, "fetch('/decide',{method:'POST'") {
+		t.Fatal("governed-accept must make exactly one fetch: POST /decide")
+	}
+	if !strings.Contains(acc, "decision:'APPROVE'") || !strings.Contains(acc, "'Authorization':'Bearer '+tok") {
+		t.Fatal("governed-accept must post APPROVE with the pasted bearer token")
+	}
+	// Only a human press calls it: defined once, called once from the button.
+	if n := strings.Count(src, "acceptAtGOV("); n != 2 || !strings.Contains(acc, "b.onclick=e=>{e.stopPropagation();acceptAtGOV(id,b)}") {
+		t.Fatalf("acceptAtGOV( appears %d times; want definition + button handler only", n)
+	}
+	if !strings.Contains(acc, "if(!reason.trim())") {
+		t.Fatal("a HUMAN_FINAL reason must be required")
+	}
+	// Never embed a token: no long hex/base64 literals in the page.
+	if m := regexp.MustCompile(`['"][A-Za-z0-9+/_=-]{32,}['"]`).FindString(src); m != "" {
+		t.Fatalf("page embeds a token-like literal %s", m)
 	}
 }
 

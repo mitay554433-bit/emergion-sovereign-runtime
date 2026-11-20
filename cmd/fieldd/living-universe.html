@@ -115,6 +115,9 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .ax b{font-family:var(--mono);color:#4f8dff;font-size:11px;font-weight:700}
 .list{display:grid;grid-template-columns:minmax(0,1fr);min-width:0}
 .pb{min-width:0}.ps,.pt{overflow-wrap:anywhere}
+.qrow{display:flex;gap:8px;align-items:center;min-width:0;border-top:1px solid var(--line2)}.qrow .row{border-top:0;flex:1}
+.acc{font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:7px 10px;border-radius:8px;border:1px solid rgba(59,130,246,.75);background:rgba(29,78,216,.22);color:#fff;min-height:32px;white-space:nowrap}.acc:disabled{opacity:.5}
+.tok{display:flex;gap:6px;min-width:0}.tok input{flex:1;min-width:0;font:inherit;font-size:11px;padding:6px 8px;border-radius:8px;border:1px solid var(--line2);background:#05070d;color:var(--ink)}
 .row{min-width:0;display:flex;justify-content:space-between;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--line2);font-size:12px;text-align:left;width:100%}
 .row:first-child{border-top:0}
 .row .l{min-width:0;flex:1 1 auto;overflow:hidden}
@@ -212,7 +215,7 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
     <canvas id="c" aria-label="Interactive FIELD render. Drag to orbit, pinch or scroll to zoom, tap a node to inspect."></canvas>
     <div id="evtip" role="status" aria-live="polite"></div>
     <div class="hfoot">
-     <div class="auth"><span class="shield"></span><b>COSL + REG remain authoritative</b> · visualization only</div>
+     <div class="auth"><span class="shield"></span><b>COSL + REG remain authoritative</b> · visualization · Accept = HUMAN_FINAL</div>
      <div class="hrow"><details class="lgd" id="lgd"><summary>Legend ▾</summary><div class="legend"><span id="kindLg" style="display:contents"></span><span class="lg"><i class="sw g"></i>AtGOV</span><span class="lg"><i class="sw k"></i>Kin / REL link</span><span class="lg"><i class="sw a"></i>Composed with</span><span class="lg"><i class="sw c"></i>Event comet</span></div></details>
      <div class="ctl"><button id="bLbl" aria-pressed="false" title="Show a few small title tags">Labels</button><button id="bGov" aria-pressed="true" title="Show AtGOV records awaiting HUMAN_FINAL">AtGOV</button><button id="bFit" title="Reset view">Reset</button></div></div>
     </div>
@@ -242,7 +245,7 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 </div>
 
 <section class="panel"><div class="ph"><span class="pt">Field Timeline <i>• Recent Manifestations</i></span><span class="ps" id="tlMeta">by capture time</span></div><div class="tlw"><div class="tl" id="tl"></div></div></section>
-<div class="foot">Read-only projection of /field.json, /projection.json and /real_temporal_wave.json · nothing here writes, decides or authorizes · COSL + REG remain authoritative · visualization only</div>
+<div class="foot">Projection of /field.json, /projection.json and /real_temporal_wave.json · the only write is a human Accept press, recorded as HUMAN_FINAL APPROVE through /decide (same path as <code>field decide</code>) · COSL + REG remain authoritative · visualization only</div>
 </div>
 
 <script>
@@ -414,7 +417,7 @@ function renderPanels(){
 }
 let hfQ=[],hfPage=0;const HF_PAGE=5;
 function renderQueue(){const L=$('hfList');if(!L)return;const pages=Math.max(1,Math.ceil(hfQ.length/HF_PAGE));hfPage=Math.max(0,Math.min(pages-1,hfPage));L.replaceChildren();
- for(const it of hfQ.slice(hfPage*HF_PAGE,hfPage*HF_PAGE+HF_PAGE)){const n=byID.get(it.id),b=el('button','row'),l=el('span','l'),nm=n?nameOf(n):(it.summary&&it.summary!==it.id?it.summary:'AtGOV record');l.append(el('div',null,nm),el('small',null,it.id));b.title=nm;b.append(l,el('span','r','AtGOV'));if(n)b.onclick=()=>select(n,true);L.append(b)}
+ for(const it of hfQ.slice(hfPage*HF_PAGE,hfPage*HF_PAGE+HF_PAGE)){const n=byID.get(it.id),b=el('button','row'),l=el('span','l'),nm=n?nameOf(n):(it.summary&&it.summary!==it.id?it.summary:'AtGOV record');l.append(el('div',null,nm),el('small',null,it.id));b.title=nm;b.append(l,el('span','r','AtGOV'));if(n)b.onclick=()=>select(n,true);const q=el('div','qrow');q.append(b,acceptButton(it.id));L.append(q)}
  const a=hfPage*HF_PAGE+1,z=Math.min(hfQ.length,a+HF_PAGE-1);setText('hfPage',`${fmt(a)}–${fmt(z)} of ${fmt(hfQ.length)}`);$('hfPrev').disabled=hfPage===0;$('hfNext').disabled=hfPage>=pages-1}
 function renderNav(){const nav=$('nav');nav.replaceChildren();
  const groups=proj&&Array.isArray(proj.facet_groups)?proj.facet_groups.map(g=>({key:g.facet,n:(g.members||[]).length})):facetOrder.map(f=>({key:f,n:nodes.filter(x=>x.kind==='accepted'&&x.facets.includes(f)).length}));
@@ -449,8 +452,33 @@ function select(n,focus){selected=n;const D=$('detail');D.replaceChildren();if(!
  if(n.t)kv('Captured',new Date(n.t).toLocaleString());if(em.m&&em.m.s)kv('Summary',em.m.s);if(em.m&&em.m.h)kv('Source hash',em.m.h.slice(0,16)+'…',true);
  const r=em.r||{},w=el('div');for(const k of Object.keys(KIN_KEYS)){const v=r[k];if(typeof v!=='string'||!v)continue;for(const id of (v.match(/E-[A-Fa-f0-9]+/g)||[])){const o=byID.get(id),pend=!o||o.kind!=='accepted'||n.kind!=='accepted',s=el('span','kin'+(pend?' p':''));s.append(el('em',null,KIN_KEYS[k]),document.createTextNode(shortID(id)));s.title=pend?'Pending (AtGOV) or outside view':'Verified · both REG-accepted';w.append(s)}}
  if(w.childNodes.length)kv('Recorded kin',w);
- if(n.kind==='accepted')kv('Weight',fmt(n.weight)+': '+fmt(n.nl)+' links, '+fmt(n.gov)+' AtGOV refs, '+fmt(n.asm)+' assemblies');if(n.kind==='accepted')kv('Kind',kindOf(n)||'REG_ACCEPTED');if(n.kind==='accepted'&&n.gov)kv('AtGOV refs',fmt(n.gov)+' AtGOV records reference this record');if(n.kind==='pending'&&n.target)kv('References',n.target.id,true);if(n.kind==='pending')kv('Governance','Awaiting HUMAN_FINAL. Not verified, not counted in verified references.');
+ if(n.kind==='accepted')kv('Weight',fmt(n.weight)+': '+fmt(n.nl)+' links, '+fmt(n.gov)+' AtGOV refs, '+fmt(n.asm)+' assemblies');if(n.kind==='accepted')kv('Kind',kindOf(n)||'REG_ACCEPTED');if(n.kind==='accepted'&&n.gov)kv('AtGOV refs',fmt(n.gov)+' AtGOV records reference this record');if(n.kind==='pending'&&n.target)kv('References',n.target.id,true);if(n.kind==='pending'){kv('Governance','Awaiting HUMAN_FINAL. Not verified, not counted in verified references.');kv('HUMAN_FINAL',acceptControls(n.id))}
  D.classList.add('on');if(focus)$('c').scrollIntoView({block:'nearest',behavior:'smooth'});want()}
+
+/* ---------- governed accept ---------- */
+// <governed-accept> The ONLY write on this page. A human pressing Accept records a HUMAN_FINAL
+// APPROVE through the existing POST /decide route (fieldapi.Decide: gov.Decide with authority
+// HUMAN_FINAL, then reg.Accept), the same receipts `field decide <id> APPROVE <reason>` writes.
+// A reason is required. The bearer token is never embedded: the operator pastes it once and it
+// is kept in this browser's localStorage under fieldd.token. Nothing here accepts automatically.
+const TOKEN_KEY='fieldd.token';
+function savedToken(){try{return localStorage.getItem(TOKEN_KEY)||''}catch(e){return ''}}
+function storeToken(v){try{v?localStorage.setItem(TOKEN_KEY,v):localStorage.removeItem(TOKEN_KEY)}catch(e){}}
+function acceptBody(id,reason){return JSON.stringify({emergion_id:id,decision:'APPROVE',reason:reason})}
+async function acceptAtGOV(id,btn){const tok=savedToken();if(!tok){alert('Paste the fieldd token first (from fieldd.token in the state directory).');return}
+ const reason=prompt('HUMAN_FINAL reason for accepting '+id+' (required):');if(reason===null)return;if(!reason.trim()){alert('A HUMAN_FINAL decision requires an explicit reason.');return}
+ if(!confirm('Accept '+id+'?\nThis records a HUMAN_FINAL APPROVE and REG acceptance.'))return;
+ if(btn)btn.disabled=true;
+ try{const r=await fetch('/decide',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:acceptBody(id,reason.trim())});
+  if(r.status===401){storeToken('');alert('Token refused (401). Paste the current fieldd token and retry.');if(selected)select(selected);return}
+  const res=await r.json().catch(()=>({error:'HTTP '+r.status}));if(!r.ok||res.error){alert(res.error||('HUMAN_FINAL decision was not accepted (HTTP '+r.status+').'));return}
+  await refresh();const n=byID.get(id);if(n)select(n)}
+ catch(e){alert('HUMAN_FINAL decision could not be confirmed. Refresh before retrying.')}
+ finally{if(btn)btn.disabled=false}}
+function acceptButton(id){const b=el('button','acc','Accept');b.title='Record HUMAN_FINAL APPROVE for '+id+' (reason required)';b.onclick=e=>{e.stopPropagation();acceptAtGOV(id,b)};return b}
+function acceptControls(id){const w=el('div');if(!savedToken()){const f=el('div','tok'),i=el('input');i.type='password';i.placeholder='paste fieldd token once';i.autocomplete='off';const s=el('button','acc','Save');s.onclick=()=>{const v=i.value.trim();if(v){storeToken(v);select(byID.get(id)||selected)}};f.append(i,s);w.append(f)}
+ else{const f=el('div','tok');const a=acceptButton(id),fg=el('button','acc','Forget token');fg.style.background='none';fg.onclick=()=>{storeToken('');select(byID.get(id)||selected)};f.append(a,fg);w.append(f)}return w}
+// </governed-accept>
 
 /* ---------- renderer ---------- */
 const c=$('c'),g=c.getContext('2d'),reduced=matchMedia('(prefers-reduced-motion: reduce)');
