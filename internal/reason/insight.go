@@ -105,6 +105,16 @@ func LocalPrompt(in InsightInput) string {
 	return insightPrompt(in, 80, 50, 60)
 }
 
+// localTurn wraps the short prompt for llama-completion: Gemma's chat turns
+// when the model is Gemma, and the answer is started with "SUMMARY:" so the
+// model goes straight into the 4 lines.
+func localTurn(model, prompt string) string {
+	if strings.Contains(strings.ToLower(filepath.Base(model)), "gemma") {
+		return "<start_of_turn>user\n" + prompt + "<end_of_turn>\n<start_of_turn>model\nSUMMARY:"
+	}
+	return prompt + "\nSUMMARY:"
+}
+
 func insightPrompt(in InsightInput, titleMax, peerMax, tagMax int) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Source file: %q (topic %s", oneLineText(in.Title, titleMax), oneLineText(in.Topic, 40))
@@ -190,9 +200,30 @@ func ParseInsight(out string, in InsightInput) (Insight, error) {
 		}
 	}
 	if r.Summary == "" {
-		return r, fmt.Errorf("reasoner reply has no SUMMARY line")
+		// Small models often skip the label: take the first real line.
+		for _, line := range strings.Split(out, "\n") {
+			line = strings.TrimSpace(strings.Trim(strings.TrimSpace(line), "*-#>`\"' "))
+			if k, _, ok := strings.Cut(line, ":"); ok && isInsightKey(k) {
+				continue
+			}
+			if len(strings.Fields(line)) >= 3 {
+				r.Summary = oneLineText(line, 300)
+				break
+			}
+		}
+	}
+	if r.Summary == "" {
+		return r, fmt.Errorf("reasoner reply has no SUMMARY line: %q", oneLineText(out, 120))
 	}
 	return r, nil
+}
+
+func isInsightKey(k string) bool {
+	switch strings.ToUpper(strings.Trim(strings.TrimSpace(k), "*")) {
+	case "SUMMARY", "KIN", "COMBO", "COMBINATION", "GAP":
+		return true
+	}
+	return false
 }
 
 // HeuristicInsighter needs no model: it links peers that share a related tag
@@ -281,7 +312,7 @@ func (l LocalInsighter) Insight(ctx context.Context, in InsightInput) (Insight, 
 	}
 	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	cmd := exec.CommandContext(cctx, l.Binary, l.Args(LocalPrompt(in))...)
+	cmd := exec.CommandContext(cctx, l.Binary, l.Args(localTurn(l.Model, LocalPrompt(in)))...)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr, cmd.Stdin = &out, &errb, nil
 	if err := cmd.Run(); err != nil {
@@ -290,7 +321,12 @@ func (l LocalInsighter) Insight(ctx context.Context, in InsightInput) (Insight, 
 		}
 		return Insight{}, fmt.Errorf("%w: local model failed: %v: %s", ErrModelRun, err, stderrTail(errb.String(), 240))
 	}
-	return ParseInsight(out.String(), in)
+	// the prompt already started the answer with "SUMMARY:"
+	reply := out.String()
+	if !strings.Contains(strings.ToUpper(reply), "SUMMARY") {
+		reply = "SUMMARY:" + strings.TrimLeft(reply, " \t")
+	}
+	return ParseInsight(reply, in)
 }
 
 // OnlineInsighter calls an OpenAI-compatible chat completions endpoint. The
