@@ -1,8 +1,12 @@
-# A01 amendment: governed auto-accept (A01-AUTO-1) and the nonstop worker
+# A01 amendment: governed auto-accept (A01-AUTO-2) and the nonstop worker
 
 **Approved:** 2026-11-20 by Michael (owner) as HUMAN_FINAL, in chat, answering
 "How much should UNIFUSION decide on its own?": *"Build it and change A01 so
-low-risk records auto-accept."*
+low-risk records auto-accept."* (A01-AUTO-1).
+
+**Widened:** 2026-11-20, 9:15 AM Pacific, by Michael (owner) as HUMAN_FINAL, in
+chat: *"Yes, auto-accept insights and links even if the uploads aren't
+accepted, with undo."* (A01-AUTO-2).
 
 ## A01 as amended
 
@@ -22,34 +26,48 @@ is switched on and off only by HUMAN_FINAL.
 ## The policy
 
 File: `policy/auto-accept.json` (embedded in the binaries). Version
-`A01-AUTO-1`, sha256 `18d8739c7fca808fb4ad773b05f1a4299d5981f563e6588261e2e0102f7c037e` at this commit. Any edit to the file changes the
+`A01-AUTO-2`, sha256 `505e18d0b005794dc8d89bd5e1bf32a09132a8714a20264741dad6a4b0c9cee3` at this commit. Any edit to the file changes the
 hash; the old switch then shows "stale" and the policy stops deciding until a
 new HUMAN_FINAL switch-on names the new hash.
+
+**Carry-over (one step, auditable):** the file's `supersedes` field names
+exactly `A01-AUTO-1` with sha256
+`18d8739c7fca808fb4ad773b05f1a4299d5981f563e6588261e2e0102f7c037e`, with a
+note citing Michael's approval. A REG-accepted HUMAN_FINAL switch-ON naming
+exactly that version and hash also turns A01-AUTO-2 on (`/auto/status` shows
+`policy.carried_over: true`); no other version or hash is covered, and a
+HUMAN_FINAL switch-OFF still turns it off. New receipts name A01-AUTO-2 and
+the carried-over switch's IDN. A01-AUTO-1 receipts already in the ledger
+replay under the A01-AUTO-1 rules and only under the A01-AUTO-1 switch. A
+future version must keep this chain (or replay A01-AUTO-1 receipts itself).
 
 | Class | Auto decision | Rule (all must hold) |
 |---|---|---|
 | `SOURCE_UPLOAD_VERIFIED` | APPROVE | `source_kind` SOURCE_UPLOAD from `governed_source_upload`; 64-hex `source_sha256`; the preserved descriptor's SHA256/PATH/TITLE/BYTES lines equal the record and the descriptor hash equals the record's source hash; if the file is present under `UNIFUSION_SOURCES_ROOT`, its sha256 must match; no Archonym; CAP exactly OBS; risk L; RECOIL+WVC passed; no facets, Supersedes, build graph, monetization or authority REL keys; no other record shares its sha256. |
 | `EXACT_DUPLICATE` | HOLD | Another record already carries the same upload sha256 or preserved source hash and is decided, or is AtGOV with a smaller IDN. |
 | `GENERATED_PROVIDER_COMBINATION` | HOLD | Generated provider-combination / trajectory record (`source_name = provider_population`). Never accepted. |
-| `SOURCE_KIN_LINK_ACCEPTED_ENDS` | APPROVE | Worker-derived topic/kin link whose two distinct ends are both REG-accepted SOURCE_UPLOAD records at decision time; descriptor FROM/TO match; same structural guard as above. |
+| `SOURCE_KIN_LINK_WORKER` | APPROVE | Worker-derived topic/kin link (`worker_source_kin_link`) whose two distinct ends are existing SOURCE_UPLOAD records (`governed_source_upload`) in any state except rejected — they need not be accepted; descriptor FROM/TO match; same structural guard as above. Replaces A01-AUTO-1's `SOURCE_KIN_LINK_ACCEPTED_ENDS` (both ends REG-accepted). |
+| `SOURCE_INSIGHT_WORKER` | APPROVE | Worker `SOURCE_INSIGHT` (`worker_source_insight`) whose cited sources (`insight_of` and every `insight_kin` ID) are existing SOURCE_UPLOAD records in any state except rejected; descriptor `SOURCE_INSIGHT/1` OF and KIN match; same structural guard (OBS only, risk L, no Archonym, no facets, Supersedes, build graph, monetization or authority keys). |
 
 Never auto-decided: capabilities other than OBS; projections, facets, build
 graphs, monetization; anything that changes authority (Supersedes,
 COMPOSITION_KIN, kin_emergion, capability providers, targets, requirements);
 wire keys; the GOV gate; the policy itself (AUTO_POLICY_SWITCH records); money
 or external actions (action authorizations stay HUMAN_FINAL); Archonym-claiming
-records; worker SOURCE_INSIGHT proposals (summaries, combinations, gaps).
+records. Links or insights that cite a missing or rejected upload, or that
+carry a facet or any other unsafe key, wait for HUMAN_FINAL.
 
 ## How it is enforced
 
 - `gov.Decide` still accepts only HUMAN_FINAL. The policy writes through
   `gov.DecideAuto`, which can only APPROVE or HOLD an AtGOV record.
 - Replay (`internal/field/rebuild.go`) re-checks every `AUTO_POLICY` receipt:
-  the switch must be ON at that point in the ledger, the reason must name the
-  switch's policy version and sha256, and the classifier must give the same
-  decision and class. A forged or out-of-policy auto receipt makes replay fail
+  the switch must be ON at that point in the ledger, the reason must name a
+  policy the switch covers (its own version and sha256, or A01-AUTO-2 under a
+  carried-over A01-AUTO-1 switch), and that version's classifier must give the
+  same decision and class. A forged or out-of-policy auto receipt makes replay fail
   closed.
-- Receipt reason format: `AUTO_POLICY A01-AUTO-1 sha256=<hash> class=<CLASS> switch=<switch IDN>: <why>`.
+- Receipt reason format: `AUTO_POLICY A01-AUTO-2 sha256=<hash> class=<CLASS> switch=<switch IDN>: <why>`.
 - Switch: `AUTO_POLICY_SWITCH` record (REL `policy_state`, `policy_version`,
   `policy_sha256`), captured and approved in one HUMAN_FINAL press with a
   reason. Default OFF (no switch record = OFF).
@@ -70,11 +88,15 @@ walks REG-accepted SOURCE_UPLOAD records that have no insight yet, gives the
 reasoner the title, topic, mime and tags plus up to 8 related accepted sources
 (shared tags first, then same topic), and writes:
 
-- one `SOURCE_INSIGHT` per source (summary, combination, gaps) — waits AtGOV
-  for one HUMAN_FINAL batch press (batch filter class `SOURCE_INSIGHT`);
+- one `SOURCE_INSIGHT` per source (summary, combination, gaps) — low-risk
+  under A01-AUTO-2, so the policy accepts it when it is ON (one-press
+  HUMAN_FINAL undo); otherwise it waits AtGOV for a HUMAN_FINAL batch press;
 - at most 3 `SOURCE_KIN_LINK` records per source, each unordered pair once,
   only to peers the reasoner picked from that short list — low-risk, so the
-  policy accepts them when it is ON.
+  policy accepts them when it is ON, even while the uploads still wait.
+
+Records already waiting AtGOV are picked up by fieldd's next ApplyAutoPolicy
+pass (every 15 s, up to the batch limit per pass).
 
 No Cartesian generation. Bounded batches (3 sources per step locally, 20 with
 an online model), a pause between steps, a resumable checkpoint, and the
@@ -99,7 +121,7 @@ blaming any source. Control and checkpoint live in `<state>-work/`
 
 ## Controls
 
-/living shows an "Auto · A01-AUTO-1" panel: policy ON/OFF, worker ON/OFF,
+/living shows an "Auto · A01-AUTO-2" panel: policy ON/OFF, worker ON/OFF,
 reasoner mode, auto-accepted, auto-held, AtGOV to decide, and a status line.
 Each button is a double-press (tap, then tap again within 4 s). The policy
 press also asks for the HUMAN_FINAL reason. An auto-accepted record shows
