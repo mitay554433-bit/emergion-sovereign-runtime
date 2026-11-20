@@ -28,6 +28,10 @@ import (
 // pauses instead of counting it against a source.
 var ErrUnavailable = errors.New("reasoner unavailable")
 
+// ErrModelRun marks a model process that crashed or timed out: a problem
+// with the model run, not with the source, so it is not counted against it.
+var ErrModelRun = errors.New("model run")
+
 // InsightPeer is one other REG-accepted SOURCE the model may link to.
 type InsightPeer struct {
 	N     int
@@ -87,20 +91,34 @@ func ValidMode(m string) bool {
 const insightPromptTail = "GAP: <one thing missing to make it useful, or none>"
 
 // InsightPrompt is the short prompt both local and online models get.
-func InsightPrompt(in InsightInput) string {
+func InsightPrompt(in InsightInput) string { return insightPrompt(in, 160, 100, 160) }
+
+// LocalPeers caps the peers a slow on-device model reads per source.
+const LocalPeers = 4
+
+// LocalPrompt is the shorter prompt for the on-device model: at most
+// LocalPeers peers and short titles, so a slow phone finishes in time.
+func LocalPrompt(in InsightInput) string {
+	if len(in.Peers) > LocalPeers {
+		in.Peers = in.Peers[:LocalPeers]
+	}
+	return insightPrompt(in, 80, 50, 60)
+}
+
+func insightPrompt(in InsightInput, titleMax, peerMax, tagMax int) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Source file: %q (topic %s", oneLineText(in.Title, 160), oneLineText(in.Topic, 40))
+	fmt.Fprintf(&b, "Source file: %q (topic %s", oneLineText(in.Title, titleMax), oneLineText(in.Topic, 40))
 	if in.Mime != "" {
 		fmt.Fprintf(&b, ", %s", oneLineText(in.Mime, 60))
 	}
 	b.WriteString(").\n")
 	if len(in.Related) > 0 {
-		fmt.Fprintf(&b, "Tags: %s\n", oneLineText(strings.Join(in.Related, ", "), 160))
+		fmt.Fprintf(&b, "Tags: %s\n", oneLineText(strings.Join(in.Related, ", "), tagMax))
 	}
 	if len(in.Peers) > 0 {
 		b.WriteString("Other files:\n")
 		for _, p := range in.Peers {
-			fmt.Fprintf(&b, "%d %s (%s)\n", p.N, oneLineText(p.Title, 100), oneLineText(p.Topic, 40))
+			fmt.Fprintf(&b, "%d %s (%s)\n", p.N, oneLineText(p.Title, peerMax), oneLineText(p.Topic, 40))
 		}
 	}
 	b.WriteString("Reply with exactly 4 lines:\n")
@@ -221,8 +239,8 @@ func LocalInsighterFromEnv() LocalInsighter {
 		Binary:    bin,
 		Model:     discoverModel(os.Getenv("GEMMA_MODEL")),
 		Threads:   envInt("GEMMA_THREADS", runtime.NumCPU()),
-		MaxTokens: envInt("UNIFUSION_WORKER_TOKENS", 120),
-		Timeout:   time.Duration(envInt("UNIFUSION_WORKER_TIMEOUT_SECONDS", 600)) * time.Second,
+		MaxTokens: envInt("UNIFUSION_WORKER_TOKENS", 64),
+		Timeout:   time.Duration(envInt("UNIFUSION_WORKER_TIMEOUT_SECONDS", 1200)) * time.Second,
 	}
 }
 
@@ -236,13 +254,13 @@ func (l LocalInsighter) Args(prompt string) []string {
 	}
 	n := l.MaxTokens
 	if n <= 0 {
-		n = 120
+		n = 64
 	}
-	args := []string{"-m", l.Model, "-p", prompt, "-n", strconv.Itoa(n), "-c", "2048",
+	args := []string{"-m", l.Model, "-p", prompt, "-n", strconv.Itoa(n), "-c", "1024",
 		"-t", strconv.Itoa(threads), "--temp", "0", "--no-display-prompt"}
-	// llama-completion is one-shot already and some builds reject -no-cnv;
-	// only llama-cli needs it to leave chat mode.
-	if filepath.Base(l.Binary) != "llama-completion" {
+	// llama-completion needs -no-cnv or it waits in chat mode until the
+	// timeout; the newer llama-cli rejects the flag.
+	if filepath.Base(l.Binary) == "llama-completion" {
 		args = append(args, "-no-cnv")
 	}
 	return args
@@ -259,18 +277,18 @@ func (l LocalInsighter) Insight(ctx context.Context, in InsightInput) (Insight, 
 	}
 	timeout := l.Timeout
 	if timeout <= 0 {
-		timeout = 10 * time.Minute
+		timeout = 20 * time.Minute
 	}
 	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	cmd := exec.CommandContext(cctx, l.Binary, l.Args(InsightPrompt(in))...)
+	cmd := exec.CommandContext(cctx, l.Binary, l.Args(LocalPrompt(in))...)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr, cmd.Stdin = &out, &errb, nil
 	if err := cmd.Run(); err != nil {
 		if errors.Is(cctx.Err(), context.DeadlineExceeded) {
-			return Insight{}, fmt.Errorf("local model timed out after %s", timeout)
+			return Insight{}, fmt.Errorf("%w: local model timed out after %s", ErrModelRun, timeout)
 		}
-		return Insight{}, fmt.Errorf("local model failed: %v: %s", err, stderrTail(errb.String(), 240))
+		return Insight{}, fmt.Errorf("%w: local model failed: %v: %s", ErrModelRun, err, stderrTail(errb.String(), 240))
 	}
 	return ParseInsight(out.String(), in)
 }
