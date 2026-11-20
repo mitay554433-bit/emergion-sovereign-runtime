@@ -66,6 +66,13 @@ func TestProjectionRouteReadOnly(t *testing.T) {
 	if len(got.Records) != 1 || got.Records[0].ID != id || got.Records[0].KinRoot != id {
 		t.Fatalf("records = %+v want accepted %s with kin root itself", got.Records, id)
 	}
+	seen := map[string]bool{}
+	for _, r := range got.Records {
+		if seen[r.ID] {
+			t.Fatalf("/projection.json repeats IDN %s", r.ID)
+		}
+		seen[r.ID] = true
+	}
 	for _, m := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch} {
 		if r := do(loop, m, testToken); r.StatusCode != http.StatusMethodNotAllowed {
 			t.Fatalf("%s = %d want 405", m, r.StatusCode)
