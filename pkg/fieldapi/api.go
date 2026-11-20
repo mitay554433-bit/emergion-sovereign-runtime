@@ -48,6 +48,86 @@ func (r *Runtime) state() (core.State, error) {
 	}
 	return livefield.Rebuild(ev)
 }
+
+// LedgerEvent is a read-only summary of one COSL ledger event for the Living
+// Universe event view. Seq is the 1-based position in the ledger.
+type LedgerEvent struct {
+	Seq        int    `json:"seq"`
+	Type       string `json:"type"`
+	Kind       string `json:"kind"`
+	ID         string `json:"id"`
+	At         string `json:"at"`
+	EmergIONID string `json:"emergion_id,omitempty"`
+	Decision   string `json:"decision,omitempty"`
+}
+
+var ledgerEventKinds = map[string]string{
+	"C": "CANDIDATE_CAPTURED",
+	"I": "INTERPRETATION_REVISED",
+	"D": "HUMAN_FINAL_DECISION",
+	"R": "REG_ACCEPTED",
+	"Q": "ACTION_AUTHORIZATION",
+}
+
+// RecentEventsJSON returns the last limit ledger events (oldest first) and
+// the ledger total. Read-only: the ledger is only read and verified.
+func (r *Runtime) RecentEventsJSON(limit int) (string, error) {
+	events, err := r.store.Events()
+	if err != nil {
+		return "", err
+	}
+	if limit <= 0 || limit > 500 {
+		limit = 50
+	}
+	start := len(events) - limit
+	if start < 0 {
+		start = 0
+	}
+	out := make([]LedgerEvent, 0, len(events)-start)
+	for i := start; i < len(events); i++ {
+		e := events[i]
+		item := LedgerEvent{Seq: i + 1, Type: e.Type, Kind: ledgerEventKinds[e.Type], ID: e.ID, At: e.At.UTC().Format(time.RFC3339)}
+		if item.Kind == "" {
+			item.Kind = "EVENT_" + e.Type
+		}
+		switch {
+		case e.EmergION != nil:
+			item.EmergIONID = e.EmergION.IDN
+		case e.Decision != nil:
+			item.EmergIONID = e.Decision.EmergIONID
+			item.Decision = e.Decision.Decision
+		case e.REG != nil:
+			item.EmergIONID = e.REG.EmergIONID
+		case e.ActionAuthorization != nil:
+			item.EmergIONID = e.ActionAuthorization.EmergIONID
+		}
+		out = append(out, item)
+	}
+	b, err := json.Marshal(struct {
+		Total  int           `json:"total"`
+		Events []LedgerEvent `json:"events"`
+	}{len(events), out})
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+// LinkedProjectionJSON returns the projection engine's linked view
+// (proj.Linked) rebuilt from the event ledger. Read-only: nothing is
+// appended, decided or written to disk.
+func (r *Runtime) LinkedProjectionJSON() (string, error) {
+	st, err := r.state()
+	if err != nil {
+		return "", err
+	}
+	b, err := json.Marshal(proj.Linked(st))
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
 func (r *Runtime) Status() (analytics.Metrics, error) {
 	st, err := r.state()
 	if err != nil {

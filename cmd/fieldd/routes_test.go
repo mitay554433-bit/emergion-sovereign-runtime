@@ -32,7 +32,7 @@ func TestFielddRoutesRegisteredOnce(t *testing.T) {
 			seen[m[1]]++
 		}
 	}
-	for _, p := range []string{"/status", "/field.json", "/living-universe", "/living", "/field.html", "/decide", "/authorize", "/actions", "/real_temporal_wave.json", "/deliverables/"} {
+	for _, p := range []string{"/status", "/field.json", "/living-universe", "/living", "/projection.json", "/events.json", "/field.html", "/decide", "/authorize", "/actions", "/real_temporal_wave.json", "/deliverables/"} {
 		if seen[p] == 0 {
 			t.Fatalf("route %s not registered", p)
 		}
