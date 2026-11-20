@@ -56,6 +56,13 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .hfoot{position:absolute;left:12px;right:12px;bottom:12px;z-index:2;display:grid;gap:8px;justify-items:center;pointer-events:none}
 .hrow{display:flex;justify-content:space-between;align-items:flex-end;gap:8px;width:100%}
 .hfoot>*{pointer-events:auto}
+/* Nothing overlays the render: banner, legend and buttons sit in a strip under the canvas. */
+.hfoot{position:static;display:flex;flex-direction:column;gap:6px;padding:7px 12px 10px;border-top:1px solid var(--line2);background:#05070d;pointer-events:auto}
+.hfoot .auth{border:0;background:none;padding:0;justify-content:center;white-space:normal;text-align:center;font-size:9.5px;box-shadow:none}
+.hfoot .hrow{align-items:flex-start}
+.ctl{flex-wrap:wrap;justify-content:flex-end}
+.lgd{min-width:0;flex:1}.lgd summary{list-style:none;cursor:pointer;display:inline-block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);padding:8px 10px;border:1px solid var(--line2);border-radius:8px;min-height:32px;box-sizing:border-box}
+.lgd summary::-webkit-details-marker{display:none}.lgd[open] summary{color:#fff;border-color:rgba(59,130,246,.6)}.lgd .legend{margin-top:6px}
 .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2);padding:7px 10px;border-radius:8px;border:1px solid var(--line2);background:rgba(5,7,13,.72)}
 .lg{display:inline-flex;align-items:center;gap:6px}
 .sw{width:8px;height:8px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px rgba(59,130,246,.55),0 0 10px rgba(59,130,246,.9)}
@@ -159,7 +166,7 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
  .bottom{grid-template-columns:1.1fr 1.2fr 1fr}
 }
 @media(min-width:1560px){.centerg{grid-template-columns:minmax(0,1fr) 220px}.mini{grid-template-columns:1fr}#c{height:680px}}
-@media(max-width:759px){.app{padding-left:10px;padding-right:10px;gap:10px}.brand h1{font-size:16px}.hpills .pill.t{display:none}#c{height:540px}.auth{font-size:9px}.legend{gap:5px 10px;font-size:9px;padding:6px 8px}
+@media(max-width:759px){.app{padding-left:10px;padding-right:10px;gap:10px}.brand h1{font-size:16px}.hpills .pill.t{display:none}#c{height:70vh;min-height:420px;max-height:820px}.hero .ph{position:static;background:none;padding:11px 14px 6px}.auth{font-size:9px}.legend{gap:5px 10px;font-size:9px;padding:6px 8px}
  .cols{display:flex;flex-direction:column}.left,.center,.right,.centerg{display:contents}
  .mini{grid-template-columns:1fr 1fr}.mini>.panel:first-child{grid-column:1/-1}#tlMeta{display:none}
  #nav{order:1}.hero{order:2}#statusP{order:3}.mini{order:4}.bottom{order:5}.right>.panel{order:6}}
@@ -206,7 +213,7 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
     <div id="evtip" role="status" aria-live="polite"></div>
     <div class="hfoot">
      <div class="auth"><span class="shield"></span><b>COSL + REG remain authoritative</b> · visualization only</div>
-     <div class="hrow"><div class="legend"><span id="kindLg" style="display:contents"></span><span class="lg"><i class="sw g"></i>AtGOV</span><span class="lg"><i class="sw k"></i>Kin / REL link</span><span class="lg"><i class="sw a"></i>Composed with</span><span class="lg"><i class="sw c"></i>Event comet</span></div>
+     <div class="hrow"><details class="lgd" id="lgd"><summary>Legend ▾</summary><div class="legend"><span id="kindLg" style="display:contents"></span><span class="lg"><i class="sw g"></i>AtGOV</span><span class="lg"><i class="sw k"></i>Kin / REL link</span><span class="lg"><i class="sw a"></i>Composed with</span><span class="lg"><i class="sw c"></i>Event comet</span></div></details>
      <div class="ctl"><button id="bLbl" aria-pressed="false" title="Show a few small title tags">Labels</button><button id="bGov" aria-pressed="true" title="Show AtGOV records awaiting HUMAN_FINAL">AtGOV</button><button id="bFit" title="Reset view">Reset</button></div></div>
     </div>
     </div>
@@ -474,8 +481,8 @@ function draw(t){g.clearRect(0,0,W,H);
  for(const p of pts){if(!p)continue;const cr=(p.h+1.2)/.12,a=Math.min(1,.4+cr*.6)*Math.min(1,2.6/p.z);const s=1+.9*Math.min(1,2.6/p.z);g.fillStyle=cr>.75?`rgba(225,230,255,${a})`:`rgba(100,140,255,${a*.85})`;g.fillRect(p.x-s/2,p.y-s/2,s,s)}
  // fog cloud
  g.globalCompositeOperation='lighter';
- {const cc=P(0,0,0);if(cc){const s=Math.min(W,H)*1.15*cam.zoom;g.globalAlpha=.45*zf;g.drawImage(sprites.core,cc.x-s/2,cc.y-s*.32,s,s*.64);g.globalAlpha=1}}
- for(const f of fog){const p=P(f.x+.06*Math.sin(t*.12+f.ph),f.y+.03*Math.sin(t*.2+f.ph),f.z);if(!p)continue;const s=f.s*p.s*Math.min(W,H)*.55;g.globalAlpha=(.34+.1*Math.sin(t*.3+f.ph))*zf;g.drawImage(f.b?sprites.fogW:sprites.fogB,p.x-s/2,p.y-s*.36,s,s*.72)}
+ {const cc=P(0,0,0);if(cc){const s=Math.min(W,H)*1.15*cam.zoom;g.globalAlpha=.3*zf;g.drawImage(sprites.core,cc.x-s/2,cc.y-s*.32,s,s*.64);g.globalAlpha=1}}
+ for(const f of fog){const p=P(f.x+.06*Math.sin(t*.12+f.ph),f.y+.03*Math.sin(t*.2+f.ph),f.z);if(!p)continue;const s=f.s*p.s*Math.min(W,H)*.55;g.globalAlpha=(.27+.08*Math.sin(t*.3+f.ph))*zf;g.drawImage(f.b?sprites.fogW:sprites.fogB,p.x-s/2,p.y-s*.36,s,s*.72)}
  g.globalAlpha=1;g.globalCompositeOperation='source-over';
  for(const d of dust){const p=P(d.x,d.y+.02*Math.sin(t*.5+d.s*6),d.z);if(!p)continue;const a=(.18+.5*d.b)*Math.min(1,2.2/p.z)*(.75+.25*Math.sin(t*1.5+d.s*9));const s=.7+1.3*d.b*Math.min(1.4,2.6/p.z);g.fillStyle=`rgba(${d.b>.6?'240,243,255':'160,180,255'},${a})`;g.fillRect(p.x,p.y,s,s)}
  g.globalCompositeOperation='source-over';
@@ -515,7 +522,7 @@ function draw(t){g.clearRect(0,0,W,H);
 // optional Labels toggle adds at most 5 tiny title tags for the nodes nearest the viewer.
 // Facet names are reserved first, so no tag or tooltip ever covers them.
 // Label budget: facet names may use at most 6% of the render, all labels together under 10%.
-const FACET_BUDGET=.06,LABEL_BUDGET=.095;let labelsOn=false,labelArea=0,facetArea=0,tipOverlap=0;
+const FACET_BUDGET=.035,LABEL_BUDGET=.095;let labelsOn=false,labelArea=0,facetArea=0,tipOverlap=0;
 const hit=(a,b)=>!(a.x+a.w<=b.x||b.x+b.w<=a.x||a.y+a.h<=b.y||b.y+b.h<=a.y);
 function labels(){const placed=[],drawn=[],mono=getComputedStyle(document.body).getPropertyValue('--mono');g.textBaseline='middle';g.textAlign='left';
  for(const A of anchors)if(A.rect)placed.push(A.rect);
@@ -523,9 +530,9 @@ function labels(){const placed=[],drawn=[],mono=getComputedStyle(document.body).
  const n=selected;if(n&&n.p){const p=n.p,maxW=W*.6;g.font='600 10px '+mono;const id=fit1(shortID(n.id),maxW-16);const w1=g.measureText(id).width;g.font='500 11px system-ui,sans-serif';const t=fit1(String(nameOf(n)),maxW-16);const w=Math.min(maxW,Math.max(w1,g.measureText(t).width)+16),h=32;
   const sx=p.x<W/2?1:-1,sy=p.y<H/2?1:-1;let r=null,bestOv=Infinity;
   // try near-to-far offsets in all four quadrants; never over a facet name if any spot is free
-  for(const k of [1,2,3,4.5])for(const [ax,ay] of [[sx,sy],[sx,-sy],[-sx,sy],[-sx,-sy]]){const bx=ax>0?p.x+20*k:p.x-20*k-w,by=ay>0?p.y+16*k:p.y-16*k-h,c={x:Math.max(6,Math.min(W-6-w,bx)),y:Math.max(56,Math.min(H-6-h,by)),w,h};if(Math.hypot(c.x+w/2-p.x,c.y+h/2-p.y)<24||(p.x>=c.x-6&&p.x<=c.x+w+6&&p.y>=c.y-6&&p.y<=c.y+h+6))continue;
+  for(const k of [1,2,3,4.5])for(const [ax,ay] of [[sx,sy],[sx,-sy],[-sx,sy],[-sx,-sy]]){const bx=ax>0?p.x+20*k:p.x-20*k-w,by=ay>0?p.y+16*k:p.y-16*k-h,c={x:Math.max(6,Math.min(W-6-w,bx)),y:Math.max(W<700?6:56,Math.min(H-6-h,by)),w,h};if(Math.hypot(c.x+w/2-p.x,c.y+h/2-p.y)<24||(p.x>=c.x-6&&p.x<=c.x+w+6&&p.y>=c.y-6&&p.y<=c.y+h+6))continue;
    const ov=placed.reduce((a,q)=>a+(hit(c,q)?Math.max(0,Math.min(c.x+w,q.x+q.w)-Math.max(c.x,q.x))*Math.max(0,Math.min(c.y+h,q.y+q.h)-Math.max(c.y,q.y)):0),0);if(ov<bestOv){bestOv=ov;r=c}if(ov===0)break}
-  if(!r)r={x:Math.max(6,Math.min(W-6-w,p.x+26)),y:Math.max(56,Math.min(H-6-h,p.y+22)),w,h};tipOverlap=bestOv===Infinity?0:bestOv;
+  if(!r)r={x:Math.max(6,Math.min(W-6-w,p.x+26)),y:Math.max(W<700?6:56,Math.min(H-6-h,p.y+22)),w,h};tipOverlap=bestOv===Infinity?0:bestOv;
   const cx=Math.max(r.x,Math.min(r.x+r.w,p.x)),cy=Math.max(r.y,Math.min(r.y+r.h,p.y));g.strokeStyle='rgba(170,195,255,.45)';g.lineWidth=.7;g.beginPath();g.moveTo(p.x,p.y);g.lineTo(cx,cy);g.stroke();
   g.fillStyle='rgba(5,8,16,.86)';g.strokeStyle='rgba(59,130,246,.55)';g.beginPath();g.roundRect?g.roundRect(r.x,r.y,r.w,r.h,4):g.rect(r.x,r.y,r.w,r.h);g.fill();g.stroke();
   g.font='600 10px '+mono;g.fillStyle='#a9c2ff';g.fillText(id,r.x+8,r.y+10);g.font='500 11px system-ui,sans-serif';g.fillStyle='#f2f5ff';g.fillText(t,r.x+8,r.y+22);placed.push(r);drawn.push(r)}
@@ -534,20 +541,21 @@ function labels(){const placed=[],drawn=[],mono=getComputedStyle(document.body).
    if(!inside(r)||placed.some(q=>hit(r,q))||facetArea+drawn.reduce((a,q)=>a+q.w*q.h,0)+r.w*r.h>W*H*LABEL_BUDGET)continue;placed.push(r);drawn.push(r);count++;g.fillStyle='rgba(5,7,13,.62)';g.fillRect(r.x-2,r.y,r.w+4,r.h);g.fillStyle='rgba(230,236,255,.9)';g.fillText(t,r.x+1,r.y+7)}}
  labelArea=drawn.reduce((a,r)=>a+r.w*r.h,0)}
 function labelCoverage(){return (labelArea+facetArea)/(W*H)}
-// Facet names: crisp near-white small caps with a dark halo, count beneath. Placed by member
-// count (largest first), nudged to avoid each other, clamped inside the render; any that still
-// collide are hidden. Font scales gently with zoom (10-14 px).
-function facetNames(){const fs=Math.max(10,Math.min(14,11*Math.pow(cam.zoom,.35))),cs=Math.max(8.5,fs-2.5),pad=2,placed=[],budget=W*H*FACET_BUDGET;let used=0;
- g.save();g.textAlign='left';g.textBaseline='middle';g.lineJoin='round';
- for(const A of anchors.filter(a=>a.p&&a.p.x>=0&&a.p.x<=W&&a.p.y>=0&&a.p.y<=H).sort((a,b)=>b.members-a.members||(a.facet<b.facet?-1:1))){const p=A.p,name=(FACET_LABEL[A.facet]||A.facet).toUpperCase(),cnt=fmt(A.members)+(A.members===1?' record':' records');
-  g.font=`700 ${fs}px system-ui,sans-serif`;g.letterSpacing='1px';const nw=g.measureText(name).width;g.font=`600 ${cs}px system-ui,sans-serif`;g.letterSpacing='0.5px';const cw=g.measureText(cnt).width;
-  const w=Math.max(nw,cw)+pad*2+4,h=fs+cs+pad*2+1;if(used+w*h>budget)continue;let r=null;
-  for(const [dx,dy] of [[0,-1],[0,0],[0,-2],[1,-1],[-1,-1],[0,1]]){const x=Math.max(4,Math.min(W-4-w,p.x-w/2+dx*(w/2+8))),y=Math.max(4,Math.min(H-4-h,p.y-h/2+dy*(h*.75+6))),c={x,y,w,h};if(!placed.some(q=>hit(c,q))){r=c;break}}
-  if(!r)continue;placed.push(r);A.rect=r;used+=w*h;const sel=filter===A.facet,on=filter==='ALL'||sel;
-  g.globalAlpha=on?1:.55;g.fillStyle='rgba(5,7,13,0.66)';g.shadowColor='rgba(5,7,13,0.8)';g.shadowBlur=8;g.beginPath();g.roundRect?g.roundRect(r.x,r.y,r.w,r.h,5):g.rect(r.x,r.y,r.w,r.h);g.fill();g.font=`700 ${fs}px system-ui,sans-serif`;g.letterSpacing='1px';g.strokeStyle='rgba(5,7,13,0.85)';g.lineWidth=3.5;g.shadowColor='rgba(5,7,13,0.85)';g.shadowBlur=6;
-  const tx=r.x+(w-nw)/2,ty=r.y+pad+fs/2;g.strokeText(name,tx,ty);g.shadowBlur=0;g.fillStyle=sel?'#ffffff':'rgba(232,237,247,0.92)';g.fillText(name,tx,ty);
-  g.font=`600 ${cs}px system-ui,sans-serif`;g.letterSpacing='0.5px';const cx=r.x+(w-cw)/2,cy=ty+fs/2+1+cs/2;g.lineWidth=3;g.strokeText(cnt,cx,cy);g.fillStyle=sel?'#c3d2ff':'#9fb1dc';g.fillText(cnt,cx,cy)}
+// Facet names: small fixed-size text (10.5px screen px, never grows with zoom), medium weight,
+// near-white with a thin dark halo only. At most 4 at once, largest facets first, never overlapping,
+// clamped inside the render. Counts appear in the tap tooltip, not on the field.
+const FACET_MAX=4;
+function facetNames(){const fs=10.5,placed=[],budget=W*H*FACET_BUDGET;let used=0,shown=0;
+ g.save();g.textAlign='left';g.textBaseline='middle';g.lineJoin='round';g.font=`500 ${fs}px system-ui,sans-serif`;g.letterSpacing='0.8px';
+ for(const A of anchors.filter(a=>a.p&&a.p.x>=0&&a.p.x<=W&&a.p.y>=0&&a.p.y<=H).sort((a,b)=>b.members-a.members||(a.facet<b.facet?-1:1))){if(shown>=FACET_MAX)break;
+  const name=(FACET_LABEL[A.facet]||A.facet).toUpperCase(),nw=g.measureText(name).width,w=nw+4,h=fs+4,p=A.p;if(used+w*h>budget)continue;let r=null;
+  for(const [dx,dy] of [[0,-1],[0,1],[1,0],[-1,0],[0,-2],[0,2]]){const x=Math.max(4,Math.min(W-4-w,p.x-w/2+dx*(w/2+8))),y=Math.max(4,Math.min(H-4-h,p.y-h/2+dy*(h+4))),c={x,y,w,h};if(!placed.some(q=>hit(c,q))){r=c;break}}
+  if(!r)continue;placed.push(r);A.rect=r;used+=w*h;shown++;const sel=filter===A.facet,on=filter==='ALL'||sel;
+  g.globalAlpha=on?1:.5;g.strokeStyle='rgba(5,7,13,0.85)';g.shadowColor='rgba(5,7,13,0.95)';g.shadowBlur=7;g.lineWidth=3.2;g.strokeText(name,r.x+2,r.y+h/2);g.shadowBlur=3;g.strokeText(name,r.x+2,r.y+h/2);g.shadowBlur=0;g.fillStyle=sel?'rgba(255,255,255,0.95)':'rgba(236,240,250,0.94)';g.fillText(name,r.x+2,r.y+h/2)}
  g.restore();g.letterSpacing='0px';facetArea=used}
+// Tap on a facet name: filter to it and show its name and record count in the small tooltip.
+function showFacet(A,x,y){const T=$('evtip');T.replaceChildren(el('b',null,FACET_LABEL[A.facet]||A.facet),el('span',null,fmt(A.members)+(A.members===1?' accepted record':' accepted records')),el('small',null,filter===A.facet?'filtered · tap again to clear':'filter cleared'));
+ T.classList.add('on');const w=T.offsetWidth,h=T.offsetHeight;T.style.left=Math.max(8,Math.min(W-w-8,x+14))+'px';T.style.top=Math.max(8,Math.min(H-h-8,y-h-10))+'px';clearTimeout(showEvent.t);showEvent.t=setTimeout(()=>T.classList.remove('on'),3000)}
 // one line, ellipsis when it would exceed max px (font must be set)
 function fit1(text,max){text=text.replace(/\s+/g,' ').trim();if(g.measureText(text).width<=max)return text;while(text.length>1&&g.measureText(text+'…').width>max)text=text.slice(0,-1);return text.trimEnd()+'…'}
 
@@ -595,7 +603,7 @@ c.addEventListener('pointerdown',e=>{c.setPointerCapture(e.pointerId);ptr.set(e.
 c.addEventListener('pointermove',e=>{if(!ptr.has(e.pointerId)){if(e.pointerType==='mouse'){const r=c.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,ev=hitEvent(x,y);if(ev)showEvent(ev,x,y)}return}const o=ptr.get(e.pointerId);ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
  if(ptr.size===2){const a=[...ptr.values()],d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);if(pinch)cam.zoom=Math.max(.6,Math.min(2.6,cam.zoom*d/pinch));pinch=d}
  else if(drag){cam.yaw+=(e.clientX-o.x)*.006;cam.pitch=Math.max(.12,Math.min(.95,cam.pitch+(e.clientY-o.y)*.004));if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>6)drag.moved=true}want()});
-function up(e){if(drag&&!drag.moved&&ptr.size===1&&e.type==='pointerup'){const r=c.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const hev=hitEvent(x,y);if(hev){showEvent(hev,x,y)}let best=null,bd=24;for(const n of proj2){const d=Math.hypot(n.p.x-x,n.p.y-y);if(d<bd){bd=d;best=n}}if(!best){bd=10;for(const n of govP){const d=Math.hypot(n.p.x-x,n.p.y-y);if(d<bd){bd=d;best=n}}}if(!best&&!hev){for(const A of anchors){if(A.rect&&x>=A.rect.x-4&&x<=A.rect.x+A.rect.w+4&&y>=A.rect.y-4&&y<=A.rect.y+A.rect.h+4){filter=filter===A.facet?'ALL':A.facet;renderNav();break}}}if(best||!hev)select(best)}ptr.delete(e.pointerId);if(!ptr.size){drag=null;pinch=0;c.classList.remove('grab')}}
+function up(e){if(drag&&!drag.moved&&ptr.size===1&&e.type==='pointerup'){const r=c.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const hev=hitEvent(x,y);if(hev){showEvent(hev,x,y)}let best=null,bd=24;for(const n of proj2){const d=Math.hypot(n.p.x-x,n.p.y-y);if(d<bd){bd=d;best=n}}if(!best){bd=10;for(const n of govP){const d=Math.hypot(n.p.x-x,n.p.y-y);if(d<bd){bd=d;best=n}}}if(!best&&!hev){for(const A of anchors){if(A.rect&&x>=A.rect.x-4&&x<=A.rect.x+A.rect.w+4&&y>=A.rect.y-4&&y<=A.rect.y+A.rect.h+4){filter=filter===A.facet?'ALL':A.facet;renderNav();showFacet(A,x,y);break}}}if(best||!hev)select(best)}ptr.delete(e.pointerId);if(!ptr.size){drag=null;pinch=0;c.classList.remove('grab')}}
 c.addEventListener('pointerup',up);c.addEventListener('pointercancel',up);
 c.addEventListener('wheel',e=>{e.preventDefault();auto=false;cam.zoom=Math.max(.6,Math.min(2.6,cam.zoom*Math.exp(-e.deltaY*.0015)));want()},{passive:false});
 function renderKinds(){const L=$('kindLg');if(!L)return;const kc=kindCounts(nodes),show=kc.slice(0,6);L.replaceChildren(...show.map(([k,c])=>{const sp=el('span','lg'),i=el('i','sw kd');i.style.background=kindColor(k);sp.append(i,document.createTextNode(k.toLowerCase().replace(/_/g,' ')+' '+fmt(c)));return sp}));if(kc.length>6)L.append(el('span','lg',`+${kc.length-6} kinds`))}

@@ -211,3 +211,31 @@ process.stdout.write([w.join("+"),ns.maxWeight,r.join("+"),new Set(r).size,nodeR
 		t.Fatalf("weights/radii = %s", out)
 	}
 }
+
+// Nothing overlays the render on a phone, and facet names stay small: a fixed
+// 10.5px (not zoom-scaled), at most 4, halo only (no plate), no counts.
+func TestLivingUniverseRenderIsUncluttered(t *testing.T) {
+	src := livingUniverseHTML(t)
+	for _, want := range []string{
+		".hfoot{position:static;",
+		`<details class="lgd" id="lgd"><summary>Legend ▾</summary>`,
+		".hero .ph{position:static;",
+		"#c{height:70vh;",
+		"const FACET_MAX=4;",
+		"function facetNames(){const fs=10.5,",
+	} {
+		if !strings.Contains(src, want) {
+			t.Fatalf("living-universe.html missing %q", want)
+		}
+	}
+	fn := src[strings.Index(src, "function facetNames(){"):]
+	fn = fn[:strings.Index(fn, "\nfunction showFacet(")]
+	for _, bad := range []string{"cam.zoom", "roundRect", "fillRect", "records'"} {
+		if strings.Contains(fn, bad) {
+			t.Fatalf("facetNames must not use %q (fixed size, no plate, no count)", bad)
+		}
+	}
+	if strings.Contains(src, `<details class="lgd" id="lgd" open`) {
+		t.Fatal("legend must be collapsed by default")
+	}
+}
