@@ -74,8 +74,34 @@ func batchID(tip string, ids []string, reason string, at time.Time) string {
 // plus the batch id. Already REG-accepted records are skipped (idempotent).
 // The first error stops the batch; receipts already written stay valid.
 func (r *Runtime) DecideBatchHuman(ids []string, reason string, confirm, limit int) (BatchResult, error) {
+	return r.DecideBatchHumanAs(ids, reason, confirm, limit, "")
+}
+
+// ValidBatchID reports whether id has the HFB-<12 hex> form batchID produces.
+func ValidBatchID(id string) bool {
+	if len(id) != 16 || !strings.HasPrefix(id, "HFB-") {
+		return false
+	}
+	for _, c := range id[4:] {
+		if !(c >= '0' && c <= '9' || c >= 'A' && c <= 'F') {
+			return false
+		}
+	}
+	return true
+}
+
+// DecideBatchHumanAs is DecideBatchHuman continuing an existing batch id, so
+// one human press over a group larger than the cap can be sent as cap-sized
+// chunks that share one batch id. Each chunk is still validated (reason,
+// confirm count, cap) and every record still gets its own receipts. The id
+// only appears in the reason text. Empty continueID derives a new one.
+func (r *Runtime) DecideBatchHumanAs(ids []string, reason string, confirm, limit int, continueID string) (BatchResult, error) {
 	if err := ValidateBatch(ids, reason, confirm, limit); err != nil {
 		return BatchResult{Requested: len(ids)}, err
+	}
+	continueID = strings.TrimSpace(continueID)
+	if continueID != "" && !ValidBatchID(continueID) {
+		return BatchResult{Requested: len(ids)}, fmt.Errorf("invalid batch id %q", continueID)
 	}
 	reason = strings.TrimSpace(reason)
 	res := BatchResult{Requested: len(ids)}
@@ -84,7 +110,10 @@ func (r *Runtime) DecideBatchHuman(ids []string, reason string, confirm, limit i
 		if err != nil {
 			return err
 		}
-		res.BatchID = batchID(st.TipHash, ids, reason, time.Now())
+		res.BatchID = continueID
+		if res.BatchID == "" {
+			res.BatchID = batchID(st.TipHash, ids, reason, time.Now())
+		}
 		text := fmt.Sprintf("%s [HUMAN_FINAL batch %s, %d records]", reason, res.BatchID, len(ids))
 		for _, raw := range ids {
 			id := strings.TrimSpace(raw)

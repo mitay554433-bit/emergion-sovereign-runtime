@@ -13,6 +13,8 @@ type BatchParams struct {
 	EmergIONIDs  []string `json:"emergion_ids"`
 	Reason       string   `json:"reason"`
 	ConfirmCount int      `json:"confirm_count"`
+	// BatchID continues an earlier chunk of the same human press (optional).
+	BatchID string `json:"batch_id,omitempty"`
 }
 
 // batchCap is the server-side batch limit (flag -batch-cap, env FIELDD_BATCH_CAP).

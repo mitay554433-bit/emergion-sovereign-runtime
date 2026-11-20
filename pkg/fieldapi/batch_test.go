@@ -226,3 +226,42 @@ func TestBatchHumanFinalScale5000(t *testing.T) {
 	}
 	verifyReplay(t, rt, 5000)
 }
+
+// One press over a group larger than the cap: cap-sized chunks share one
+// batch id, each record still gets its own HUMAN_FINAL receipt.
+func TestBatchHumanFinalChunksShareBatchID(t *testing.T) {
+	rt, ids := seedAtGOV(t, 5)
+	before := len(ledger(t, rt))
+	first, err := rt.DecideBatchHumanAs(ids[:2], "group review", 2, 2, "")
+	if err != nil || first.Accepted != 2 || !ValidBatchID(first.BatchID) {
+		t.Fatalf("chunk 1: %+v %v", first, err)
+	}
+	for _, part := range [][]string{ids[2:4], ids[4:]} {
+		res, err := rt.DecideBatchHumanAs(part, "group review", len(part), 2, first.BatchID)
+		if err != nil || res.BatchID != first.BatchID || res.Accepted != len(part) {
+			t.Fatalf("chunk: %+v %v", res, err)
+		}
+	}
+	if _, err := rt.DecideBatchHumanAs(ids[:1], "x", 1, 2, "HFB-not-valid"); err == nil {
+		t.Fatal("invalid batch id accepted")
+	}
+	if _, err := rt.DecideBatchHumanAs(ids, "x", 5, 2, first.BatchID); err == nil {
+		t.Fatal("chunk over cap accepted")
+	}
+	events := ledger(t, rt)[before:]
+	if len(events) != 10 {
+		t.Fatalf("want 10 events (D,R x5), got %d", len(events))
+	}
+	seen := map[string]bool{}
+	for i := 0; i < len(events); i += 2 {
+		d := events[i].Decision
+		if d == nil || d.Authority != "HUMAN_FINAL" || !strings.Contains(d.Reason, "[HUMAN_FINAL batch "+first.BatchID+",") || events[i+1].REG.DecisionID != events[i].ID {
+			t.Fatalf("receipt %d: %+v", i/2, d)
+		}
+		seen[d.EmergIONID] = true
+	}
+	if len(seen) != 5 {
+		t.Fatalf("receipts cover %d records", len(seen))
+	}
+	verifyReplay(t, rt, 5)
+}

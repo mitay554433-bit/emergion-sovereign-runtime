@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -106,12 +107,16 @@ func newHTTPMux(rt *fieldapi.Runtime, token string, loopback bool) *http.ServeMu
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		if err := fieldapi.ValidateBatch(p.EmergIONIDs, p.Reason, p.ConfirmCount, batchCap); err != nil {
+		err := fieldapi.ValidateBatch(p.EmergIONIDs, p.Reason, p.ConfirmCount, batchCap)
+		if err == nil && p.BatchID != "" && !fieldapi.ValidBatchID(p.BatchID) {
+			err = errors.New("invalid batch id")
+		}
+		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			_ = json.NewEncoder(w).Encode(fieldapi.BatchResult{Requested: len(p.EmergIONIDs), Error: err.Error()})
 			return
 		}
-		res, _ := rt.DecideBatchHuman(p.EmergIONIDs, p.Reason, p.ConfirmCount, batchCap)
+		res, _ := rt.DecideBatchHumanAs(p.EmergIONIDs, p.Reason, p.ConfirmCount, batchCap, p.BatchID)
 		_ = json.NewEncoder(w).Encode(res)
 	})
 	mux.HandleFunc("/decide-batch-human", func(w http.ResponseWriter, req *http.Request) {

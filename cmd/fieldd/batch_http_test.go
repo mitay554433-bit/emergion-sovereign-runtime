@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -19,14 +20,15 @@ import (
 // server's BatchParams decodes.
 func TestLivingBatchSelectionAndBody(t *testing.T) {
 	src := livingUniverseHTML(t)
-	out := runNode(t, block(t, src, "governed-accept")+`
+	out := runNode(t, batchBlocks(t, src)+`
 const gov={"E-03":{r:{source_kind:"A",target_emergion:"E-T1"},e:{m:{f:["MEM"],h:"three"}}},
  "E-01":{r:{source_kind:"A"},e:{m:{f:["MEM","VAL"]}},m:{s:"one"}},
  "E-02":{r:{source_kind:"B",target_emergion:"E-T1"},e:{m:{f:["VAL"]}}}};
+const idx=batchIndex(gov,{});
 const r={
  all:batchSelect(gov,batchFilter('all','',null),500),
  tapNone:batchSelect(gov,batchFilter('tap','','ALL'),500).ids,
- tapVal:batchSelect(gov,batchFilter('tap','','VAL'),500).ids,
+ tapVal:batchSelect(gov,batchFilter('tap','','VAL'),500,idx).ids,
  cls:batchSelect(gov,{kind:'class',value:'A'},500).ids,
  tgt:batchSelect(gov,{kind:'target',value:'E-T1'},500).ids,
  cap:batchSelect(gov,{kind:'all'},2),
@@ -78,7 +80,7 @@ process.stdout.write(JSON.stringify(r));`)
 func TestLivingBatchPrefilledReasonAndDoublePress(t *testing.T) {
 	src := livingUniverseHTML(t)
 	out := runNode(t, `const _ls={};globalThis.localStorage={getItem:k=>k in _ls?_ls[k]:null,setItem:(k,v)=>{_ls[k]=String(v)},removeItem:k=>{delete _ls[k]}};
-`+block(t, src, "governed-accept")+`
+`+batchBlocks(t, src)+`
 const gov={"E-01":{r:{source_kind:"COMPARISON"},e:{m:{h:"comparison: TARGET_EMERGION:E-AA"}}},
  "E-02":{r:{source_kind:"COMPARISON"},e:{m:{h:"comparison: TARGET_EMERGION:E-BB"}}},
  "E-03":{r:{source_kind:"OBS"},m:{s:"execution observation of run"}}};
@@ -106,6 +108,96 @@ process.stdout.write(JSON.stringify({pre,all,before,kept,after:savedReason(),p1:
 	}
 	if r.P1 || !r.Armed || !r.P2 || r.Late || r.Other {
 		t.Fatalf("double press: single=%v armed=%v second=%v late=%v changed=%v", r.P1, r.Armed, r.P2, r.Late, r.Other)
+	}
+}
+
+// batchBlocks is the batch code plus the reference resolver the haze uses.
+func batchBlocks(t *testing.T, src string) string {
+	return block(t, src, "ref-resolve") + "\n" + block(t, src, "ref-resolve-fn") + "\n" + block(t, src, "governed-accept")
+}
+
+// AtGOV records carry no facet of their own; for the batch facet filter and
+// counts they belong to the facet(s) of the accepted record they reference,
+// resolved like the haze: target_emergion, then REL IDNs, then the summary.
+func TestLivingBatchFacetFromReferencedTarget(t *testing.T) {
+	src := livingUniverseHTML(t)
+	out := runNode(t, batchBlocks(t, src)+`
+const acc={"E-AAAAAA01":{e:{m:{f:["DOCS_PROJECTION","MEM"]}}},"E-AAAAAA02":{e:{m:{f:["GRANT_FUNDING"]}}},"E-AAAAAA03":{e:{m:{}}}};
+const gov={
+ "E-B00001":{r:{target_emergion:"E-AAAAAA01"}},
+ "E-B00002":{r:{kin:"E-AAAAAA02"}},
+ "E-B00003":{r:{},m:{s:"compare with E-AAAAAA01"}},
+ "E-B00004":{r:{target_emergion:"E-FFFFFF99",parent:"E-AAAAAA02"}},
+ "E-B00005":{r:{target_emergion:"E-AAAAAA03"}},
+ "E-B00006":{r:{source_kind:"X"}}};
+const idx=batchIndex(gov,acc),sel=f=>batchSelect(gov,{kind:'facet',value:f},500,idx).ids;
+process.stdout.write(JSON.stringify({docs:sel("DOCS_PROJECTION"),grant:sel("GRANT_FUNDING"),un:sel("UNASSIGNED"),none:sel("PATENT"),
+ opts:batchOptions(gov,idx).facet,tap:batchSelect(gov,batchFilter('tap','','DOCS_PROJECTION'),500,idx).ids,same:batchIndex(gov,acc)===idx}));`)
+	var r struct {
+		Docs, Grant, Un, None, Tap []string
+		Opts                       [][]any
+		Same                       bool
+	}
+	if err := json.Unmarshal([]byte(out), &r); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if strings.Join(r.Docs, ",") != "E-B00001,E-B00003" || strings.Join(r.Tap, ",") != "E-B00001,E-B00003" {
+		t.Fatalf("docs facet = %v tap = %v", r.Docs, r.Tap)
+	}
+	// unresolved target_emergion falls through to the next REL IDN, as the haze does
+	if strings.Join(r.Grant, ",") != "E-B00002,E-B00004" || strings.Join(r.Un, ",") != "E-B00005" || len(r.None) != 0 {
+		t.Fatalf("grant = %v unassigned = %v none = %v", r.Grant, r.Un, r.None)
+	}
+	if len(r.Opts) != 4 || r.Opts[0][0] != "DOCS_PROJECTION" || r.Opts[0][1] != float64(2) {
+		t.Fatalf("facet options = %v", r.Opts)
+	}
+	if !r.Same {
+		t.Fatal("index must be cached per field snapshot")
+	}
+	// zero matches: hint line and Accept stays disabled
+	if !strings.Contains(src, "No waiting records point at this facet") || !strings.Contains(src, "$('bGo').disabled") && !strings.Contains(src, "go.disabled=!s.ids.length") {
+		t.Fatal("zero-match facet must show the hint and keep Accept disabled")
+	}
+}
+
+// Emergent groups are the data's own (same resolved haze target + same
+// source_kind), sorted by size; a group is selected whole even over the cap
+// and sent in cap-sized chunks; later chunks carry the first batch id.
+func TestLivingBatchEmergentGroupsWholeAndChunked(t *testing.T) {
+	src := livingUniverseHTML(t)
+	out := runNode(t, batchBlocks(t, src)+`
+const acc={"E-AAAAAA01":{e:{m:{f:["DOCS_PROJECTION"]}}},"E-AAAAAA02":{e:{m:{f:["GRANT_FUNDING"]}}}};
+const gov={};
+for(let i=0;i<7;i++)gov["E-C0000"+i]={r:{source_kind:"DETERMINISTIC_CAPABILITY_PROVIDERS",target_emergion:"E-AAAAAA01"}};
+for(let i=0;i<3;i++)gov["E-D0000"+i]={r:{source_kind:"COMPARISON",kin:"E-AAAAAA02"}};
+gov["E-E00001"]={r:{source_kind:"COMPARISON"}};
+const idx=batchIndex(gov,acc),g=idx.groups,s=batchSelect(gov,{kind:'group',value:g[0].key},3,idx);
+process.stdout.write(JSON.stringify({groups:g.map(x=>[x.label,x.count]),n:s.ids.length,whole:s.whole,
+ chunks:batchChunks(s.ids,3).map(c=>c.length),b1:JSON.parse(batchBody(s.ids.slice(0,3),"r","")),b2:JSON.parse(batchBody(s.ids.slice(3,6),"r","HFB-0123456789AB")),
+ reason:autoReason(gov,{kind:'group',value:g[0].key},s.ids,idx)}));`)
+	var r struct {
+		Groups [][]any
+		N      int
+		Whole  bool
+		Chunks []int
+		B1, B2 map[string]any
+		Reason string
+	}
+	if err := json.Unmarshal([]byte(out), &r); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	want := [][]any{{"deterministic capability providers → E-AAAAAA01", float64(7)}, {"comparison → E-AAAAAA02", float64(3)}, {"comparison → no accepted target", float64(1)}}
+	if fmt.Sprint(r.Groups) != fmt.Sprint(want) {
+		t.Fatalf("groups = %v", r.Groups)
+	}
+	if r.N != 7 || !r.Whole || fmt.Sprint(r.Chunks) != "[3 3 1]" {
+		t.Fatalf("whole group over cap: n=%d whole=%v chunks=%v", r.N, r.Whole, r.Chunks)
+	}
+	if _, ok := r.B1["batch_id"]; ok || r.B2["batch_id"] != "HFB-0123456789AB" || r.B2["confirm_count"] != float64(3) {
+		t.Fatalf("chunk bodies: %v %v", r.B1, r.B2)
+	}
+	if !strings.HasPrefix(r.Reason, "Batch HUMAN_FINAL: group deterministic capability providers → E-AAAAAA01 · 7 records") {
+		t.Fatalf("reason = %q", r.Reason)
 	}
 }
 
@@ -152,6 +244,9 @@ func TestDecideBatchHumanRoute(t *testing.T) {
 		t.Fatalf("cap: %d %+v", c, res)
 	}
 	batchCap = old
+	if c, res := post(testToken, BatchParams{EmergIONIDs: []string{id}, Reason: "x", ConfirmCount: 1, BatchID: "HFB-zz"}); c != http.StatusBadRequest || !strings.Contains(res.Error, "invalid batch id") {
+		t.Fatalf("bad batch id: %d %+v", c, res)
+	}
 	if events() != 1 {
 		t.Fatal("refused batches wrote events")
 	}
