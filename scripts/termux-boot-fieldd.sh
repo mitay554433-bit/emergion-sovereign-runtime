@@ -1,12 +1,15 @@
 #!/data/data/com.termux/files/usr/bin/sh
+# shellcheck shell=sh
 # UNIFUSION fieldd auto-start for Termux:Boot.
 # Install: cp scripts/termux-boot-fieldd.sh ~/.termux/boot/ && chmod +x ~/.termux/boot/termux-boot-fieldd.sh
 #
-# Idempotent: if fieldd already answers on 127.0.0.1:8899 it does nothing.
-# Builds fieldd into $TMPDIR only when the binary is missing or older than
-# the checked-out commit. Logs to $TMPDIR/fieldd-boot.log and $TMPDIR/fieldd.log.
+# Starts the fieldd watchdog (scripts/fieldd-watchdog.sh) if it is not already
+# running. The watchdog holds termux-wake-lock, rebuilds $TMPDIR/fieldd when
+# the checked-out commit changes, and restarts fieldd whenever
+# http://127.0.0.1:8899/status is not 200.
 # It never edits, resets or cleans the repo and never touches .field.
-# Pass --open to also open /living (the Termux:Widget shortcut does this).
+# Pass --open to also open /living (the Termux:Widget shortcut does this
+# itself after ensuring the watchdog is up).
 
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 PATH="$PREFIX/bin:$HOME/go/bin:$PATH"
@@ -15,9 +18,8 @@ export PREFIX PATH TMPDIR
 REPO="${UNIFUSION_REPO:-$HOME/AXM/emergion-sovereign-runtime}"
 ADDR="${FIELDD_ADDR:-127.0.0.1:8899}"
 URL="http://$ADDR/living"
-BIN="$TMPDIR/fieldd"
-STAMP="$TMPDIR/fieldd.built-sha"
 LOG="$TMPDIR/fieldd-boot.log"
+WATCHDOG="$REPO/scripts/fieldd-watchdog.sh"
 mkdir -p "$TMPDIR"
 
 say() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$LOG"; }
@@ -28,50 +30,33 @@ open_living() {
   case " $* " in *" --open "*) command -v termux-open-url >/dev/null 2>&1 && termux-open-url "$URL" ;; esac
 }
 
-if up; then
-  say "fieldd already running on $ADDR; nothing to do"
+if [ ! -f "$WATCHDOG" ]; then
+  say "watchdog script not found at $WATCHDOG; not starting"
   open_living "$@"
   exit 0
 fi
 
 command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock
+sh "$WATCHDOG" --ensure
+say "watchdog --ensure finished"
 
-if [ ! -d "$REPO" ]; then
-  say "repo not found at $REPO; not starting"
+if up; then
+  say "fieldd already answering on $ADDR"
+  open_living "$@"
   exit 0
 fi
-cd "$REPO" || exit 0
 
-HEAD_SHA="$(git rev-parse HEAD 2>/dev/null)"
-if [ ! -x "$BIN" ] || [ "$(cat "$STAMP" 2>/dev/null)" != "$HEAD_SHA" ]; then
-  say "building fieldd at ${HEAD_SHA:-unknown}"
-  if go build -o "$BIN" ./cmd/fieldd >> "$LOG" 2>&1; then
-    echo "$HEAD_SHA" > "$STAMP"
-    say "BUILD_OK"
-  else
-    say "build failed; see above"
-    [ -x "$BIN" ] || exit 0
-    say "starting the previous build"
-  fi
-fi
-
-# A stale fieldd that is not answering HTTP would hold the socket/pid; clear only that.
-if pgrep -f "$BIN -http" >/dev/null 2>&1; then
-  say "fieldd process present but not answering; restarting it"
-  pkill -f "$BIN -http"
-  sleep 1
-fi
-
-nohup "$BIN" -http "$ADDR" >> "$TMPDIR/fieldd.log" 2>&1 &
+# First start after boot can take a few seconds to build or come up.
 i=0
 while [ $i -lt 20 ]; do
   sleep 1
   if up; then
-    say "fieldd up on $ADDR (pid $(pgrep -f "$BIN -http" | head -1))"
+    say "fieldd up on $ADDR"
     open_living "$@"
     exit 0
   fi
   i=$((i + 1))
 done
-say "fieldd did not answer within 20s; see $TMPDIR/fieldd.log"
+say "fieldd not answering yet; the watchdog will keep trying. See $TMPDIR/fieldd-watchdog.log"
+open_living "$@"
 exit 0

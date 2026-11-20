@@ -23,7 +23,7 @@ import (
 const (
 	pwaBackground = "#0a0a0a" // carbon black
 	pwaRoyal      = "#2f6bff" // royal blue (matches --royal in living-universe.html)
-	pwaCacheName  = "unifusion-shell-v1"
+	pwaCacheName  = "unifusion-shell-v2"
 )
 
 // pwaShellAssets is the complete list of URLs the service worker may cache.
@@ -102,7 +102,7 @@ self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 function offline() {
-  return new Response('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a0a0a"><title>UNIFUSION</title><body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0a0a;color:#c9d8ff;font:16px system-ui,sans-serif;text-align:center"><div><div style="color:#2f6bff;font-size:28px">&#9672;</div><p>fieldd is not running.</p><p>Tap the UNIFUSION widget, then reopen.</p></div>',
+  return new Response('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a0a0a"><title>UNIFUSION</title><body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0a0a;color:#c9d8ff;font:16px system-ui,sans-serif;text-align:center"><div><div style="color:#2f6bff;font-size:28px">&#9672;</div><p>fieldd is restarting, try again in a few seconds</p></div><script>function peek(){fetch("/status",{cache:"no-store"}).then(function(r){if(r.status===200)location.reload()}).catch(function(){})}setInterval(peek,5000);peek();</script>',
     {status: 503, headers: {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store'}});
 }
 self.addEventListener('fetch', e => {
