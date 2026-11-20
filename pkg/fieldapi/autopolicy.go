@@ -36,6 +36,7 @@ type PolicyStatus struct {
 	SwitchVersion string `json:"switch_version,omitempty"`
 	SwitchSHA256  string `json:"switch_sha256,omitempty"`
 	Stale         bool   `json:"stale,omitempty"`
+	CarriedOver   bool   `json:"carried_over,omitempty"`
 	AutoAccepted  int    `json:"auto_accepted"`
 	AutoHeld      int    `json:"auto_held"`
 	Waiting       int    `json:"waiting"`
@@ -50,7 +51,10 @@ func PolicyStatusOf(st core.State) PolicyStatus {
 		ps.SwitchID = st.AutoPolicy.SwitchID
 		ps.SwitchVersion = st.AutoPolicy.Version
 		ps.SwitchSHA256 = st.AutoPolicy.SHA256
-		ps.Stale = st.AutoPolicy.On && (st.AutoPolicy.SHA256 != policy.SHA256() || st.AutoPolicy.Version != policy.Version())
+		// A switch naming the superseded policy carries over (auditable
+		// "supersedes" field, HUMAN_FINAL-approved).
+		ps.Stale = st.AutoPolicy.On && !policy.Covers(st.AutoPolicy.Version, st.AutoPolicy.SHA256)
+		ps.CarriedOver = st.AutoPolicy.On && policy.CarriedOver(st.AutoPolicy.Version, st.AutoPolicy.SHA256)
 		ps.Effective = st.AutoPolicy.On && !ps.Stale
 	}
 	for _, d := range st.AutoDecided {

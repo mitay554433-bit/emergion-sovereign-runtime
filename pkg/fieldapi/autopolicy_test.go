@@ -225,3 +225,75 @@ func TestAutoPolicyReplayRejectsForgedAutoDecision(t *testing.T) {
 		t.Fatal("gov.Decide must stay HUMAN_FINAL only")
 	}
 }
+
+// legacySwitchOn captures and HUMAN_FINAL-approves a switch-ON that names the
+// superseded A01-AUTO-1 policy, as a phone ledger switched on before
+// A01-AUTO-2 holds.
+func legacySwitchOn(t *testing.T, rt *Runtime) string {
+	t.Helper()
+	oldV, oldH, ok := policy.Superseded()
+	if !ok {
+		t.Fatal("no supersedes")
+	}
+	res := reason.Result{
+		Summary:       "AUTO_POLICY switch ON (" + oldV + ")",
+		Relationships: map[string]string{"source_kind": policy.KindSwitch, "policy_state": "on", "policy_version": oldV, "policy_sha256": oldH},
+		Capabilities:  []string{"OBS"},
+		Facts:         []string{"policy_switch_requested", "policy_sha256:" + oldH},
+		Risk:          "L",
+	}
+	desc := "AUTO_POLICY_SWITCH/1\nSTATE:on\nVERSION:" + oldV + "\nSHA256:" + oldH + "\nAT:2026-11-20T15:00:00Z\nREASON:Michael approved A01-AUTO-1\nZ\n"
+	em, _, err := (fieldruntime.Runtime{Store: rt.store, Reasoner: fixedResult{name: "policy-switch", version: "v1", result: res}}).CaptureBytes(context.Background(), "auto-policy-switch", []byte(desc), policy.ProvenanceSwitch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := rt.Decide(em.IDN, string(gov.Approve), "HUMAN_FINAL AUTO_POLICY switch ON: Michael approved A01-AUTO-1"); err != nil {
+		t.Fatal(err)
+	}
+	return em.IDN
+}
+
+func TestA01Auto1SwitchCarriesOverToA01Auto2(t *testing.T) {
+	rt := openTestRuntime(t)
+	ids := ingestLines(t, rt, manifestLine("c1", "Alpha"), manifestLine("c2", "Beta"))
+	switchID := legacySwitchOn(t, rt)
+	st, err := rt.state()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ps := PolicyStatusOf(st)
+	if !ps.On || !ps.Effective || ps.Stale || !ps.CarriedOver || ps.SwitchVersion != policy.LegacyVersion || ps.Version != policy.Version() {
+		t.Fatalf("A01-AUTO-1 switch must carry over: %+v", ps)
+	}
+	// An A01-AUTO-1 receipt already in the ledger still replays (legacy rules).
+	oldV, oldH, _ := policy.Superseded()
+	_, legacy, err := gov.DecideAuto(st.AtGOV[ids[1]], gov.Approve, "AUTO_POLICY "+oldV+" sha256="+oldH+" class="+policy.ClassSourceUpload+" switch="+switchID+": verified SOURCE upload")
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, _ := rt.store.Events()
+	if _, err := livefield.Rebuild(append(append([]core.Event(nil), events...), core.Event{Type: "D", ID: "EV-L", Decision: &legacy})); err != nil {
+		t.Fatalf("A01-AUTO-1 receipt must replay: %v", err)
+	}
+	res, err := rt.ApplyAutoPolicy(0, "")
+	if err != nil || !res.Effective || res.Accepted != 2 {
+		t.Fatalf("carried-over policy must decide: %+v %v", res, err)
+	}
+	if _, err := rt.state(); err != nil {
+		t.Fatalf("replay of A01-AUTO-2 receipts under the A01-AUTO-1 switch: %v", err)
+	}
+	for _, id := range ids {
+		d := decisionsFor(t, rt, id)
+		if len(d) != 1 || !strings.Contains(d[0].Reason, "AUTO_POLICY "+policy.Version()+" sha256="+policy.SHA256()) || !strings.Contains(d[0].Reason, "switch="+switchID) {
+			t.Fatalf("receipt: %+v", d)
+		}
+	}
+	// A HUMAN_FINAL switch-OFF still turns it off.
+	if _, err := rt.SetAutoPolicy(context.Background(), false, "pause"); err != nil {
+		t.Fatal(err)
+	}
+	st, _ = rt.state()
+	if ps := PolicyStatusOf(st); ps.On || ps.Effective {
+		t.Fatalf("off: %+v", ps)
+	}
+}

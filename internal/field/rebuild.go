@@ -112,10 +112,11 @@ func Rebuild(events []core.Event) (core.State, error) {
 					case "HUMAN_FINAL":
 						return nil
 					case policy.Authority:
-						// A01-AUTO-1 (HUMAN_FINAL amendment, 2026-11-20): an
-						// AUTO_POLICY receipt is valid only while a
-						// HUMAN_FINAL-approved switch has the policy on, and
-						// only for a record the policy classifies the same way.
+						// A01-AUTO-1/-2 (HUMAN_FINAL amendments, 2026-11-20):
+						// an AUTO_POLICY receipt is valid only while a
+						// HUMAN_FINAL-approved switch covering the named
+						// policy is on, and only for a record that policy
+						// classifies the same way.
 						em, ok := st.AtGOV[ev.Decision.EmergIONID]
 						if !ok {
 							return fmt.Errorf("decision target not at GOV: %s", ev.Decision.EmergIONID)
