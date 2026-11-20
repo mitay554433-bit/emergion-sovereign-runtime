@@ -216,6 +216,7 @@ func LocalInsighterFromEnv() LocalInsighter {
 			bin = discoverBinary("")
 		}
 	}
+	bin = preferCompletion(bin)
 	return LocalInsighter{
 		Binary:    bin,
 		Model:     discoverModel(os.Getenv("GEMMA_MODEL")),
@@ -505,4 +506,22 @@ func stderrTail(s string, n int) string {
 		return "no error text"
 	}
 	return out
+}
+
+// preferCompletion swaps llama-cli (newer builds reject -no-cnv and open in
+// chat mode) for llama-completion when one sits beside it or on PATH.
+func preferCompletion(bin string) string {
+	if filepath.Base(bin) != "llama-cli" {
+		return bin
+	}
+	if dir := filepath.Dir(bin); dir != "." && dir != "" {
+		side := filepath.Join(dir, "llama-completion")
+		if st, err := os.Stat(side); err == nil && !st.IsDir() {
+			return side
+		}
+	}
+	if p, err := exec.LookPath("llama-completion"); err == nil {
+		return p
+	}
+	return bin
 }
