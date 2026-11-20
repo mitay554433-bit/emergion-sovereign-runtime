@@ -145,3 +145,22 @@ process.stdout.write([ids.length,new Set(ids).size,one.kind,one.facets.join('+')
 		t.Fatalf("nodeSet = %s", out)
 	}
 }
+
+// Labels show the IDN once: the name line never repeats the IDN, and the page
+// never scrolls sideways on a phone.
+func TestLivingUniverseLabelsShowIDNOnce(t *testing.T) {
+	src := livingUniverseHTML(t)
+	for _, want := range []string{"overflow-x:hidden", "nm=String(nameOf(n)).slice(0,28)", "renderQueue()", "govP.length<=400"} {
+		if !strings.Contains(src, want) {
+			t.Fatalf("living-universe.html missing %q", want)
+		}
+	}
+	out := runNode(t, block(t, src, "node-set")+`
+const a={id:"E-BBFF45DB435E0D39",label:"E-BBFF45DB435E0D39",kind:"accepted",em:{m:{s:"E-BBFF45DB435E0D39"}}};
+const b={id:"E-1",label:"E-1",kind:"pending",em:{m:{s:"execution observation"}}};
+const c={id:"E-2",label:"Skyhook Runtime",kind:"accepted",em:{}};
+process.stdout.write([nameOf(a),nameOf(b),nameOf(c)].join("|"));`)
+	if out != "REG-accepted record|execution observation|Skyhook Runtime" {
+		t.Fatalf("nameOf = %q", out)
+	}
+}
