@@ -132,6 +132,18 @@ func TestPWAServiceWorkerNeverCachesDataOrDecide(t *testing.T) {
 	if !strings.Contains(sw, "if (req.method !== 'GET') return;") {
 		t.Fatal("sw.js must pass non-GET (decide/authorize) straight through")
 	}
+	if !strings.Contains(sw, "fieldd is restarting, try again in a few seconds") {
+		t.Fatal("sw.js offline page must tell the user fieldd is restarting")
+	}
+	if !strings.Contains(sw, `fetch("/status",{cache:"no-store"})`) {
+		t.Fatal("sw.js offline page must poll /status with no-store")
+	}
+	if !strings.Contains(sw, "setInterval(peek,5000)") || !strings.Contains(sw, "location.reload") {
+		t.Fatal("sw.js offline page must retry every 5s and reload when /status is 200")
+	}
+	if strings.Contains(sw, "cache.put") || strings.Contains(sw, "caches.open(CACHE).then(c => c.add(") {
+		t.Fatal("sw.js must not cache the offline page or /status")
+	}
 }
 
 func TestLivingStillInjectsTokenNoStoreWithPWA(t *testing.T) {
