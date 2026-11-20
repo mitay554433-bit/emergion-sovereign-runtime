@@ -1,11 +1,16 @@
 {
   "policy": "AUTO_ACCEPT",
-  "version": "A01-AUTO-1",
+  "version": "A01-AUTO-2",
   "amends": "A01",
-  "approved": "2026-11-20, Michael (owner), HUMAN_FINAL in chat: \"Build it and change A01 so low-risk records auto-accept\"",
+  "approved": "2026-11-20, Michael (owner), HUMAN_FINAL in chat: \"Yes, auto-accept insights and links even if the uploads aren't accepted, with undo\"",
+  "supersedes": {
+    "version": "A01-AUTO-1",
+    "sha256": "18d8739c7fca808fb4ad773b05f1a4299d5981f563e6588261e2e0102f7c037e",
+    "note": "A01-AUTO-2 widens A01-AUTO-1 by Michael's HUMAN_FINAL approval above (chat, 2026-11-20 9:15 AM Pacific). A REG-accepted HUMAN_FINAL switch-ON naming exactly this superseded version and sha256 also covers A01-AUTO-2; a switch-OFF still turns it off. One step only: no other version or hash is covered. A01-AUTO-1 receipts already in the ledger replay under the A01-AUTO-1 rules."
+  },
   "authority": "AUTO_POLICY",
   "default": "OFF",
-  "switch": "ON and OFF are each a governed AUTO_POLICY_SWITCH record that only a HUMAN_FINAL APPROVE + REG acceptance makes effective. The switch names this file's sha256; a changed file is a new policy and is OFF until switched on again.",
+  "switch": "ON and OFF are each a governed AUTO_POLICY_SWITCH record that only a HUMAN_FINAL APPROVE + REG acceptance makes effective. The switch names this file's sha256; a changed file is a new policy and is OFF until switched on again. Exception: the single superseded version named in \"supersedes\" (HUMAN_FINAL-approved carry-over).",
   "classes": [
     {
       "class": "SOURCE_UPLOAD_VERIFIED",
@@ -23,9 +28,14 @@
       "rule": "Generated provider-combination / trajectory record (REL source_name provider_population). HOLD only, never accepted; RESUME is one HUMAN_FINAL press."
     },
     {
-      "class": "SOURCE_KIN_LINK_ACCEPTED_ENDS",
+      "class": "SOURCE_KIN_LINK_WORKER",
       "decision": "APPROVE",
-      "rule": "Worker-derived SOURCE_KIN_LINK (topic or kin) whose two distinct ends are both REG-accepted SOURCE_UPLOAD records at decision time; preserved descriptor FROM/TO equal the record; no Archonym; CAP exactly OBS; risk L; RECOIL and WVC passed; no facets, Supersedes or authority REL keys."
+      "rule": "Worker-derived SOURCE_KIN_LINK (topic or kin) from worker_source_kin_link whose two distinct ends are existing SOURCE_UPLOAD records from governed_source_upload in any state except rejected (AtGOV, approved, accepted, held or returned); preserved descriptor FROM/TO equal the record; no Archonym; CAP exactly OBS; risk L; RECOIL and WVC passed; no facets, Supersedes, build graph, monetization or authority REL keys."
+    },
+    {
+      "class": "SOURCE_INSIGHT_WORKER",
+      "decision": "APPROVE",
+      "rule": "Worker SOURCE_INSIGHT from worker_source_insight whose cited sources (insight_of and every insight_kin ID) are existing SOURCE_UPLOAD records from governed_source_upload in any state except rejected; preserved descriptor is SOURCE_INSIGHT/1 with OF and KIN equal to the record; no Archonym; CAP exactly OBS; risk L; RECOIL and WVC passed; no facets, Supersedes, build graph, monetization or authority REL keys."
     }
   ],
   "never": [
@@ -34,8 +44,7 @@
     "any record that changes authority (Supersedes, COMPOSITION_KIN, kin_emergion, capability providers, targets, requirements)",
     "wire keys, the GOV gate, the policy itself (AUTO_POLICY_SWITCH)",
     "money or external actions (action authorizations stay HUMAN_FINAL)",
-    "Archonym-claiming records",
-    "worker SOURCE_INSIGHT proposals (summaries, combinations, gaps): they wait AtGOV for one HUMAN_FINAL batch press"
+    "Archonym-claiming records"
   ],
   "undo": "REVERT: one HUMAN_FINAL press moves an AUTO_POLICY-accepted record from REG-accepted to HELD (append-only). An AUTO_POLICY HOLD is undone with the existing HUMAN_FINAL RESUME."
 }

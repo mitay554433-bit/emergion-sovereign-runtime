@@ -182,7 +182,7 @@ func TestWorkerFailuresAreBoundedAndRetried(t *testing.T) {
 	}
 }
 
-func TestWorkerLinksAutoAcceptUnderPolicyInsightsWait(t *testing.T) {
+func TestWorkerLinksAndInsightsAutoAcceptUnderPolicy(t *testing.T) {
 	s, _ := setup(t, 3)
 	w := &Worker{Store: s, Insighter: &fakeInsighter{}, Dir: t.TempDir()}
 	if _, err := w.Step(context.Background(), 3); err != nil {
@@ -194,7 +194,7 @@ func TestWorkerLinksAutoAcceptUnderPolicyInsightsWait(t *testing.T) {
 		v := policy.Classify(st, x, em)
 		switch em.REL["source_kind"] {
 		case policy.KindKinLink:
-			if v.Class != policy.ClassKinLinkAccepted {
+			if v.Class != policy.ClassKinLinkWorker {
 				t.Fatalf("link %s not low-risk: %+v (REL %v)", em.IDN, v, em.REL)
 			}
 			ev, err := s.ReadEvidence(em.MEM.SourceHash)
@@ -202,8 +202,13 @@ func TestWorkerLinksAutoAcceptUnderPolicyInsightsWait(t *testing.T) {
 				t.Fatalf("link evidence: %v", err)
 			}
 		case policy.KindInsight:
-			if v.Decision != "" {
-				t.Fatalf("insight must wait for HUMAN_FINAL: %+v", v)
+			// A01-AUTO-2: worker insights on existing uploads are low-risk
+			if v.Class != policy.ClassInsightWorker || v.Decision != "APPROVE" {
+				t.Fatalf("insight %s not low-risk: %+v (REL %v)", em.IDN, v, em.REL)
+			}
+			ev, err := s.ReadEvidence(em.MEM.SourceHash)
+			if err != nil || policy.VerifyEvidence(v, em, ev, "") != nil {
+				t.Fatalf("insight evidence: %v %v", err, policy.VerifyEvidence(v, em, ev, ""))
 			}
 		}
 	}

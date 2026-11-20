@@ -1,4 +1,5 @@
-// Package policy holds the A01 auto-accept amendment (A01-AUTO-1).
+// Package policy holds the A01 auto-accept amendment (A01-AUTO-2, which
+// widens A01-AUTO-1).
 //
 // Approved by Michael (owner) as HUMAN_FINAL on 2026-11-20: low-risk records
 // may be decided by a versioned, hash-identified policy instead of a human
@@ -51,19 +52,34 @@ const (
 
 // Classes (must match auto-accept.json).
 const (
-	ClassNone            = ""
-	ClassSourceUpload    = "SOURCE_UPLOAD_VERIFIED"
-	ClassDuplicate       = "EXACT_DUPLICATE"
-	ClassGenerated       = "GENERATED_PROVIDER_COMBINATION"
+	ClassNone          = ""
+	ClassSourceUpload  = "SOURCE_UPLOAD_VERIFIED"
+	ClassDuplicate     = "EXACT_DUPLICATE"
+	ClassGenerated     = "GENERATED_PROVIDER_COMBINATION"
+	ClassKinLinkWorker = "SOURCE_KIN_LINK_WORKER"
+	ClassInsightWorker = "SOURCE_INSIGHT_WORKER"
+
+	// ClassKinLinkAccepted is the A01-AUTO-1 link class. It is kept only so
+	// A01-AUTO-1 receipts already in a ledger replay under their own rules.
 	ClassKinLinkAccepted = "SOURCE_KIN_LINK_ACCEPTED_ENDS"
 )
 
+// LegacyVersion is the policy A01-AUTO-2 supersedes.
+const LegacyVersion = "A01-AUTO-1"
+
 // Document is the parsed policy file.
 type Document struct {
-	Policy    string `json:"policy"`
-	Version   string `json:"version"`
-	Amends    string `json:"amends"`
-	Approved  string `json:"approved"`
+	Policy   string `json:"policy"`
+	Version  string `json:"version"`
+	Amends   string `json:"amends"`
+	Approved string `json:"approved"`
+	// Supersedes names the one earlier policy whose REG-accepted HUMAN_FINAL
+	// switch-ON also covers this version (HUMAN_FINAL-approved carry-over).
+	Supersedes *struct {
+		Version string `json:"version"`
+		SHA256  string `json:"sha256"`
+		Note    string `json:"note"`
+	} `json:"supersedes,omitempty"`
 	Authority string `json:"authority"`
 	Default   string `json:"default"`
 	Classes   []struct {
@@ -80,9 +96,37 @@ func init() {
 	if err := json.Unmarshal(policyJSON, &doc); err != nil {
 		panic("policy/auto-accept.json: " + err.Error())
 	}
+	if p := doc.Supersedes; p != nil && (p.Version != LegacyVersion || !validHex64(p.SHA256) || strings.TrimSpace(p.Note) == "") {
+		panic("policy/auto-accept.json: supersedes must name " + LegacyVersion + ", its sha256 and a note")
+	}
 }
 
-// Version is the policy version (A01-AUTO-1).
+// Superseded returns the version and sha256 this policy supersedes, if any.
+func Superseded() (version, sha string, ok bool) {
+	if doc.Supersedes == nil {
+		return "", "", false
+	}
+	return doc.Supersedes.Version, doc.Supersedes.SHA256, true
+}
+
+// Covers reports whether a switch naming version/sha turns THIS policy on:
+// it names this exact file, or exactly the one version and sha256 the file
+// says it supersedes.
+func Covers(version, sha string) bool {
+	if version == Version() && sha == SHA256() {
+		return true
+	}
+	v, h, ok := Superseded()
+	return ok && version == v && sha == h
+}
+
+// CarriedOver reports whether a switch naming version/sha covers this policy
+// only through "supersedes".
+func CarriedOver(version, sha string) bool {
+	return Covers(version, sha) && !(version == Version() && sha == SHA256())
+}
+
+// Version is the policy version (A01-AUTO-2).
 func Version() string { return doc.Version }
 
 // SHA256 is the hex sha256 of the exact embedded policy file.
@@ -237,6 +281,12 @@ var uploadREL = map[string]bool{
 	"source_mime": true, "source_captured_at": true, "source_related": true,
 }
 
+var insightREL = map[string]bool{
+	"protector": true, "governed_state": true, "source_kind": true, "source_topic": true,
+	"insight_of": true, "insight_reasoner": true, "insight_kin": true, "insight_combo": true,
+	"worker_version": true,
+}
+
 var linkREL = map[string]bool{
 	"protector": true, "governed_state": true, "source_kind": true, "source_topic": true,
 	"kin_link_from": true, "kin_link_to": true, "kin_link_basis": true, "kin_link_why": true,
@@ -295,6 +345,39 @@ func validHex64(v string) bool {
 // duplicate index x. Decision "" means HUMAN_FINAL is required. It is pure
 // and deterministic so replay can re-run it.
 func Classify(st core.State, x *Index, em core.EmergION) Verdict {
+	return classifyVersion(st, x, em, false)
+}
+
+// classifyLegacy is the A01-AUTO-1 classifier, used only to replay receipts
+// that name A01-AUTO-1.
+func classifyLegacy(st core.State, x *Index, em core.EmergION) Verdict {
+	return classifyVersion(st, x, em, true)
+}
+
+// liveUpload is an existing SOURCE_UPLOAD in any state except rejected.
+func liveUpload(st core.State, id string) bool {
+	if id == "" || has(st.Rejected, id) {
+		return false
+	}
+	for _, set := range []map[string]core.EmergION{st.AtGOV, st.Approved, st.Accepted, st.Held, st.Returned} {
+		if em, ok := set[id]; ok {
+			return strings.TrimSpace(em.REL["source_kind"]) == KindSourceUpload && em.MEM.Provenance == ProvenanceSourceUpload
+		}
+	}
+	return false
+}
+
+func splitIDs(v string) []string {
+	var out []string
+	for _, f := range strings.Split(v, ",") {
+		if f = strings.TrimSpace(f); f != "" {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+func classifyVersion(st core.State, x *Index, em core.EmergION, legacy bool) Verdict {
 	kind := strings.TrimSpace(em.REL["source_kind"])
 	if em.STA != core.StateAtGOV {
 		return Verdict{Why: "not AtGOV"}
@@ -336,16 +419,45 @@ func Classify(st core.State, x *Index, em core.EmergION) Verdict {
 		if from == "" || to == "" || from == to {
 			return Verdict{Why: "link ends invalid"}
 		}
+		if legacy {
+			for _, end := range []string{from, to} {
+				a, ok := st.Accepted[end]
+				if !ok || strings.TrimSpace(a.REL["source_kind"]) != KindSourceUpload {
+					return Verdict{Why: "link end " + end + " is not a REG-accepted SOURCE_UPLOAD"}
+				}
+			}
+			if why := lowRiskShape(em, linkREL); why != "" {
+				return Verdict{Why: why}
+			}
+			return Verdict{Class: ClassKinLinkAccepted, Decision: "APPROVE", Why: "link between accepted sources " + from + " and " + to}
+		}
 		for _, end := range []string{from, to} {
-			a, ok := st.Accepted[end]
-			if !ok || strings.TrimSpace(a.REL["source_kind"]) != KindSourceUpload {
-				return Verdict{Why: "link end " + end + " is not a REG-accepted SOURCE_UPLOAD"}
+			if !liveUpload(st, end) {
+				return Verdict{Why: "link end " + end + " is not an existing, unrejected SOURCE_UPLOAD"}
 			}
 		}
 		if why := lowRiskShape(em, linkREL); why != "" {
 			return Verdict{Why: why}
 		}
-		return Verdict{Class: ClassKinLinkAccepted, Decision: "APPROVE", Why: "link between accepted sources " + from + " and " + to}
+		return Verdict{Class: ClassKinLinkWorker, Decision: "APPROVE", Why: "worker link between sources " + from + " and " + to}
+	case KindInsight:
+		if legacy {
+			return Verdict{Why: "A01-AUTO-1 never decides insights"}
+		}
+		if em.MEM.Provenance != ProvenanceInsight {
+			return Verdict{Why: "SOURCE_INSIGHT not from the worker"}
+		}
+		of := strings.TrimSpace(em.REL["insight_of"])
+		cited := append([]string{of}, splitIDs(em.REL["insight_kin"])...)
+		for _, id := range cited {
+			if !liveUpload(st, id) {
+				return Verdict{Why: "cited source " + id + " is not an existing, unrejected SOURCE_UPLOAD"}
+			}
+		}
+		if why := lowRiskShape(em, insightREL); why != "" {
+			return Verdict{Why: why}
+		}
+		return Verdict{Class: ClassInsightWorker, Decision: "APPROVE", Why: "worker insight on source " + of}
 	}
 	return Verdict{Why: "not a low-risk class"}
 }
@@ -383,13 +495,21 @@ func VerifyEvidence(v Verdict, em core.EmergION, evidence []byte, fileHash strin
 		if fileHash != "" && fileHash != em.REL["source_sha256"] {
 			return fmt.Errorf("file sha256 does not match the manifest")
 		}
-	case ClassKinLinkAccepted:
+	case ClassKinLinkAccepted, ClassKinLinkWorker:
 		d, err := descriptorLines(evidence, "SOURCE_KIN_LINK/1")
 		if err != nil {
 			return err
 		}
 		if d["FROM"] != em.REL["kin_link_from"] || d["TO"] != em.REL["kin_link_to"] {
 			return fmt.Errorf("link descriptor does not match the record")
+		}
+	case ClassInsightWorker:
+		d, err := descriptorLines(evidence, "SOURCE_INSIGHT/1")
+		if err != nil {
+			return err
+		}
+		if d["OF"] != em.REL["insight_of"] || strings.Join(splitIDs(d["KIN"]), ",") != strings.Join(splitIDs(em.REL["insight_kin"]), ",") {
+			return fmt.Errorf("insight descriptor does not match the record")
 		}
 	}
 	return nil
@@ -403,16 +523,29 @@ func ReplayCheck(st core.State, x *Index, status Status, em core.EmergION, d cor
 	if !status.On {
 		return fmt.Errorf("AUTO_POLICY decision while the policy is off")
 	}
-	if !strings.Contains(d.Reason, "AUTO_POLICY "+status.Version+" sha256="+status.SHA256+" ") {
-		return fmt.Errorf("AUTO_POLICY decision does not name the active policy")
-	}
-	if status.Version != Version() {
-		return fmt.Errorf("AUTO_POLICY version %s has no classifier", status.Version)
-	}
 	if d.Decision != "APPROVE" && d.Decision != "HOLD" {
 		return fmt.Errorf("AUTO_POLICY may only APPROVE or HOLD")
 	}
-	v := Classify(st, x, em)
+	// The receipt names the policy that decided it: this file (allowed when
+	// the switch names this file or the one version it supersedes), or the
+	// superseded A01-AUTO-1 itself (allowed only under its own switch, and
+	// replayed with the A01-AUTO-1 rules).
+	var v Verdict
+	lv, lh, hasLegacy := Superseded()
+	switch {
+	case strings.Contains(d.Reason, "AUTO_POLICY "+Version()+" sha256="+SHA256()+" "):
+		if !Covers(status.Version, status.SHA256) {
+			return fmt.Errorf("AUTO_POLICY decision does not name the active policy")
+		}
+		v = Classify(st, x, em)
+	case hasLegacy && strings.Contains(d.Reason, "AUTO_POLICY "+lv+" sha256="+lh+" "):
+		if status.Version != lv || status.SHA256 != lh {
+			return fmt.Errorf("AUTO_POLICY decision does not name the active policy")
+		}
+		v = classifyLegacy(st, x, em)
+	default:
+		return fmt.Errorf("AUTO_POLICY decision does not name the active policy")
+	}
 	if v.Decision != d.Decision {
 		return fmt.Errorf("AUTO_POLICY %s of %s is outside the policy (%s)", d.Decision, em.IDN, v.Why)
 	}

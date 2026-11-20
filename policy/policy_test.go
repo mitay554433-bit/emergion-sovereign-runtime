@@ -31,6 +31,16 @@ func link(id, from, to string) core.EmergION {
 	return em
 }
 
+func insight(id, of, kin string) core.EmergION {
+	em := upload(id, sha)
+	em.MEM.Provenance = ProvenanceInsight
+	em.REL = map[string]string{"protector": "NO_EXTERNAL_AUTHORITY_CLAIMED", "source_kind": KindInsight, "insight_of": of, "source_topic": "x", "insight_reasoner": "local-gemma-server", "worker_version": "worker-1"}
+	if kin != "" {
+		em.REL["insight_kin"] = kin
+	}
+	return em
+}
+
 func classify(st core.State, em core.EmergION) Verdict {
 	st.AtGOV[em.IDN] = em
 	return Classify(st, BuildIndex(st), em)
@@ -41,7 +51,7 @@ func TestPolicyFileMatchesCode(t *testing.T) {
 	if err := json.Unmarshal(Bytes(), &d); err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]string{ClassSourceUpload: "APPROVE", ClassDuplicate: "HOLD", ClassGenerated: "HOLD", ClassKinLinkAccepted: "APPROVE"}
+	want := map[string]string{ClassSourceUpload: "APPROVE", ClassDuplicate: "HOLD", ClassGenerated: "HOLD", ClassKinLinkWorker: "APPROVE", ClassInsightWorker: "APPROVE"}
 	if len(d.Classes) != len(want) {
 		t.Fatalf("classes: %+v", d.Classes)
 	}
@@ -50,7 +60,18 @@ func TestPolicyFileMatchesCode(t *testing.T) {
 			t.Fatalf("class %s decision %s", c.Class, c.Decision)
 		}
 	}
-	if d.Version != "A01-AUTO-1" || d.Default != "OFF" || d.Authority != Authority || d.Amends != "A01" {
+	for _, n := range d.Never {
+		if strings.Contains(n, "SOURCE_INSIGHT") {
+			t.Fatalf("insights are no longer in never: %q", n)
+		}
+	}
+	if v, h, ok := Superseded(); !ok || v != "A01-AUTO-1" || h != "18d8739c7fca808fb4ad773b05f1a4299d5981f563e6588261e2e0102f7c037e" || !strings.Contains(d.Supersedes.Note, "HUMAN_FINAL") {
+		t.Fatalf("supersedes: %v %v %v", v, h, ok)
+	}
+	if !strings.Contains(d.Approved, "auto-accept insights and links even if the uploads aren't accepted, with undo") {
+		t.Fatalf("approved: %q", d.Approved)
+	}
+	if d.Version != "A01-AUTO-2" || d.Default != "OFF" || d.Authority != Authority || d.Amends != "A01" {
 		t.Fatalf("header: %+v", d)
 	}
 	if len(SHA256()) != 64 {
@@ -88,18 +109,143 @@ func TestClassifyLowRiskClasses(t *testing.T) {
 	if v := classify(st, gen); v.Class != ClassGenerated || v.Decision != "HOLD" {
 		t.Fatalf("generated: %+v", v)
 	}
-	// kin link between accepted SOURCE records -> APPROVE; with a waiting end -> human
+	// kin link between accepted SOURCE records -> APPROVE
 	st = core.EmptyState()
 	a, b := upload("E-a", strings.Repeat("1", 64)), upload("E-b", strings.Repeat("2", 64))
 	a.STA, b.STA = core.StateAccepted, core.StateAccepted
 	st.Accepted["E-a"], st.Accepted["E-b"] = a, b
-	if v := classify(st, link("E-L", "E-a", "E-b")); v.Class != ClassKinLinkAccepted || v.Decision != "APPROVE" {
+	if v := classify(st, link("E-L", "E-a", "E-b")); v.Class != ClassKinLinkWorker || v.Decision != "APPROVE" {
 		t.Fatalf("link: %+v", v)
 	}
-	delete(st.Accepted, "E-b")
-	st.AtGOV["E-b"] = upload("E-b", strings.Repeat("2", 64))
-	if v := classify(st, link("E-L2", "E-a", "E-b")); v.Decision != "" {
-		t.Fatalf("link with waiting end must need HUMAN_FINAL: %+v", v)
+}
+
+func TestA01Auto2LinksAndInsights(t *testing.T) {
+	ends := func() core.State {
+		st := core.EmptyState()
+		a, b := upload("E-a", strings.Repeat("1", 64)), upload("E-b", strings.Repeat("2", 64))
+		b.STA = core.StateHeld
+		st.AtGOV["E-a"], st.Held["E-b"] = a, b
+		return st
+	}
+	// A01-AUTO-2: a link whose ends are not accepted (AtGOV, held) auto-approves
+	if v := classify(ends(), link("E-L", "E-a", "E-b")); v.Class != ClassKinLinkWorker || v.Decision != "APPROVE" {
+		t.Fatalf("link with non-accepted ends: %+v", v)
+	}
+	// ...but the A01-AUTO-1 rules (legacy replay) still need accepted ends
+	st := ends()
+	st.AtGOV["E-L"] = link("E-L", "E-a", "E-b")
+	if v := classifyLegacy(st, BuildIndex(st), st.AtGOV["E-L"]); v.Decision != "" {
+		t.Fatalf("legacy rules changed: %+v", v)
+	}
+	// a link to a missing upload is not approved
+	if v := classify(ends(), link("E-L", "E-a", "E-missing")); v.Decision == "APPROVE" {
+		t.Fatalf("link to missing upload approved: %+v", v)
+	}
+	// a link to a rejected upload is not approved
+	st = ends()
+	r := st.Held["E-b"]
+	delete(st.Held, "E-b")
+	r.STA = core.StateRejected
+	st.Rejected["E-b"] = r
+	if v := classify(st, link("E-L", "E-a", "E-b")); v.Decision == "APPROVE" {
+		t.Fatalf("link to rejected upload approved: %+v", v)
+	}
+	// a link to a record that is not a SOURCE_UPLOAD is not approved
+	st = ends()
+	st.AtGOV["E-i"] = insight("E-i", "E-a", "")
+	if v := classify(st, link("E-L", "E-a", "E-i")); v.Decision == "APPROVE" {
+		t.Fatalf("link to non-upload approved: %+v", v)
+	}
+	// an insight on an existing upload (cited kin too) auto-approves
+	if v := classify(ends(), insight("E-I", "E-a", "E-b")); v.Class != ClassInsightWorker || v.Decision != "APPROVE" {
+		t.Fatalf("insight: %+v", v)
+	}
+	// insight on a missing or rejected source, or citing a missing kin -> human
+	if v := classify(ends(), insight("E-I", "E-missing", "")); v.Decision != "" {
+		t.Fatalf("insight on missing source: %+v", v)
+	}
+	if v := classify(ends(), insight("E-I", "E-a", "E-missing")); v.Decision != "" {
+		t.Fatalf("insight citing missing kin: %+v", v)
+	}
+	st = ends()
+	st.Rejected["E-b"] = st.Held["E-b"]
+	delete(st.Held, "E-b")
+	if v := classify(st, insight("E-I", "E-b", "")); v.Decision != "" {
+		t.Fatalf("insight on rejected source: %+v", v)
+	}
+	// unsafe insights are never approved
+	unsafe := map[string]func(*core.EmergION){
+		"facet":        func(e *core.EmergION) { e.EVO.Metadata.Facets = []core.Facet{core.FacetPaymentsFinance} },
+		"archonym":     func(e *core.EmergION) { e.EVO.Metadata.Archonym = "Name" },
+		"capability":   func(e *core.EmergION) { e.CAP = []string{"OBS", "SEND"} },
+		"risk":         func(e *core.EmergION) { e.VAL.Risk = "M" },
+		"supersedes":   func(e *core.EmergION) { e.EVO.Supersedes = "E-OLD" },
+		"monetization": func(e *core.EmergION) { e.EVO.Metadata.Monetization = &core.Monetization{Model: "x"} },
+		"build graph":  func(e *core.EmergION) { e.EVO.Metadata.BuildNodes = []core.BuildNode{{ID: "a", System: "b"}} },
+		"authority":    func(e *core.EmergION) { e.REL["capability_providers"] = "X:E-a" },
+		"provenance":   func(e *core.EmergION) { e.MEM.Provenance = "local_dropzone" },
+		"no wvc":       func(e *core.EmergION) { e.VAL.WVC = false },
+	}
+	for name, mut := range unsafe {
+		em := insight("E-I", "E-a", "")
+		mut(&em)
+		if v := classify(ends(), em); v.Decision == "APPROVE" {
+			t.Fatalf("insight with %s approved: %+v", name, v)
+		}
+	}
+	// descriptor must match
+	v := Verdict{Class: ClassInsightWorker}
+	em := insight("E-I", "E-a", "E-b")
+	desc := "SOURCE_INSIGHT/1\nOF:E-a\nOF_SHA256:x\nREASONER:r\nWORKER:worker-1\nSUMMARY:s\nKIN:E-b\nZ\n"
+	if err := VerifyEvidence(v, em, []byte(desc), ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := VerifyEvidence(v, em, []byte(strings.Replace(desc, "OF:E-a", "OF:E-z", 1)), ""); err == nil {
+		t.Fatal("insight descriptor mismatch must fail")
+	}
+}
+
+func TestSwitchForA01Auto1CarriesOverOnlyViaSupersedes(t *testing.T) {
+	oldV, oldH, _ := Superseded()
+	if !Covers(Version(), SHA256()) || !Covers(oldV, oldH) || !CarriedOver(oldV, oldH) || CarriedOver(Version(), SHA256()) {
+		t.Fatal("covers")
+	}
+	if Covers(oldV, strings.Repeat("f", 64)) || Covers("A01-AUTO-0", oldH) {
+		t.Fatal("only the exact superseded version and hash carry over")
+	}
+	st := core.EmptyState()
+	st.AtGOV["E-a"] = upload("E-a", strings.Repeat("1", 64))
+	em := insight("E-I", "E-a", "")
+	st.AtGOV["E-I"] = em
+	x := BuildIndex(st)
+	v := Classify(st, x, em)
+	d := core.DecisionReceipt{EmergIONID: "E-I", Decision: "APPROVE", Authority: Authority, Reason: ReasonText(v, "E-S1")}
+	old := Status{On: true, Version: oldV, SHA256: oldH, SwitchID: "E-S1"}
+	if err := ReplayCheck(st, x, old, em, d); err != nil {
+		t.Fatalf("A01-AUTO-2 receipt under the A01-AUTO-1 switch: %v", err)
+	}
+	if err := ReplayCheck(st, x, Status{Version: oldV, SHA256: oldH}, em, d); err == nil {
+		t.Fatal("switch OFF must fail")
+	}
+	// an A01-AUTO-1 receipt replays under its own switch with its own rules
+	lnk := link("E-L", "E-a", "E-b")
+	acc := upload("E-b", strings.Repeat("2", 64))
+	acc.STA = core.StateAccepted
+	st.Accepted["E-b"] = acc
+	a := st.AtGOV["E-a"]
+	delete(st.AtGOV, "E-a")
+	a.STA = core.StateAccepted
+	st.Accepted["E-a"] = a
+	st.AtGOV["E-L"] = lnk
+	x = BuildIndex(st)
+	legacy := core.DecisionReceipt{EmergIONID: "E-L", Decision: "APPROVE", Authority: Authority,
+		Reason: "AUTO_POLICY " + oldV + " sha256=" + oldH + " class=" + ClassKinLinkAccepted + " switch=E-S1: link between accepted sources E-a and E-b"}
+	if err := ReplayCheck(st, x, old, lnk, legacy); err != nil {
+		t.Fatalf("legacy receipt: %v", err)
+	}
+	cur := Status{On: true, Version: Version(), SHA256: SHA256(), SwitchID: "E-S2"}
+	if err := ReplayCheck(st, x, cur, lnk, legacy); err == nil {
+		t.Fatal("an A01-AUTO-1 receipt needs the A01-AUTO-1 switch")
 	}
 }
 
