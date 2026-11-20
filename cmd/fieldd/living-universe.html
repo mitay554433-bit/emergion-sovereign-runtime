@@ -285,7 +285,7 @@ const fmt=n=>Number(n).toLocaleString('en-US');
 const shortID=id=>{id=String(id||'');return id.length>SHORT?id.slice(0,SHORT)+'…':id};
 const AXIOMS=[['A01','HUMAN_FINAL authority cannot be bypassed'],['A02','self-building does not imply self-authorizing'],['A03','SOURCE evidence is distinct from accepted truth'],['A04','GOV decides'],['A05','REG accepts'],['A06','PROJ is not authority'],['A07','invalid candidates fail closed and preserve evidence'],['A08','sovereign kin remain distinct during composition'],['A09','indexes and projections are rebuildable and non-authoritative'],['A10','architecture changes require HUMAN_FINAL']];
 const FACET_LABEL={FIELD_COMMAND:'FIELD Command',EMERGENCE_CAPTURE:'Emergence Capture',PROGRAM_FORGE:'Program Forge',PRODUCT_STORE:'Product Store',CUSTOMERS_SALES:'Customers & Sales',COMMUNICATIONS:'Communications',PAYMENTS_FINANCE:'Payments & Finance',GRANT_FUNDING:'Grant Funding',PATENT_IP:'Patent & IP',MA_PARTNERSHIPS:'M&A Partnerships',DOCS_PROJECTION:'Docs & Projection',ANALYTICS_FORECAST:'Analytics & Forecast'};
-const ICON={ALL:'M12 3l8 9-8 9-8-9z M12 8l4 4-4 4-4-4z',FIELD_COMMAND:'M4 5h16v11H4z M8 20h8 M12 16v4 M7 9l3 2-3 2',EMERGENCE_CAPTURE:'M12 4a8 8 0 1 0 0 16a8 8 0 1 0 0-16 M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6',PROGRAM_FORGE:'M9 7l-5 5 5 5 M15 7l5 5-5 5 M13 5l-2 14',PRODUCT_STORE:'M4 8l8-4 8 4v8l-8 4-8-4z M4 8l8 4 8-4 M12 12v8',CUSTOMERS_SALES:'M9 11a3 3 0 1 0 0-6a3 3 0 1 0 0 6 M3 19c1-3 3.5-5 6-5s5 2 6 5 M16 6a3 3 0 0 1 0 5 M18 14c1.5.8 2.5 2.5 3 5',COMMUNICATIONS:'M4 5h16v10H9l-5 4z M8 9h8 M8 12h5',PAYMENTS_FINANCE:'M3 7h18v10H3z M3 11h18 M7 15h3',GRANT_FUNDING:'M12 3l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z',PATENT_IP:'M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z M9 12l2 2 4-4',MA_PARTNERSHIPS:'M9 12a4 4 0 1 0 0-.01 M15 12a4 4 0 1 0 0-.01',DOCS_PROJECTION:'M6 3h8l4 4v14H6z M14 3v4h4 M9 12h6 M9 16h6',ANALYTICS_FORECAST:'M4 20V10 M10 20V4 M16 20v-7 M3 20h18',UNASSIGNED:'M12 4a8 8 0 1 0 0 16a8 8 0 1 0 0-16 M8 12h8'};
+const ICON={ALL:'M12 3l8 9-8 9-8-9z M12 8l4 4-4 4-4-4z',FIELD_COMMAND:'M4 5h16v11H4z M8 20h8 M12 16v4 M7 9l3 2-3 2',EMERGENCE_CAPTURE:'M12 4a8 8 0 1 0 0 16a8 8 0 1 0 0-16 M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6',PROGRAM_FORGE:'M9 7l-5 5 5 5 M15 7l5 5-5 5 M13 5l-2 14',PRODUCT_STORE:'M4 8l8-4 8 4v8l-8 4-8-4z M4 8l8 4 8-4 M12 12v8',CUSTOMERS_SALES:'M9 11a3 3 0 1 0 0-6a3 3 0 1 0 0 6 M3 19c1-3 3.5-5 6-5s5 2 6 5 M16 6a3 3 0 0 1 0 5 M18 14c1.5.8 2.5 2.5 3 5',COMMUNICATIONS:'M4 5h16v10H9l-5 4z M8 9h8 M8 12h5',PAYMENTS_FINANCE:'M3 7h18v10H3z M3 11h18 M7 15h3',GRANT_FUNDING:'M12 3l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z',PATENT_IP:'M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z M9 12l2 2 4-4',MA_PARTNERSHIPS:'M9 12a4 4 0 1 0 0-.01 M15 12a4 4 0 1 0 0-.01',DOCS_PROJECTION:'M6 3h8l4 4v14H6z M14 3v4h4 M9 12h6 M9 16h6',ANALYTICS_FORECAST:'M4 20V10 M10 20V4 M16 20v-7 M3 20h18',UNASSIGNED:'M12 4a8 8 0 1 0 0 16a8 8 0 1 0 0-16 M8 12h8',SOURCE_TOPIC:'M4 6h6l2 2h8v11H4z M8 13h8'};
 const svg=d=>'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="'+d+'"/></svg>';
 // REL keys that name another EmergION, shown with kin words only.
 const KIN_KEYS={kin_emergion:'KIN',parent_emergion:'KIN',COMPOSITION_KIN:'COMPOSED_WITH',transition_emergion:'SUCCESSOR_KIN',origin:'ORIGIN_KIN',capability_providers:'CAPABILITY_KIN'};
@@ -331,11 +331,14 @@ function relax(items,springs,iters){const n=items.length;if(!n)return;
 function nodeSet(field,proj,facetOrder){
  const acc=(field&&field.Accepted)||{},gov=(field&&field.AtGOV)||{},out=[],by=new Map();
  // Engine output first; fall back to recorded facets only if /projection.json is unavailable.
- const recs=proj&&Array.isArray(proj.records)?proj.records:Object.values(acc).map(em=>({id:em.i,archonym:meta(em).h,facets:meta(em).f||[],kin_root:em.i}));
- for(const r of recs){if(!r||!r.id)continue;const fs=Array.isArray(r.facets)?r.facets:[];
+ // A SOURCE_UPLOAD record with no REG facet is grouped by its recorded REL source_topic
+ // (derived_facets, facet_source "source_topic"): a display grouping, never a REG facet.
+ const srcTopic=em=>{const r=(em&&em.r)||{},t=String(r.source_topic||'').trim().toLowerCase();return r.source_kind==='SOURCE_UPLOAD'&&/^[a-z0-9_-]{1,64}$/.test(t)?t:''};
+ const recs=proj&&Array.isArray(proj.records)?proj.records:Object.values(acc).map(em=>{const f=meta(em).f||[],t=f.length?'':srcTopic(em);return {id:em.i,archonym:meta(em).h,facets:f,derived_facets:t?['SOURCE_TOPIC:'+t]:[],kin_root:em.i}});
+ for(const r of recs){if(!r||!r.id)continue;const own=Array.isArray(r.facets)?r.facets:[],der=Array.isArray(r.derived_facets)?r.derived_facets:[],fs=[...own,...der.filter(f=>!own.includes(f))];
   if(by.has(r.id)){const n=by.get(r.id);for(const f of fs)if(!n.facets.includes(f))n.facets.push(f);continue}
   const em=acc[r.id]||{},m=meta(em),p=ball(r.id,1);
-  const n={id:r.id,kind:'accepted',label:r.archonym||m.h||r.id,facets:fs.slice(),root:r.kin_root||r.id,x:p[0],y:p[1],z:p[2],em,rec:r,t:m.t||'',tw:rnd(r.id+'t')*6.28,q:1,gov:0};out.push(n);by.set(n.id,n)}
+  const n={id:r.id,kind:'accepted',label:r.archonym||m.h||r.id,facets:fs.slice(),derived:der.slice(),root:r.kin_root||r.id,x:p[0],y:p[1],z:p[2],em,rec:r,t:m.t||'',tw:rnd(r.id+'t')*6.28,q:1,gov:0};out.push(n);by.set(n.id,n)}
  const accN=out.slice();
  // relationships among accepted records
  const links=[],seen=new Set(),add=(a,b,k,asm)=>{if(!by.has(a)||!by.has(b)||a===b)return;const key=a+'|'+b+'|'+k;if(seen.has(key))return;seen.add(key);links.push({a:by.get(a),b:by.get(b),k,asm})};
@@ -348,9 +351,11 @@ function nodeSet(field,proj,facetOrder){
  // facet attractors: only facets that records actually carry; their positions are relaxed too
  const anchors=new Map();for(const n of accN)for(const f of n.facets)if(!anchors.has(f)){const p=ball('facet:'+f,.8);anchors.set(f,{id:'facet:'+f,facet:f,x:p[0],y:p[1],z:p[2],q:1.4,members:0})}
  for(const n of accN)for(const f of n.facets)anchors.get(f).members++;
- const items=[...accN,...anchors.values()];items.forEach((o,i)=>o.i=i);
+ const refHubs=[];if(proj&&Array.isArray(proj.source_ref_groups))for(const g of proj.source_ref_groups){const ms=(g.members||[]).filter(id=>by.has(id));if(ms.length<2)continue;const p=ball('ref:'+g.ref,.8);refHubs.push({id:'ref:'+g.ref,x:p[0],y:p[1],z:p[2],q:.5,ms:ms.map(id=>by.get(id))})}
+ const items=[...accN,...anchors.values(),...refHubs];items.forEach((o,i)=>o.i=i);
  const springs=[];for(const n of accN)for(const f of n.facets)springs.push({a:n,b:anchors.get(f),l:.28,w:1/n.facets.length});
  for(const l of links)springs.push({a:l.a,b:l.b,l:l.k==='KIN'?.2:.3,w:l.k==='KIN'?1:.7});
+ for(const h of refHubs)for(const n of h.ms)springs.push({a:n,b:h,l:.35,w:.12/Math.max(1,n.facets.length)});
  relax(items,springs,accN.length>400?60:200);
  // normalise: centre and scale so the field fills the render (95th percentile radius = 1)
  if(items.length){const cx=items.reduce((a,o)=>a+o.x,0)/items.length,cy=items.reduce((a,o)=>a+o.y,0)/items.length,cz=items.reduce((a,o)=>a+o.z,0)/items.length;
@@ -412,9 +417,12 @@ function groupFrame(ms){if(!ms.length)return null;const cx=ms.reduce((a,n)=>a+n.
  const d=ms.map(n=>Math.hypot(n.x-cx,n.y-cy,n.z-cz)).sort((a,b)=>a-b),r90=d[Math.floor((d.length-1)*.9)]||0;return {tx:cx,ty:cy,tz:cz,zoom:Math.max(ZMIN_FLY,Math.min(ZMAX,1.1/Math.max(.2,r90)))}}
 // </node-set>
 let clusters=[],fly=null,maxWeight=0,maxMembers=0,SHORT=12,threads=[],anchors=[],anchorEdges=[],lstats=null;
+function topicLabel(f){const t=String(f).slice(13);return t.split(/[-_]/).filter(Boolean).map(w=>w[0].toUpperCase()+w.slice(1)).join(' ')}
+function registerTopicLabels(){if(proj&&Array.isArray(proj.derived_facet_groups))for(const g of proj.derived_facet_groups)if(g&&g.facet&&g.label)FACET_LABEL[g.facet]=g.label;
+ for(const n of nodes)for(const f of n.facets)if(String(f).startsWith('SOURCE_TOPIC:')&&!FACET_LABEL[f])FACET_LABEL[f]=topicLabel(f)}
 function build(){
  facetOrder=proj&&Array.isArray(proj.facet_order)?proj.facet_order:Object.keys(FACET_LABEL);
- const ns=nodeSet(field,proj,facetOrder);nodes=ns.nodes;byID=ns.byID;links=ns.links;threads=ns.threads;anchors=ns.anchors;anchorEdges=ns.anchorEdges;lstats=ns.stats;maxWeight=ns.maxWeight;maxMembers=ns.maxMembers;renderKinds();SHORT=shortLen(nodes.map(n=>n.id));clusters=clusterGroups(nodes);for(const n of nodes)n.col=n.kind==='accepted'?kindColor(kindOf(n)):GOV_COLOR;
+ const ns=nodeSet(field,proj,facetOrder);nodes=ns.nodes;byID=ns.byID;links=ns.links;threads=ns.threads;anchors=ns.anchors;anchorEdges=ns.anchorEdges;lstats=ns.stats;maxWeight=ns.maxWeight;maxMembers=ns.maxMembers;registerTopicLabels();renderKinds();SHORT=shortLen(nodes.map(n=>n.id));clusters=clusterGroups(nodes);for(const n of nodes)n.col=n.kind==='accepted'?kindColor(kindOf(n)):GOV_COLOR;
  if(selected)selected=byID.get(selected.id)||null;
 }
 
@@ -489,8 +497,10 @@ function renderNav(){if($('bKind'))renderBatch();const nav=$('nav');nav.replaceC
  const govN=f=>nodes.filter(x=>x.kind==='pending'&&x.facets.includes(f)).length;
  const items=[{key:'ALL',title:'FIELD View',sub:fmt(nodes.filter(n=>n.kind==='accepted').length)+' accepted · all facets'}];
  for(const g of groups){if(!g.n&&!govN(g.key))continue;items.push({key:g.key,title:FACET_LABEL[g.key]||g.key,sub:fmt(g.n)+' accepted'+(govN(g.key)?' · '+fmt(govN(g.key))+' AtGOV':'')})}
+ const dgroups=proj&&Array.isArray(proj.derived_facet_groups)?proj.derived_facet_groups.map(g=>({key:g.facet,n:(g.members||[]).length})):[...new Set(nodes.filter(x=>x.kind==='accepted').flatMap(x=>x.derived||[]))].map(f=>({key:f,n:nodes.filter(x=>x.kind==='accepted'&&x.facets.includes(f)).length})).sort((a,b)=>b.n-a.n);
+ for(const g of dgroups){if(!g.n)continue;items.push({key:g.key,title:FACET_LABEL[g.key]||topicLabel(g.key),sub:fmt(g.n)+' accepted · SOURCE topic',icon:'SOURCE_TOPIC'})}
  if(proj&&proj.unassigned&&proj.unassigned.length)items.push({key:'UNASSIGNED',title:'Unassigned',sub:fmt(proj.unassigned.length)+' accepted · no facet'});
- for(const it of items){const b=el('button','tile');b.setAttribute('aria-pressed',String(filter===it.key));const ic=el('span','ic');ic.innerHTML=svg(ICON[it.key]||ICON.ALL);const t=el('span');t.append(el('div','tt',it.title),el('div','ts',it.sub));b.append(ic,t);b.onclick=()=>{showField();if(it.key==='ALL'){filter='ALL';renderNav();flyHome()}else flyToFacet(it.key)};nav.append(b)}heroSub()}
+ for(const it of items){const b=el('button','tile');b.setAttribute('aria-pressed',String(filter===it.key));const ic=el('span','ic');ic.innerHTML=svg(ICON[it.icon||it.key]||ICON.ALL);const t=el('span');t.append(el('div','tt',it.title),el('div','ts',it.sub));b.append(ic,t);b.onclick=()=>{showField();if(it.key==='ALL'){filter='ALL';renderNav();flyHome()}else flyToFacet(it.key)};nav.append(b)}heroSub()}
 function inFilter(n){if(filter==='ALL')return true;if(filter==='UNASSIGNED')return n.kind==='accepted'&&!n.facets.length;return n.facets.includes(filter)}
 function hl(line){const d=el('div');const m=line.match(/^([A-Z])(\|.*)?$/);if(!m){d.append(el('span','k2',line));return d}
  d.append(el('span','k1',m[1]));if(m[2]){for(const part of m[2].slice(1).split('|')){d.append(el('span','k3',' | '));const s=part.replace(/^"|"$/g,'');d.append(el('span',/_KIN$|^[A-Z_]+$/.test(s)?'k4':/^E-/.test(s)||/^SAAB:/.test(s)?'k2':'k5',part))}}return d}
@@ -512,7 +522,7 @@ function renderTimeline(){const T=$('tl');T.replaceChildren();const ev=nodes.fil
 function select(n,focus){selected=n;const D=$('detail');D.replaceChildren();if(!n){D.classList.remove('on');heroSub();want();return}
  const h=el('div','dh'),t=el('div');t.append(el('span','badge'+(n.kind==='pending'?' g':''),n.kind==='pending'?'AtGOV · not accepted':'REG accepted'));const h3=el('h3',null,nameOf(n));h3.id='dTitle';t.append(h3);const x=el('button','x','Close');x.onclick=()=>select(null);h.append(t,x);D.append(h);
  const kv=(k,v,mono)=>{if(v==null||v==='')return;const r=el('div','kv');r.append(el('small',null,k));const d=el('div',mono?'mono':null);if(v instanceof Node)d.append(v);else d.textContent=v;r.append(d);D.append(r)};
- const em=n.em||{};kv('Identity',n.id,true);kv('Facets',n.facets.map(f=>FACET_LABEL[f]||f).join(' · ')||'unassigned');
+ const em=n.em||{};kv('Identity',n.id,true);kv('Facets',n.facets.map(f=>(FACET_LABEL[f]||f)+((n.derived||[]).includes(f)?' (SOURCE topic, not a REG facet)':'')).join(' · ')||'unassigned');
  if(n.kind==='accepted'){kv('Kin root',n.root===n.id?'itself (root)':n.root,true);const as=(proj&&proj.assemblies||[]).find(a=>(a.members||[]).includes(n.id));if(as)kv('Assembly',as.id,true);if(n.rec&&n.rec.capabilities)kv('Capability',n.rec.capabilities.join(', '))}
  if(n.t)kv('Captured',new Date(n.t).toLocaleString());if(em.m&&em.m.s)kv('Summary',em.m.s);if(em.m&&em.m.h)kv('Source hash',em.m.h.slice(0,16)+'…',true);
  const r=em.r||{},w=el('div');for(const k of Object.keys(KIN_KEYS)){const v=r[k];if(typeof v!=='string'||!v)continue;for(const id of (v.match(/E-[A-Fa-f0-9]+/g)||[])){const o=byID.get(id),pend=!o||o.kind!=='accepted'||n.kind!=='accepted',s=el('span','kin'+(pend?' p':''));s.append(el('em',null,KIN_KEYS[k]),document.createTextNode(shortID(id)));s.title=pend?'Pending (AtGOV) or outside view':'Verified · both REG-accepted';w.append(s)}}
