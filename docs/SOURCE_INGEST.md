@@ -23,3 +23,14 @@ The 2b54f72 ingest set each record's Archonym to its title, and the accept paths
 - Accept is now strict before anything is written: `field decide ... APPROVE`, `/decide` and `/decide-batch-human` refuse a record whose Archonym already belongs to another REG-accepted or HUMAN_FINAL RETURNED EmergION (same Kin continuation through Supersedes stays allowed). HOLD, REJECT and RETURN are unaffected.
 - Replay no longer fails on such a receipt that is already in the ledger. The ledger is never rewritten. The refused record stays Approved, not Accepted. The owner keeps the Archonym, and the conflict is reported as `archonym_conflicts` in `/projection.json` and `ArchonymConflicts` in `field.json` (present only when non-empty).
 - Waiting records whose Archonym matches an accepted one have always replayed fine; they stay AtGOV, are shown by ID and summary, and are listed in `archonym_waiting_conflicts` in `/projection.json` (an APPROVE of them is refused; HOLD or REJECT work).
+
+## SOURCE topic facets (display grouping, 2026-11-20)
+
+Accepted uploads carry no REG facet, so the Living Universe showed them all as UNASSIGNED. `/projection.json` now derives a display grouping on every read; nothing is written and `.field` evidence is untouched.
+
+- A REG-accepted record with `source_kind=SOURCE_UPLOAD`, no REG facet and a safe `source_topic` gets `derived_facets: ["SOURCE_TOPIC:<topic>"]` and `facet_source: "source_topic"`. Its `facets` (REG) stay empty. A record with any REG facet is never given a derived one.
+- `derived_facet_groups` lists the topic groups (`facet`, readable `label` such as "Inventions & IP", `topic`, `facet_source`, `members`), largest first. `facet_order` and `facet_groups` remain REG facets only.
+- `unassigned` now lists only records with neither a REG facet nor a derived grouping. `reg_unassigned` keeps the strict list (every accepted record with no REG facet).
+- `source_ref_groups` lists accepted SOURCE records that name the same manifest `related` id. Related ids are not EmergION ids, so this is a shared reference, never KIN. The page uses it only as weak springs to hidden hubs.
+- The page treats a derived facet like a facet attractor, so topics cluster through the same emergent spring layout (no preset geometry). Facet tiles name topics readably and mark them "SOURCE topic"; the detail panel says "(SOURCE topic, not a REG facet)". Canvas text still appears only with Labels on.
+- No HUMAN_FINAL is needed for display. GOV, A01/A02 and the Archonym rules are unchanged.
