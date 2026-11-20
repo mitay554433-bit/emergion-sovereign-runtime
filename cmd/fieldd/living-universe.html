@@ -13,6 +13,7 @@ button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--blue);outl
 .ph{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:11px 14px 0}
 .pt{font-size:10.5px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--ink)}
 .pt i{font-style:normal;color:var(--ink3);font-weight:600}
+#heroSub.on{color:var(--pale);font-family:var(--mono);letter-spacing:.08em}
 .ps{font-size:10.5px;color:var(--ink3);letter-spacing:.06em}
 .pb{padding:10px 14px 13px}
 .nf{font-family:var(--mono);font-size:11px;color:var(--ink3);letter-spacing:.08em}
@@ -207,7 +208,7 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
  <main class="center">
   <div class="centerg">
    <section class="panel hero" aria-label="FIELD render">
-    <div class="ph"><span><span class="pt">FIELD Render <i>• Linked Projection</i></span><br><span class="ps" id="heroSub">Emergent layout · facet attractors · kin · AtGOV haze around targets</span></span><span class="ps mono" id="zoomv" style="white-space:nowrap">1.00×</span></div>
+    <div class="ph"><span><span class="pt">FIELD Render <i>• Linked Projection</i></span><br><span class="ps" id="heroSub" aria-live="polite">Emergent layout · facet attractors · kin · AtGOV haze around targets</span></span><span class="ps mono" id="zoomv" style="white-space:nowrap">1.00×</span></div>
     <div class="stage">
     <canvas id="c" aria-label="Interactive FIELD render. Drag to orbit, pinch or scroll to zoom, tap a node to inspect."></canvas>
     <div id="evtip" role="status" aria-live="polite"></div>
@@ -372,8 +373,10 @@ function clusterGroups(nodes){const by=new Map(),add=(k,n)=>{let a=by.get(k);if(
  for(const n of nodes){if(n.kind!=='accepted')continue;for(const f of n.facets)add('facet:'+f,n);if(n.root)add('kin:'+n.root,n)}
  return [...by].filter(([,m])=>m.length>=3).map(([key,members])=>({key,facet:key.startsWith('facet:')?key.slice(6):null,members})).sort((a,b)=>b.members.length-a.members.length||(a.key<b.key?-1:1))}
 // Camera target for a group of nodes: centroid, and a zoom that frames its 90th-percentile spread.
+// a flight is meant to be seen: at least 2.2x, at most 3.2x (pinch/scroll share the cap)
+const ZMIN_FLY=2.2,ZMAX=3.2;
 function groupFrame(ms){if(!ms.length)return null;const cx=ms.reduce((a,n)=>a+n.x,0)/ms.length,cy=ms.reduce((a,n)=>a+n.y,0)/ms.length,cz=ms.reduce((a,n)=>a+n.z,0)/ms.length;
- const d=ms.map(n=>Math.hypot(n.x-cx,n.y-cy,n.z-cz)).sort((a,b)=>a-b),r90=d[Math.floor((d.length-1)*.9)]||0;return {tx:cx,ty:cy,tz:cz,zoom:Math.max(1.2,Math.min(2.4,.85/Math.max(.2,r90)))}}
+ const d=ms.map(n=>Math.hypot(n.x-cx,n.y-cy,n.z-cz)).sort((a,b)=>a-b),r90=d[Math.floor((d.length-1)*.9)]||0;return {tx:cx,ty:cy,tz:cz,zoom:Math.max(ZMIN_FLY,Math.min(ZMAX,1.1/Math.max(.2,r90)))}}
 // </node-set>
 let clusters=[],fly=null,maxWeight=0,maxMembers=0,SHORT=12,threads=[],anchors=[],anchorEdges=[],lstats=null;
 function build(){
@@ -384,6 +387,12 @@ function build(){
 
 /* ---------- panels ---------- */
 function setText(id,v){$(id).textContent=v}
+// Header line outside the render: the flown-to facet (name + accepted count) or the tapped record.
+const HERO_SUB='Emergent layout · facet attractors · kin · AtGOV haze around targets';
+function heroSub(){const h=$('heroSub');if(!h)return;let t=HERO_SUB,on=false;
+ if(selected){t='▸ '+shortID(selected.id)+' · '+String(nameOf(selected));on=true}
+ else if(filter!=='ALL'){const k=filter==='UNASSIGNED'?nodes.filter(n=>n.kind==='accepted'&&!n.facets.length).length:nodes.filter(n=>n.kind==='accepted'&&n.facets.includes(filter)).length;t='▸ '+(filter==='UNASSIGNED'?'Unassigned':(FACET_LABEL[filter]||filter)).toUpperCase()+' · '+fmt(k)+(k===1?' accepted record':' accepted records');on=true}
+ h.textContent=t;h.classList.toggle('on',on)}
 function renderPanels(){
  const acc=(field&&field.Accepted)||{},gov=(field&&field.AtGOV)||{},nA=Object.keys(acc).length,nG=Object.keys(gov).length;
  const rc=refCounts(relRefs(field));
@@ -430,7 +439,7 @@ function renderNav(){const nav=$('nav');nav.replaceChildren();
  const items=[{key:'ALL',title:'FIELD View',sub:fmt(nodes.filter(n=>n.kind==='accepted').length)+' accepted · all facets'}];
  for(const g of groups){if(!g.n&&!govN(g.key))continue;items.push({key:g.key,title:FACET_LABEL[g.key]||g.key,sub:fmt(g.n)+' accepted'+(govN(g.key)?' · '+fmt(govN(g.key))+' AtGOV':'')})}
  if(proj&&proj.unassigned&&proj.unassigned.length)items.push({key:'UNASSIGNED',title:'Unassigned',sub:fmt(proj.unassigned.length)+' accepted · no facet'});
- for(const it of items){const b=el('button','tile');b.setAttribute('aria-pressed',String(filter===it.key));const ic=el('span','ic');ic.innerHTML=svg(ICON[it.key]||ICON.ALL);const t=el('span');t.append(el('div','tt',it.title),el('div','ts',it.sub));b.append(ic,t);b.onclick=()=>{if(it.key==='ALL'){filter='ALL';renderNav();flyHome()}else flyToFacet(it.key)};nav.append(b)}}
+ for(const it of items){const b=el('button','tile');b.setAttribute('aria-pressed',String(filter===it.key));const ic=el('span','ic');ic.innerHTML=svg(ICON[it.key]||ICON.ALL);const t=el('span');t.append(el('div','tt',it.title),el('div','ts',it.sub));b.append(ic,t);b.onclick=()=>{showField();if(it.key==='ALL'){filter='ALL';renderNav();flyHome()}else flyToFacet(it.key)};nav.append(b)}heroSub()}
 function inFilter(n){if(filter==='ALL')return true;if(filter==='UNASSIGNED')return n.kind==='accepted'&&!n.facets.length;return n.facets.includes(filter)}
 function hl(line){const d=el('div');const m=line.match(/^([A-Z])(\|.*)?$/);if(!m){d.append(el('span','k2',line));return d}
  d.append(el('span','k1',m[1]));if(m[2]){for(const part of m[2].slice(1).split('|')){d.append(el('span','k3',' | '));const s=part.replace(/^"|"$/g,'');d.append(el('span',/_KIN$|^[A-Z_]+$/.test(s)?'k4':/^E-/.test(s)||/^SAAB:/.test(s)?'k2':'k5',part))}}return d}
@@ -449,7 +458,7 @@ function renderTimeline(){const T=$('tl');T.replaceChildren();const ev=nodes.fil
  if(!ev.length)T.append(el('span','nf','NOT_FOUND_YET'))}
 
 /* ---------- detail ---------- */
-function select(n,focus){selected=n;const D=$('detail');D.replaceChildren();if(!n){D.classList.remove('on');want();return}
+function select(n,focus){selected=n;const D=$('detail');D.replaceChildren();if(!n){D.classList.remove('on');heroSub();want();return}
  const h=el('div','dh'),t=el('div');t.append(el('span','badge'+(n.kind==='pending'?' g':''),n.kind==='pending'?'AtGOV · not accepted':'REG accepted'));const h3=el('h3',null,nameOf(n));h3.id='dTitle';t.append(h3);const x=el('button','x','Close');x.onclick=()=>select(null);h.append(t,x);D.append(h);
  const kv=(k,v,mono)=>{if(v==null||v==='')return;const r=el('div','kv');r.append(el('small',null,k));const d=el('div',mono?'mono':null);if(v instanceof Node)d.append(v);else d.textContent=v;r.append(d);D.append(r)};
  const em=n.em||{};kv('Identity',n.id,true);kv('Facets',n.facets.map(f=>FACET_LABEL[f]||f).join(' · ')||'unassigned');
@@ -458,7 +467,7 @@ function select(n,focus){selected=n;const D=$('detail');D.replaceChildren();if(!
  const r=em.r||{},w=el('div');for(const k of Object.keys(KIN_KEYS)){const v=r[k];if(typeof v!=='string'||!v)continue;for(const id of (v.match(/E-[A-Fa-f0-9]+/g)||[])){const o=byID.get(id),pend=!o||o.kind!=='accepted'||n.kind!=='accepted',s=el('span','kin'+(pend?' p':''));s.append(el('em',null,KIN_KEYS[k]),document.createTextNode(shortID(id)));s.title=pend?'Pending (AtGOV) or outside view':'Verified · both REG-accepted';w.append(s)}}
  if(w.childNodes.length)kv('Recorded kin',w);
  if(n.kind==='accepted')kv('Weight',fmt(n.weight)+': '+fmt(n.nl)+' links, '+fmt(n.gov)+' AtGOV refs, '+fmt(n.asm)+' assemblies');if(n.kind==='accepted')kv('Kind',kindOf(n)||'REG_ACCEPTED');if(n.kind==='accepted'&&n.gov)kv('AtGOV refs',fmt(n.gov)+' AtGOV records reference this record');if(n.kind==='pending'&&n.target)kv('References',n.target.id,true);if(n.kind==='pending')kv('Governance','Awaiting HUMAN_FINAL. Not verified, not counted in verified references.');
- D.classList.add('on');if(focus)$('c').scrollIntoView({block:'nearest',behavior:'smooth'});want()}
+ heroSub();D.classList.add('on');if(focus)$('c').scrollIntoView({block:'nearest',behavior:'smooth'});want()}
 
 /* ---------- renderer ---------- */
 const c=$('c'),g=c.getContext('2d'),reduced=matchMedia('(prefers-reduced-motion: reduce)');
@@ -479,10 +488,12 @@ function resize(){const r=c.getBoundingClientRect();W=Math.max(1,r.width);H=Math
 function P(x,y,z){x-=cam.tx||0;y-=cam.ty||0;z-=cam.tz||0;const cy=Math.cos(cam.yaw),sy=Math.sin(cam.yaw);let X=x*cy-z*sy,Z=x*sy+z*cy;const cp=Math.cos(cam.pitch),sp=Math.sin(cam.pitch);let Y=y*cp-Z*sp;Z=y*sp+Z*cp;const D=3.4,zz=Z+D;if(zz<.2)return null;const k=Math.min(W*.92,H*1.25)*.5*cam.zoom*D/1.75/zz;return {x:W/2+X*k,y:H*.5-Y*k+H*.04,s:k/ (Math.min(W*.92,H*1.25)*.5)*2.1/D*1.6,z:zz}}
 // Smooth camera flight to a cluster (or home). Reduced motion jumps straight there.
 const HOME={tx:0,ty:0,tz:0,zoom:1};
-function flyTo(to){const from={tx:cam.tx||0,ty:cam.ty||0,tz:cam.tz||0,zoom:cam.zoom};if(reduced.matches){Object.assign(cam,to);fly=null}else fly={from,to,t0:null,dur:750};want()}
+function flyTo(to){const from={tx:cam.tx||0,ty:cam.ty||0,tz:cam.tz||0,zoom:cam.zoom};if(reduced.matches){Object.assign(cam,to);fly=null}else fly={from,to,t0:null,dur:800};want()}
 function stepFly(ts){if(!fly)return;if(fly.t0==null)fly.t0=ts;const u=Math.min(1,(ts-fly.t0)/fly.dur),e=u<.5?4*u*u*u:1-Math.pow(-2*u+2,3)/2;for(const k of ['tx','ty','tz','zoom'])cam[k]=fly.from[k]+(fly.to[k]-fly.from[k])*e;if(u>=1)fly=null;else if(reduced.matches){Object.assign(cam,fly.to);fly=null}}
 function flyToFacet(f){filter=f;renderNav();const ms=f==='UNASSIGNED'?nodes.filter(n=>n.kind==='accepted'&&!n.facets.length):nodes.filter(n=>n.kind==='accepted'&&n.facets.includes(f));const fr=groupFrame(ms);if(fr){auto=false;flyTo(fr)}else flyHome()}
 function flyHome(){auto=true;flyTo(HOME)}
+// A nav tile is often tapped with the render below the fold on a phone: scroll it into view first.
+function showField(){const r=c.getBoundingClientRect();if(r.top<0||r.bottom>innerHeight)c.scrollIntoView({block:'center',behavior:reduced.matches?'auto':'smooth'})}
 function want(){if(!raf&&visible&&!document.hidden)raf=requestAnimationFrame(frame)}
 function frame(ts){raf=0;const dt=Math.min(.05,(ts-(lastT||ts))/1000);lastT=ts;const anim=!reduced.matches;stepFly(ts);if(anim&&auto)cam.yaw+=dt*.035;draw(anim?ts/1000:0);if(anim&&visible&&!document.hidden)want()}
 function draw(t){g.clearRect(0,0,W,H);
@@ -523,7 +534,7 @@ function draw(t){g.clearRect(0,0,W,H);
  if(showGov)for(const th of threads){const p=P(th.cx,th.cy,th.cz),q=th.t.p;if(!p||!q)continue;const on=inFilter(th.t),hot=selected===th.t,f=Math.log2(1+th.count)/Math.log2(1+maxC);
   g.strokeStyle=`rgba(205,214,236,${hot?.7:on?.05+.18*f:.02})`;g.lineWidth=.4+1.4*f;g.beginPath();g.moveTo(p.x,p.y);g.lineTo(q.x,q.y);g.stroke()}
  // facet attractor dots (sized by member count); their names are drawn above the nodes
- for(const A of anchors){const p=P(A.x,A.y,A.z);A.p=p;A.rect=null;if(!p)continue;const sel=filter===A.facet;g.fillStyle=`rgba(127,156,255,${sel?.6:.3})`;g.beginPath();g.arc(p.x,p.y,nodeRadius(A.members,maxMembers)*.8,0,6.283);g.fill()}
+ for(const A of anchors){const p=P(A.x,A.y,A.z);A.p=p;A.rect=null;if(!p)continue;const sel=filter===A.facet,ar=nodeRadius(A.members,maxMembers)*.8;A.r=ar;g.fillStyle=`rgba(127,156,255,${sel?.7:.3})`;g.beginPath();g.arc(p.x,p.y,ar,0,6.283);g.fill();if(sel){g.strokeStyle='rgba(47,107,255,.9)';g.lineWidth=1.4;g.beginPath();g.arc(p.x,p.y,ar+5,0,6.283);g.stroke()}}
  g.textAlign='left';
  // nodes
  // AtGOV layer: rings when few, one batched density pass when many (thousands stay smooth)
@@ -544,7 +555,7 @@ function draw(t){g.clearRect(0,0,W,H);
 // Label budget: facet names may use at most 6% of the render, all labels together under 10%.
 const FACET_BUDGET=.035,LABEL_BUDGET=.095;let labelsOn=false,labelArea=0,facetArea=0,tipOverlap=0;
 const hit=(a,b)=>!(a.x+a.w<=b.x||b.x+b.w<=a.x||a.y+a.h<=b.y||b.y+b.h<=a.y);
-function labels(){const placed=[],drawn=[],mono=getComputedStyle(document.body).getPropertyValue('--mono');g.textBaseline='middle';g.textAlign='left';
+function labels(){if(!labelsOn){labelArea=0;tipOverlap=0;return}const placed=[],drawn=[],mono=getComputedStyle(document.body).getPropertyValue('--mono');g.textBaseline='middle';g.textAlign='left';
  for(const A of anchors)if(A.rect)placed.push(A.rect);
  const inside=r=>r.x>=4&&r.y>=4&&r.x+r.w<=W-4&&r.y+r.h<=H-4;
  const n=selected;if(n&&n.p){const p=n.p,maxW=W*.6;g.font='600 10px '+mono;const id=fit1(shortID(n.id),maxW-16);const w1=g.measureText(id).width;g.font='500 11px system-ui,sans-serif';const t=fit1(String(nameOf(n)),maxW-16);const w=Math.min(maxW,Math.max(w1,g.measureText(t).width)+16),h=32;
@@ -562,20 +573,18 @@ function labels(){const placed=[],drawn=[],mono=getComputedStyle(document.body).
  labelArea=drawn.reduce((a,r)=>a+r.w*r.h,0)}
 function labelCoverage(){return (labelArea+facetArea)/(W*H)}
 // Facet names: small fixed-size text (10.5px screen px, never grows with zoom), medium weight,
-// near-white with a thin dark halo only. At most 4 at once, largest facets first, never overlapping,
+// near-white with a thin dark halo only. A name keeps its last side while it fits, so it does not jump under a finger. At most 4 at once, largest facets first, never overlapping,
 // clamped inside the render. Counts appear in the tap tooltip, not on the field.
 const FACET_MAX=4;
-function facetNames(){const fs=10.5,placed=[],budget=W*H*FACET_BUDGET;let used=0,shown=0;
+function facetNames(){const fs=10.5,placed=[],budget=W*H*FACET_BUDGET;let used=0,shown=0;if(!labelsOn){facetArea=0;return}
  g.save();g.textAlign='left';g.textBaseline='middle';g.lineJoin='round';g.font=`500 ${fs}px system-ui,sans-serif`;g.letterSpacing='0.8px';
- for(const A of anchors.filter(a=>a.p&&a.p.x>=0&&a.p.x<=W&&a.p.y>=0&&a.p.y<=H).sort((a,b)=>b.members-a.members||(a.facet<b.facet?-1:1))){if(shown>=FACET_MAX)break;
+ for(const A of anchors.filter(a=>a.p&&a.p.x>=0&&a.p.x<=W&&a.p.y>=0&&a.p.y<=H).sort((a,b)=>(b.facet===filter)-(a.facet===filter)||b.members-a.members||(a.facet<b.facet?-1:1))){if(shown>=FACET_MAX)break;
   const name=(FACET_LABEL[A.facet]||A.facet).toUpperCase(),nw=g.measureText(name).width,w=nw+4,h=fs+4,p=A.p;if(used+w*h>budget)continue;let r=null;
-  for(const [dx,dy] of [[0,-1],[0,1],[1,0],[-1,0],[0,-2],[0,2]]){const x=Math.max(4,Math.min(W-4-w,p.x-w/2+dx*(w/2+8))),y=Math.max(4,Math.min(H-4-h,p.y-h/2+dy*(h+4))),c={x,y,w,h};if(!placed.some(q=>hit(c,q))){r=c;break}}
+  const DIRS=[[0,-1],[0,1],[1,0],[-1,0],[0,-2],[0,2]];for(const di of A.ldir!=null?[A.ldir,...DIRS.keys()]:DIRS.keys()){const [dx,dy]=DIRS[di];const x=Math.max(4,Math.min(W-4-w,p.x-w/2+dx*(w/2+8))),y=Math.max(4,Math.min(H-4-h,p.y-h/2+dy*(h+4))),c={x,y,w,h};if(!placed.some(q=>hit(c,q))){r=c;A.ldir=di;break}}
   if(!r)continue;placed.push(r);A.rect=r;used+=w*h;shown++;const sel=filter===A.facet,on=filter==='ALL'||sel;
-  g.globalAlpha=on?1:.5;g.strokeStyle='rgba(5,7,13,0.85)';g.shadowColor='rgba(5,7,13,0.95)';g.shadowBlur=7;g.lineWidth=3.2;g.strokeText(name,r.x+2,r.y+h/2);g.shadowBlur=3;g.strokeText(name,r.x+2,r.y+h/2);g.shadowBlur=0;g.fillStyle=sel?'rgba(255,255,255,0.95)':'rgba(236,240,250,0.94)';g.fillText(name,r.x+2,r.y+h/2)}
+  g.globalAlpha=on?1:.5;g.strokeStyle='rgba(5,7,13,0.85)';g.shadowColor='rgba(5,7,13,0.95)';g.shadowBlur=7;g.lineWidth=3.2;g.strokeText(name,r.x+2,r.y+h/2);g.shadowBlur=3;g.strokeText(name,r.x+2,r.y+h/2);g.shadowBlur=0;g.fillStyle=sel?'#c9d8ff':'rgba(236,240,250,0.94)';g.fillText(name,r.x+2,r.y+h/2)}
  g.restore();g.letterSpacing='0px';facetArea=used}
-// Tap on a facet name: filter to it and show its name and record count in the small tooltip.
-function showFacet(A,x,y){const T=$('evtip');T.replaceChildren(el('b',null,FACET_LABEL[A.facet]||A.facet),el('span',null,fmt(A.members)+(A.members===1?' accepted record':' accepted records')),el('small',null,filter===A.facet?'filtered · tap again to clear':'filter cleared'));
- T.classList.add('on');const w=T.offsetWidth,h=T.offsetHeight;T.style.left=Math.max(8,Math.min(W-w-8,x+14))+'px';T.style.top=Math.max(8,Math.min(H-h-8,y-h-10))+'px';clearTimeout(showEvent.t);showEvent.t=setTimeout(()=>T.classList.remove('on'),3000)}
+// A facet tap names the facet and its count in the header line above the render (heroSub), never on it.
 // one line, ellipsis when it would exceed max px (font must be set)
 function fit1(text,max){text=text.replace(/\s+/g,' ').trim();if(g.measureText(text).width<=max)return text;while(text.length>1&&g.measureText(text+'…').width>max)text=text.slice(0,-1);return text.trimEnd()+'…'}
 
@@ -621,11 +630,23 @@ async function pollEvents(){if(document.hidden)return;try{const d=await getJSON(
 const ptr=new Map();let drag=null,pinch=0;
 c.addEventListener('pointerdown',e=>{c.setPointerCapture(e.pointerId);ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});auto=false;if(ptr.size===1)drag={sx:e.clientX,sy:e.clientY,moved:false};else if(ptr.size===2){const a=[...ptr.values()];pinch=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);if(drag)drag.moved=true}c.classList.add('grab');want()});
 c.addEventListener('pointermove',e=>{if(!ptr.has(e.pointerId)){if(e.pointerType==='mouse'){const r=c.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,ev=hitEvent(x,y);if(ev)showEvent(ev,x,y)}return}const o=ptr.get(e.pointerId);ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
- if(ptr.size===2){const a=[...ptr.values()],d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);if(pinch)cam.zoom=Math.max(.6,Math.min(2.6,cam.zoom*d/pinch));pinch=d}
- else if(drag){cam.yaw+=(e.clientX-o.x)*.006;cam.pitch=Math.max(.12,Math.min(.95,cam.pitch+(e.clientY-o.y)*.004));if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>6)drag.moved=true}want()});
-function up(e){if(drag&&!drag.moved&&ptr.size===1&&e.type==='pointerup'){const r=c.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const hev=hitEvent(x,y);let hitFacet=false;if(hev){showEvent(hev,x,y)}let best=null,bd=24;for(const n of proj2){const d=Math.hypot(n.p.x-x,n.p.y-y);if(d<bd){bd=d;best=n}}if(!best){bd=10;for(const n of govP){const d=Math.hypot(n.p.x-x,n.p.y-y);if(d<bd){bd=d;best=n}}}if(!best&&!hev){for(const A of anchors){if(A.rect&&x>=A.rect.x-4&&x<=A.rect.x+A.rect.w+4&&y>=A.rect.y-4&&y<=A.rect.y+A.rect.h+4){hitFacet=true;if(filter===A.facet){filter='ALL';renderNav();flyHome()}else flyToFacet(A.facet);showFacet(A,x,y);break}}}if(!best&&!hev&&!hitFacet&&(filter!=='ALL'||cam.tx||cam.ty||cam.tz)){filter='ALL';renderNav();flyHome()}if(best||!hev)select(best)}ptr.delete(e.pointerId);if(!ptr.size){drag=null;pinch=0;c.classList.remove('grab')}}
+ if(ptr.size===2){const a=[...ptr.values()],d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);if(pinch)cam.zoom=Math.max(.6,Math.min(ZMAX,cam.zoom*d/pinch));pinch=d}
+ else if(drag){cam.yaw+=(e.clientX-o.x)*.006;cam.pitch=Math.max(.12,Math.min(.95,cam.pitch+(e.clientY-o.y)*.004));if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>(e.pointerType==='mouse'?6:TAP_SLOP))drag.moved=true}want()});
+// <tap-target> pure: which facet a tap lands on. Facet names (only drawn with Labels on) get a
+// finger-sized 36px band on touch; the attractor dot is always a target (radius >= 18px on touch).
+const TAP_SLOP=12;
+function pickFacet(anchors,x,y,touch){let best=null,bd=Infinity;
+ for(const A of anchors){const r=A.rect;if(!r)continue;const px=touch?10:4,py=Math.max(4,(touch?36:r.h+8)-r.h)/2;
+  if(x>=r.x-px&&x<=r.x+r.w+px&&y>=r.y-py&&y<=r.y+r.h+py){const d=Math.abs(y-(r.y+r.h/2));if(d<bd){bd=d;best=A}}}
+ if(best)return best;
+ for(const A of anchors){if(!A.p)continue;const d=Math.hypot(A.p.x-x,A.p.y-y),lim=Math.max((A.r||4)+(touch?8:3),touch?18:8);if(d<=lim&&d<bd){bd=d;best=A}}return best}
+// </tap-target>
+function up(e){if(drag&&!drag.moved&&ptr.size===1&&e.type==='pointerup'){const r=c.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+ // facet names first: the touch path must reach them even when thousands of AtGOV dots sit under the name
+ const fA=pickFacet(anchors,x,y,e.pointerType!=='mouse');if(fA){if(filter===fA.facet){filter='ALL';renderNav();flyHome()}else flyToFacet(fA.facet);showEvent(null);if(selected)select(null)}
+ else{const hev=hitEvent(x,y);if(hev){showEvent(hev,x,y)}let best=null,bd=24;for(const n of proj2){const d=Math.hypot(n.p.x-x,n.p.y-y);if(d<bd){bd=d;best=n}}if(!best){bd=10;for(const n of govP){const d=Math.hypot(n.p.x-x,n.p.y-y);if(d<bd){bd=d;best=n}}}if(!best&&!hev&&(filter!=='ALL'||cam.tx||cam.ty||cam.tz)){filter='ALL';renderNav();flyHome()}if(best||!hev)select(best)}}ptr.delete(e.pointerId);if(!ptr.size){drag=null;pinch=0;c.classList.remove('grab')}}
 c.addEventListener('pointerup',up);c.addEventListener('pointercancel',up);
-c.addEventListener('wheel',e=>{e.preventDefault();auto=false;cam.zoom=Math.max(.6,Math.min(2.6,cam.zoom*Math.exp(-e.deltaY*.0015)));want()},{passive:false});
+c.addEventListener('wheel',e=>{e.preventDefault();auto=false;cam.zoom=Math.max(.6,Math.min(ZMAX,cam.zoom*Math.exp(-e.deltaY*.0015)));want()},{passive:false});
 function renderKinds(){const L=$('kindLg');if(!L)return;const kc=kindCounts(nodes),show=kc.slice(0,6);L.replaceChildren(...show.map(([k,c])=>{const sp=el('span','lg'),i=el('i','sw kd');i.style.background=kindColor(k);sp.append(i,document.createTextNode(k.toLowerCase().replace(/_/g,' ')+' '+fmt(c)));return sp}));if(kc.length>6)L.append(el('span','lg',`+${kc.length-6} kinds`))}
 $('bLbl').onclick=()=>{labelsOn=!labelsOn;$('bLbl').setAttribute('aria-pressed',String(labelsOn));want()};
 $('bGov').onclick=()=>{showGov=!showGov;$('bGov').setAttribute('aria-pressed',String(showGov));if(!showGov&&selected&&selected.kind==='pending')select(null);renderTimeline();want()};
