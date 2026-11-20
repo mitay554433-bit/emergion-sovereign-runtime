@@ -237,8 +237,14 @@ func (l LocalInsighter) Args(prompt string) []string {
 	if n <= 0 {
 		n = 120
 	}
-	return []string{"-m", l.Model, "-p", prompt, "-n", strconv.Itoa(n), "-c", "2048",
-		"-t", strconv.Itoa(threads), "--temp", "0", "-no-cnv", "--no-display-prompt"}
+	args := []string{"-m", l.Model, "-p", prompt, "-n", strconv.Itoa(n), "-c", "2048",
+		"-t", strconv.Itoa(threads), "--temp", "0", "--no-display-prompt"}
+	// llama-completion is one-shot already and some builds reject -no-cnv;
+	// only llama-cli needs it to leave chat mode.
+	if filepath.Base(l.Binary) != "llama-completion" {
+		args = append(args, "-no-cnv")
+	}
+	return args
 }
 
 func (l LocalInsighter) Insight(ctx context.Context, in InsightInput) (Insight, error) {
