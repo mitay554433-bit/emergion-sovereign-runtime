@@ -185,6 +185,8 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
     <div class="st"><small>Pending (AtGOV)</small><b id="sPend">—</b></div>
     <div class="st"><small>Kin assemblies</small><b id="sSaab">—</b></div>
     <div class="st"><small>Temporal states</small><b id="sWave">—</b></div>
+    <div class="st"><small>Linked accepted</small><b id="sLinked">—</b></div>
+    <div class="st"><small>AtGOV → target</small><b id="sGovT">—</b></div>
     <div class="st"><small>Same-SOURCE IDNs</small><b id="sDup" title="Records sharing one SOURCE hash under different IDNs">—</b></div>
     <div class="st"><small>Last update · latest capture</small><b class="sm" id="sLast">—</b></div>
    </div>
@@ -194,13 +196,13 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
  <main class="center">
   <div class="centerg">
    <section class="panel hero" aria-label="FIELD render">
-    <div class="ph"><span><span class="pt">FIELD Render <i>• Linked Projection</i></span><br><span class="ps" id="heroSub">Projection engine · facet groups · kin roots · composition assemblies</span></span><span class="ps mono" id="zoomv" style="white-space:nowrap">1.00×</span></div>
+    <div class="ph"><span><span class="pt">FIELD Render <i>• Linked Projection</i></span><br><span class="ps" id="heroSub">Emergent layout · facet attractors · kin · AtGOV haze around targets</span></span><span class="ps mono" id="zoomv" style="white-space:nowrap">1.00×</span></div>
     <canvas id="c" aria-label="Interactive FIELD render. Drag to orbit, pinch or scroll to zoom, tap a node to inspect."></canvas>
     <div id="evtip" role="status" aria-live="polite"></div>
     <div class="panel" id="detail" role="dialog" aria-labelledby="dTitle"></div>
     <div class="hfoot">
      <div class="auth"><span class="shield"></span><b>COSL + REG remain authoritative</b> · visualization only</div>
-     <div class="hrow"><div class="legend"><span class="lg"><i class="sw"></i>REG accepted</span><span class="lg"><i class="sw g"></i>AtGOV</span><span class="lg"><i class="sw k"></i>Kin root</span><span class="lg"><i class="sw a"></i>Composed with</span><span class="lg"><i class="sw c"></i>Event comet</span></div>
+     <div class="hrow"><div class="legend"><span class="lg"><i class="sw"></i>REG accepted</span><span class="lg"><i class="sw g"></i>AtGOV</span><span class="lg"><i class="sw k"></i>Kin / REL link</span><span class="lg"><i class="sw a"></i>Composed with</span><span class="lg"><i class="sw c"></i>Event comet</span></div>
      <div class="ctl"><button id="bGov" aria-pressed="true" title="Show AtGOV records awaiting HUMAN_FINAL">AtGOV</button><button id="bFit" title="Reset view">Reset</button></div></div>
     </div>
    </section>
@@ -260,41 +262,84 @@ function relRefs(f){const acc=(f&&f.Accepted)||{},gov=(f&&f.AtGOV)||{},out=[],se
 function refCounts(es){let verified=0,pending=0;for(const e of es){if(e.a&&e.b&&e.a.kind==='accepted'&&e.b.kind==='accepted')verified++;else pending++}return {verified,pending}}
 
 /* ---------- model from the projection engine ---------- */
-// <node-set> pure helpers: exactly one node per IDN, links deduplicated
+// <node-set> pure helpers: exactly one node per IDN; layout EMERGES from the data.
+// No preset geometry: positions come from a deterministic relaxation over real relationships
+// (facet membership, engine kin roots, recorded REL kin, composition links), seeded by IDN hash.
 function hash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
 function rnd(s){let h=hash(s);h^=h>>>16;h=Math.imul(h,0x85ebca6b);h^=h>>>13;h=Math.imul(h,0xc2b2ae35);h^=h>>>16;return (h>>>0)/4294967296}
 function meta(em){return (em&&em.e&&em.e.m)||{}}
+const IDN_G=/E-[0-9A-Fa-f]{6,}/g;
+const REL_KIN={kin_emergion:'KIN',parent_emergion:'KIN',COMPOSITION_KIN:'COMPOSED_WITH',transition_emergion:'SUCCESSOR_KIN',origin:'ORIGIN_KIN',capability_providers:'CAPABILITY_KIN'};
+// point in a ball by hash (direction + cube-root radius), never on a shell or ring
+function ball(key,r){const u=rnd(key+'u')*2-1,a=rnd(key+'v')*Math.PI*2,q=Math.sqrt(1-u*u),rr=r*Math.cbrt(.05+.95*rnd(key+'w'));return [Math.cos(a)*q*rr,u*rr*.7,Math.sin(a)*q*rr]}
+function gauss(key){const u=Math.max(1e-6,rnd(key+'g1')),v=rnd(key+'g2');return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
+// AtGOV references: target_emergion first, then other recorded REL IDNs, then IDNs in the summary
+function refsOf(em){const r=(em&&em.r)||{},out=[];const push=v=>{if(typeof v==='string')for(const m of v.match(IDN_G)||[])if(!out.includes(m))out.push(m)};push(r.target_emergion);for(const k of Object.keys(r).sort())if(k!=='target_emergion')push(r[k]);push(em&&em.m&&em.m.s);return out}
+function relax(items,springs,iters){const n=items.length;if(!n)return;
+ for(let it=0;it<iters;it++){const cool=1-it/iters,step=.06*cool+.004;const f=items.map(()=>[0,0,0]);
+  for(let i=0;i<n;i++){const a=items[i];for(let j=i+1;j<n;j++){const b=items[j];let dx=a.x-b.x,dy=a.y-b.y,dz=a.z-b.z,d2=dx*dx+dy*dy+dz*dz+1e-4;const k=.004*a.q*b.q/d2;const d=Math.sqrt(d2);dx/=d;dy/=d;dz/=d;f[i][0]+=dx*k;f[i][1]+=dy*k;f[i][2]+=dz*k;f[j][0]-=dx*k;f[j][1]-=dy*k;f[j][2]-=dz*k}}
+  for(const sp of springs){const a=sp.a,b=sp.b;let dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z;const d=Math.sqrt(dx*dx+dy*dy+dz*dz)+1e-6,k=(d-sp.l)*sp.w*.12;dx/=d;dy/=d;dz/=d;f[a.i][0]+=dx*k;f[a.i][1]+=dy*k;f[a.i][2]+=dz*k;f[b.i][0]-=dx*k;f[b.i][1]-=dy*k;f[b.i][2]-=dz*k}
+  for(let i=0;i<n;i++){const a=items[i],F=f[i];F[0]-=a.x*.012;F[1]-=a.y*.03;F[2]-=a.z*.012;const m=Math.hypot(F[0],F[1],F[2]),c=m>step?step/m:1;a.x+=F[0]*c;a.y+=F[1]*c;a.z+=F[2]*c}}}
 function nodeSet(field,proj,facetOrder){
- const acc=(field&&field.Accepted)||{},gov=(field&&field.AtGOV)||{},out=[],by=new Map(),nF=Math.max(1,facetOrder.length);
+ const acc=(field&&field.Accepted)||{},gov=(field&&field.AtGOV)||{},out=[],by=new Map();
  // Engine output first; fall back to recorded facets only if /projection.json is unavailable.
  const recs=proj&&Array.isArray(proj.records)?proj.records:Object.values(acc).map(em=>({id:em.i,archonym:meta(em).h,facets:meta(em).f||[],kin_root:em.i}));
  for(const r of recs){if(!r||!r.id)continue;const fs=Array.isArray(r.facets)?r.facets:[];
   if(by.has(r.id)){const n=by.get(r.id);for(const f of fs)if(!n.facets.includes(f))n.facets.push(f);continue}
-  const em=acc[r.id]||{},m=meta(em),home=fs.length?facetOrder.indexOf(fs[0]):-1;
-  const root=r.kin_root||r.id,fa=home>=0?(home/nF)*Math.PI*2:0,R=home>=0?1:0;
-  // engine grouping: facet anchor on the ring; kin families cluster around their root's offset
-  const ra=rnd(root+'a')*Math.PI*2,rr=home>=0?.10+.16*Math.sqrt(rnd(root+'r')):.25*Math.sqrt(rnd(root+'r'));
-  const ja=rnd(r.id+'a')*Math.PI*2,jr=.07*Math.sqrt(rnd(r.id+'r'));
-  const n={id:r.id,kind:'accepted',label:r.archonym||m.h||r.id,facets:fs.slice(),home,root,x:Math.cos(fa)*R+Math.cos(ra)*rr+Math.cos(ja)*jr,y:.02+.36*rnd(r.id+'y'),z:Math.sin(fa)*R+Math.sin(ra)*rr+Math.sin(ja)*jr,em,rec:r,t:m.t||'',tw:rnd(r.id+'t')*6.28};out.push(n);by.set(n.id,n)}
- for(const [id,em] of Object.entries(gov)){if(by.has(id))continue;const m=meta(em),fs=Array.isArray(m.f)?m.f:[],home=fs.length?facetOrder.indexOf(fs[0]):-1,fa=home>=0?(home/nF)*Math.PI*2:rnd(id)*6.28;
-  const sp=(rnd(id+'s')-.5)*.36,rr=1.42+.22*rnd(id+'r');
-  const n={id,kind:'pending',label:m.h||(em.m&&em.m.s)||id,facets:fs.slice(),home,root:id,x:Math.cos(fa+sp)*rr,y:-.05+.2*rnd(id+'y'),z:Math.sin(fa+sp)*rr,em,t:m.t||'',tw:rnd(id+'t')*6.28};out.push(n);by.set(id,n)}
- // links exactly as the engine emits them: record -> kin root, and SAAB composition links
+  const em=acc[r.id]||{},m=meta(em),p=ball(r.id,1);
+  const n={id:r.id,kind:'accepted',label:r.archonym||m.h||r.id,facets:fs.slice(),root:r.kin_root||r.id,x:p[0],y:p[1],z:p[2],em,rec:r,t:m.t||'',tw:rnd(r.id+'t')*6.28,q:1,gov:0};out.push(n);by.set(n.id,n)}
+ const accN=out.slice();
+ // relationships among accepted records
  const links=[],seen=new Set(),add=(a,b,k,asm)=>{if(!by.has(a)||!by.has(b)||a===b)return;const key=a+'|'+b+'|'+k;if(seen.has(key))return;seen.add(key);links.push({a:by.get(a),b:by.get(b),k,asm})};
  if(proj&&Array.isArray(proj.records))for(const r of proj.records)if(r&&r.kin_root&&r.kin_root!==r.id)add(r.id,r.kin_root,'KIN');
  if(proj&&Array.isArray(proj.assemblies))for(const a of proj.assemblies)for(const l of (a.links||[]))add(l.from,l.to,'COMPOSED_WITH',a.id);
- return {nodes:out,byID:by,links}}
+ for(const n of accN){const r=(n.em&&n.em.r)||{};for(const k of Object.keys(REL_KIN)){const v=r[k];if(typeof v!=='string')continue;for(const m of v.match(IDN_G)||[])add(n.id,m,REL_KIN[k]==='COMPOSED_WITH'?'COMPOSED_WITH':'REL_'+REL_KIN[k])}}
+ // AtGOV references -> targets (counted before layout so referenced records get room for their haze)
+ const govRefs=[];for(const [id,em] of Object.entries(gov)){if(by.has(id))continue;const t=refsOf(em).find(x=>by.has(x)&&by.get(x).kind==='accepted');govRefs.push([id,em,t]);if(t)by.get(t).gov++}
+ for(const n of accN)n.q=1+.35*Math.log2(1+n.gov);
+ // facet attractors: only facets that records actually carry; their positions are relaxed too
+ const anchors=new Map();for(const n of accN)for(const f of n.facets)if(!anchors.has(f)){const p=ball('facet:'+f,.8);anchors.set(f,{id:'facet:'+f,facet:f,x:p[0],y:p[1],z:p[2],q:1.4,members:0})}
+ for(const n of accN)for(const f of n.facets)anchors.get(f).members++;
+ const items=[...accN,...anchors.values()];items.forEach((o,i)=>o.i=i);
+ const springs=[];for(const n of accN)for(const f of n.facets)springs.push({a:n,b:anchors.get(f),l:.28,w:1/n.facets.length});
+ for(const l of links)springs.push({a:l.a,b:l.b,l:l.k==='KIN'?.2:.3,w:l.k==='KIN'?1:.7});
+ relax(items,springs,accN.length>400?60:200);
+ // normalise: centre and scale so the field fills the render (95th percentile radius = 1)
+ if(items.length){const cx=items.reduce((a,o)=>a+o.x,0)/items.length,cy=items.reduce((a,o)=>a+o.y,0)/items.length,cz=items.reduce((a,o)=>a+o.z,0)/items.length;
+  const rs=items.map(o=>Math.hypot(o.x-cx,(o.y-cy)/.7,o.z-cz)).sort((a,b)=>a-b),r95=rs[Math.floor(rs.length*.95)]||1,sc=items.length>1?1.3/Math.max(.05,r95):1;
+  for(const o of items){o.x=(o.x-cx)*sc;o.y=(o.y-cy)*sc;o.z=(o.z-cz)*sc}}
+ // AtGOV haze: around the accepted record each one references; unmatched ones become diffuse fog
+ const threads=new Map();let govLinked=0;
+ for(const [id,em,t] of govRefs){const m=meta(em),fs=Array.isArray(m.f)?m.f:[];let x,y,z,target=null;
+  if(t){const T=by.get(t);govLinked++;let th=threads.get(t);if(!th){const d=ball('plume:'+t,1),L=Math.hypot(T.x,T.y,T.z)||1,ox=T.x/L*.6+d[0]*.5,oy=T.y/L*.6+d[1]*.5+.15,oz=T.z/L*.6+d[2]*.5,M=Math.hypot(ox,oy,oz)||1,s=Math.min(.16,.06+.018*Math.log2(1+T.gov));
+    th={t:T,count:0,cx:T.x+ox/M*s*1.6,cy:T.y+oy/M*s*1.6,cz:T.z+oz/M*s*1.6,s};threads.set(t,th)}th.count++;
+   x=th.cx+gauss(id+'x')*th.s;y=th.cy+gauss(id+'y')*th.s*.8;z=th.cz+gauss(id+'z')*th.s;target=T}
+  else if(fs.length&&anchors.has(fs[0])){const A=anchors.get(fs[0]);x=A.x+gauss(id+'x')*.16;y=A.y+gauss(id+'y')*.12;z=A.z+gauss(id+'z')*.16}
+  else{x=(rnd(id+'a')+rnd(id+'b')+rnd(id+'c')-1.5)*1.25;y=(rnd(id+'d')+rnd(id+'e')+rnd(id+'f')-1.5)*.8;z=(rnd(id+'h')+rnd(id+'i')+rnd(id+'j')-1.5)*1.25}
+  const n={id,kind:'pending',label:m.h||(em.m&&em.m.s)||id,facets:fs.slice(),root:id,x,y,z,em,t:m.t||'',tw:rnd(id+'t')*6.28,target};out.push(n);by.set(id,n)}
+ // edges between facet attractors that actually share relationships (weight = shared count)
+ const fe=new Map();const bump=(fa,fb)=>{if(fa===fb)return;const k=fa<fb?fa+'|'+fb:fb+'|'+fa;fe.set(k,(fe.get(k)||0)+1)};
+ for(const n of accN)for(let i=0;i<n.facets.length;i++)for(let j=i+1;j<n.facets.length;j++)bump(n.facets[i],n.facets[j]);
+ for(const l of links)for(const fa of l.a.facets)for(const fb of l.b.facets)bump(fa,fb);
+ const anchorEdges=[...fe].map(([k,w])=>{const [a,b]=k.split('|');return {a:anchors.get(a),b:anchors.get(b),w}}).filter(e=>e.a&&e.b);
+ const linkedAcc=new Set();for(const l of links){linkedAcc.add(l.a.id);linkedAcc.add(l.b.id)}
+ return {nodes:out,byID:by,links,threads:[...threads.values()],anchors:[...anchors.values()],anchorEdges,stats:{accTotal:accN.length,linkedAcc:accN.filter(n=>linkedAcc.has(n.id)).length,govTotal:govRefs.length,govLinked}}}
 // Shortest unique IDN prefix (at least 10 chars) so no two labels ever read the same.
 function shortLen(ids){const u=[...new Set(ids)];for(let n=10;n<64;n++){const s=new Set(u.map(id=>id.slice(0,n)));if(s.size===u.length)return n}return 64}
 // Records that share one SOURCE hash under different IDNs (reported, never merged).
 function sameSource(field){const by={};for(const k of ['Accepted','AtGOV','Approved','Held','Rejected','Returned']){const m=(field&&field[k])||{};for(const [id,em] of Object.entries(m)){const h=em&&em.m&&em.m.h;if(!h)continue;(by[h]=by[h]||new Set()).add(id)}}return Object.values(by).filter(s=>s.size>1).map(s=>[...s].sort())}
-// Readable name for a node; never repeats the IDN (the IDN is shown once, separately).
-function nameOf(n){if(!n)return '';const em=n.em||{},sum=em.m&&em.m.s;if(n.label&&n.label!==n.id)return n.label;if(sum&&sum!==n.id)return sum;return n.kind==='pending'?'AtGOV record':'REG-accepted record'}
+// Readable name for a node. Never an IDN: the IDN is shown once, separately. When the title is
+// empty or is itself an IDN, use the record kind plus a short summary with IDNs removed.
+function nameOf(n){if(!n)return '';const em=n.em||{},r=em.r||{},isID=v=>/^\s*E-[0-9A-Fa-f]{6,}\s*$/.test(String(v||''));
+ if(n.label&&n.label!==n.id&&!isID(n.label)&&n.kind!=='pending')return n.label;
+ const sum=String((em.m&&em.m.s)||(n.kind==='pending'?n.label:'')||'').replace(IDN_G,'').replace(/[\s:,;·|-]+$/,'').replace(/\s{2,}/g,' ').trim();
+ if(sum.length>=3&&!isID(sum))return sum;
+ const kind=n.kind==='pending'?'AtGOV record':'REG-accepted record';return r.source_kind?kind+' · '+r.source_kind:kind}
 // </node-set>
-let SHORT=12;
+let SHORT=12,threads=[],anchors=[],anchorEdges=[],lstats=null;
 function build(){
  facetOrder=proj&&Array.isArray(proj.facet_order)?proj.facet_order:Object.keys(FACET_LABEL);
- const ns=nodeSet(field,proj,facetOrder);nodes=ns.nodes;byID=ns.byID;links=ns.links;SHORT=shortLen(nodes.map(n=>n.id));
+ const ns=nodeSet(field,proj,facetOrder);nodes=ns.nodes;byID=ns.byID;links=ns.links;threads=ns.threads;anchors=ns.anchors;anchorEdges=ns.anchorEdges;lstats=ns.stats;SHORT=shortLen(nodes.map(n=>n.id));
  if(selected)selected=byID.get(selected.id)||null;
 }
 
@@ -306,6 +351,7 @@ function renderPanels(){
  setText('sAcc',fmt(nA));setText('sGov',fmt(nG));setText('sRef',field?fmt(rc.verified):'—');setText('sPend',field?fmt(rc.pending):'—');
  setText('sEv',field&&field.Events!=null?fmt(field.Events):'—');
  {const d=sameSource(field);setText('sDup',field?(d.length?fmt(d.reduce((a,x)=>a+x.length,0))+' in '+fmt(d.length):'0'):'—');$('sDup').title=d.length?'Same SOURCE hash under different IDNs: '+d.map(x=>x.join(' = ')).join(' ; '):'No SOURCE hash is shared by two IDNs'}
+ setText('sLinked',lstats?fmt(lstats.linkedAcc)+' / '+fmt(lstats.accTotal):'—');setText('sGovT',lstats?fmt(lstats.govLinked)+' / '+fmt(lstats.govTotal):'—');
  setText('sSaab',proj?fmt((proj.assemblies||[]).length):'NOT_FOUND_YET');
  const tip=(proj&&proj.tip_hash)||(field&&field.TipHash)||'';setText('tipTop',tip?tip.slice(0,10):'—');setText('mTip',tip||'NOT_FOUND_YET');setText('mTipS',field?fmt(field.Events||0)+' events · projection rebuilt from the ledger':'—');
  const times=nodes.map(n=>n.t).filter(Boolean).sort();const last=times[times.length-1];
@@ -372,7 +418,7 @@ function select(n,focus){selected=n;const D=$('detail');D.replaceChildren();if(!
  if(n.t)kv('Captured',new Date(n.t).toLocaleString());if(em.m&&em.m.s)kv('Summary',em.m.s);if(em.m&&em.m.h)kv('Source hash',em.m.h.slice(0,16)+'…',true);
  const r=em.r||{},w=el('div');for(const k of Object.keys(KIN_KEYS)){const v=r[k];if(typeof v!=='string'||!v)continue;for(const id of (v.match(/E-[A-Fa-f0-9]+/g)||[])){const o=byID.get(id),pend=!o||o.kind!=='accepted'||n.kind!=='accepted',s=el('span','kin'+(pend?' p':''));s.append(el('em',null,KIN_KEYS[k]),document.createTextNode(shortID(id)));s.title=pend?'Pending (AtGOV) or outside view':'Verified · both REG-accepted';w.append(s)}}
  if(w.childNodes.length)kv('Recorded kin',w);
- if(n.kind==='pending')kv('Governance','Awaiting HUMAN_FINAL. Not verified, not counted in verified references.');
+ if(n.kind==='accepted'&&n.gov)kv('AtGOV refs',fmt(n.gov)+' AtGOV records reference this record');if(n.kind==='pending'&&n.target)kv('References',n.target.id,true);if(n.kind==='pending')kv('Governance','Awaiting HUMAN_FINAL. Not verified, not counted in verified references.');
  D.classList.add('on');if(focus)$('c').scrollIntoView({block:'nearest',behavior:'smooth'});want()}
 
 /* ---------- renderer ---------- */
@@ -387,8 +433,8 @@ function sprites0(){sprites.halo=sprite(96,[[0,'rgba(255,255,255,1)'],[.08,'rgba
  sprites.dot=sprite(16,[[0,'rgba(255,255,255,1)'],[.4,'rgba(220,226,255,.5)'],[1,'rgba(200,210,255,0)']])}
 function seedParticles(){const small=W<700,R=(i,s)=>rnd(s+i);
  const cols=small?46:72,rows=small?20:28;mesh=[];for(let j=0;j<rows;j++)for(let i=0;i<cols;i++)mesh.push({x:-2.6+5.2*i/(cols-1),z:-2.6+5.2*j/(rows-1)});mesh.cols=cols;mesh.rows=rows;
- dust=[];const nd=small?700:1200;for(let i=0;i<nd;i++){const a=R(i,'da')*6.28,r=Math.pow(R(i,'dr'),.7)*1.9;dust.push({x:Math.cos(a)*r,z:Math.sin(a)*r*.9,y:-.1+Math.pow(R(i,'dy'),1.6)*.9*(1-r/2.2),b:R(i,'db'),s:R(i,'ds')})}
- fog=[];const nf=small?22:34;for(let i=0;i<nf;i++){const a=R(i,'fa')*6.28,r=.2+R(i,'fr')*1.25;fog.push({x:Math.cos(a)*r,z:Math.sin(a)*r,y:.02+R(i,'fy')*.32,s:.9+R(i,'fs')*1.3,b:R(i,'fb')<.62,ph:R(i,'fp')*6.28})}}
+ dust=[];const nd=small?700:1200;for(let i=0;i<nd;i++){const k='d'+i;dust.push({x:gauss(k+'x')*.75,y:gauss(k+'y')*.42,z:gauss(k+'z')*.75,b:R(i,'db'),s:R(i,'ds')})}
+ fog=[];const nf=small?22:34;for(let i=0;i<nf;i++){const k='f'+i;fog.push({x:gauss(k+'x')*.6,z:gauss(k+'z')*.6,y:gauss(k+'y')*.22,s:.9+R(i,'fs')*1.3,b:R(i,'fb')<.62,ph:R(i,'fp')*6.28})}}
 function resize(){const r=c.getBoundingClientRect();W=Math.max(1,r.width);H=Math.max(1,r.height);dpr=Math.min(window.devicePixelRatio||1,2);c.width=Math.round(W*dpr);c.height=Math.round(H*dpr);g.setTransform(dpr,0,0,dpr,0,0);seedParticles();want()}
 function P(x,y,z){const cy=Math.cos(cam.yaw),sy=Math.sin(cam.yaw);let X=x*cy-z*sy,Z=x*sy+z*cy;const cp=Math.cos(cam.pitch),sp=Math.sin(cam.pitch);let Y=y*cp-Z*sp;Z=y*sp+Z*cp;const D=3.4,zz=Z+D;if(zz<.2)return null;const k=Math.min(W*.92,H*1.25)*.5*cam.zoom*D/1.75/zz;return {x:W/2+X*k,y:H*.5-Y*k+H*.04,s:k/ (Math.min(W*.92,H*1.25)*.5)*2.1/D*1.6,z:zz}}
 function want(){if(!raf&&visible&&!document.hidden)raf=requestAnimationFrame(frame)}
@@ -396,15 +442,15 @@ function frame(ts){raf=0;const dt=Math.min(.05,(ts-(lastT||ts))/1000);lastT=ts;c
 function draw(t){g.clearRect(0,0,W,H);
  // backdrop: near-black with deep electric blue underglow
  const bg=g.createLinearGradient(0,0,0,H);bg.addColorStop(0,'#04060b');bg.addColorStop(.55,'#060a16');bg.addColorStop(1,'#04060c');g.fillStyle=bg;g.fillRect(0,0,W,H);
- const gc=P(0,-.45,0);if(gc){const s=Math.max(W,H)*1.1*cam.zoom;g.globalAlpha=.9;g.drawImage(sprites.glow,gc.x-s/2,gc.y-s*.22,s,s*.44);g.globalAlpha=1}
+ const gc=P(0,-1.2,0);if(gc){const s=Math.max(W,H)*1.1*cam.zoom;g.globalAlpha=.9;g.drawImage(sprites.glow,gc.x-s/2,gc.y-s*.22,s,s*.44);g.globalAlpha=1}
  // mesh wave surface
- const cols=mesh.cols,pts=new Array(mesh.length);for(let i=0;i<mesh.length;i++){const m=mesh[i],y=-.46+.055*Math.sin(m.x*2.1+t*.7)+.04*Math.sin(m.z*2.7-t*.9)+.025*Math.sin((m.x+m.z)*4+t*1.3);pts[i]=P(m.x,y,m.z);if(pts[i])pts[i].h=y}
+ const cols=mesh.cols,pts=new Array(mesh.length);for(let i=0;i<mesh.length;i++){const m=mesh[i],y=-1.2+.055*Math.sin(m.x*2.1+t*.7)+.04*Math.sin(m.z*2.7-t*.9)+.025*Math.sin((m.x+m.z)*4+t*1.3);pts[i]=P(m.x,y,m.z);if(pts[i])pts[i].h=y}
  g.lineWidth=.6;for(let j=0;j<mesh.rows;j++){g.beginPath();let on=false;for(let i=0;i<cols;i++){const p=pts[j*cols+i];if(!p){on=false;continue}on?g.lineTo(p.x,p.y):g.moveTo(p.x,p.y);on=true}const dep=j/(mesh.rows-1);g.strokeStyle=`rgba(59,130,246,${.08+.22*dep})`;g.stroke()}
  for(let i=0;i<cols;i+=2){g.beginPath();let on=false;for(let j=0;j<mesh.rows;j++){const p=pts[j*cols+i];if(!p){on=false;continue}on?g.lineTo(p.x,p.y):g.moveTo(p.x,p.y);on=true}g.strokeStyle='rgba(47,107,255,.07)';g.stroke()}
- for(const p of pts){if(!p)continue;const cr=(p.h+.46)/.12,a=Math.min(1,.4+cr*.6)*Math.min(1,2.6/p.z);const s=1+.9*Math.min(1,2.6/p.z);g.fillStyle=cr>.75?`rgba(225,230,255,${a})`:`rgba(100,140,255,${a*.85})`;g.fillRect(p.x-s/2,p.y-s/2,s,s)}
+ for(const p of pts){if(!p)continue;const cr=(p.h+1.2)/.12,a=Math.min(1,.4+cr*.6)*Math.min(1,2.6/p.z);const s=1+.9*Math.min(1,2.6/p.z);g.fillStyle=cr>.75?`rgba(225,230,255,${a})`:`rgba(100,140,255,${a*.85})`;g.fillRect(p.x-s/2,p.y-s/2,s,s)}
  // fog cloud
  g.globalCompositeOperation='lighter';
- {const cc=P(0,.18,0);if(cc){const s=Math.min(W,H)*1.15*cam.zoom;g.globalAlpha=.75;g.drawImage(sprites.core,cc.x-s/2,cc.y-s*.32,s,s*.64);g.globalAlpha=1}}
+ {const cc=P(0,0,0);if(cc){const s=Math.min(W,H)*1.15*cam.zoom;g.globalAlpha=.45;g.drawImage(sprites.core,cc.x-s/2,cc.y-s*.32,s,s*.64);g.globalAlpha=1}}
  for(const f of fog){const p=P(f.x+.06*Math.sin(t*.12+f.ph),f.y+.03*Math.sin(t*.2+f.ph),f.z);if(!p)continue;const s=f.s*p.s*Math.min(W,H)*.55;g.globalAlpha=.34+.1*Math.sin(t*.3+f.ph);g.drawImage(f.b?sprites.fogW:sprites.fogB,p.x-s/2,p.y-s*.36,s,s*.72)}
  g.globalAlpha=1;g.globalCompositeOperation='source-over';
  for(const d of dust){const p=P(d.x,d.y+.02*Math.sin(t*.5+d.s*6),d.z);if(!p)continue;const a=(.18+.5*d.b)*Math.min(1,2.2/p.z)*(.75+.25*Math.sin(t*1.5+d.s*9));const s=.7+1.3*d.b*Math.min(1.4,2.6/p.z);g.fillStyle=`rgba(${d.b>.6?'240,243,255':'160,180,255'},${a})`;g.fillRect(p.x,p.y,s,s)}
@@ -417,6 +463,17 @@ function draw(t){g.clearRect(0,0,W,H);
  for(const l of links){if(!l.a.p||!l.b.p||(l.a.kind==='pending'&&!showGov))continue;const on=l.a.on&&l.b.on,hot=selected&&(l.a===selected||l.b===selected);const p=l.a.p,q=l.b.p,mx=(p.x+q.x)/2,my=(p.y+q.y)/2-Math.hypot(q.x-p.x,q.y-p.y)*.22;
   g.beginPath();g.moveTo(p.x,p.y);g.quadraticCurveTo(mx,my,q.x,q.y);
   if(l.k==='COMPOSED_WITH'){g.strokeStyle=`rgba(59,130,246,${hot?.95:on?.5:.06})`;g.lineWidth=hot?1.8:1}else{g.strokeStyle=`rgba(210,222,255,${hot?.8:on?.13:.03})`;g.lineWidth=hot?1.2:.6}g.stroke()}
+ // emergent facet attractors: faint edges only where facets share relationships, names at the attractor
+ const maxW=Math.max(1,...anchorEdges.map(e=>e.w));
+ for(const e of anchorEdges){const p=P(e.a.x,e.a.y,e.a.z),q=P(e.b.x,e.b.y,e.b.z);if(!p||!q)continue;const on=filter==='ALL'||filter===e.a.facet||filter===e.b.facet;g.strokeStyle=`rgba(150,175,240,${(on?.05:.015)+.22*(e.w/maxW)*(on?1:.2)})`;g.lineWidth=.5+1.6*(e.w/maxW);g.setLineDash([2,4]);g.beginPath();g.moveTo(p.x,p.y);g.lineTo(q.x,q.y);g.stroke()}
+ g.setLineDash([]);
+ // AtGOV -> target threads, one per referenced record, width by reference count
+ const maxC=Math.max(1,...threads.map(th=>th.count));
+ if(showGov)for(const th of threads){const p=P(th.cx,th.cy,th.cz),q=th.t.p;if(!p||!q)continue;const on=inFilter(th.t),hot=selected===th.t,f=Math.log2(1+th.count)/Math.log2(1+maxC);
+  g.strokeStyle=`rgba(205,214,236,${hot?.7:on?.05+.18*f:.02})`;g.lineWidth=.4+1.4*f;g.beginPath();g.moveTo(p.x,p.y);g.lineTo(q.x,q.y);g.stroke()}
+ g.font='700 9px system-ui,sans-serif';g.textAlign='center';
+ for(const A of anchors){const p=P(A.x,A.y,A.z);A.p=p;if(!p)continue;const sel=filter===A.facet,front=Math.max(.25,Math.min(1,2.9/p.z-.25));g.fillStyle=sel?'rgba(120,165,255,.95)':`rgba(190,205,240,${(filter==='ALL'?.55:.22)*front})`;g.fillText((FACET_LABEL[A.facet]||A.facet).toUpperCase(),p.x,p.y-10);g.fillStyle=`rgba(150,175,240,${.35*front})`;g.fillText('· '+A.members+' ·',p.x,p.y+1)}
+ g.textAlign='left';
  // nodes
  // AtGOV layer: rings when few, one batched density pass when many (thousands stay smooth)
  if(govP.length<=400){g.lineWidth=1;for(const on of [true,false]){g.strokeStyle=`rgba(205,214,236,${on?.38:.06})`;g.beginPath();for(const n of govP){if(n.on!==on)continue;const r=2.2+1.2*n.p.s;g.moveTo(n.p.x+r,n.p.y);g.arc(n.p.x,n.p.y,r,0,6.283)}g.stroke()}}
@@ -432,14 +489,17 @@ function labels(){const placed=[],small=W<700,max=small?4:7;const cand=[],shown=
  for(const n of proj2.filter(n=>n.kind==='accepted'&&n.on&&n!==selected).sort((a,b)=>String(b.t).localeCompare(String(a.t))))cand.push(n);
  g.textBaseline='middle';let count=0;
  for(const n of cand){if(count>=max)break;if(shown.has(n.id))continue;const p=n.p;if(p.x<20||p.x>W-20||p.y<70||p.y>H-60)continue;
-  const right=p.x<W*.62,dx=right?1:-1,ex=p.x+dx*24,ey=p.y-22,id=shortID(n.id),nm=String(nameOf(n)).slice(0,28);
-  g.font='600 10.5px '+getComputedStyle(document.body).getPropertyValue('--mono');const w1=g.measureText(id).width;g.font='500 11px system-ui,sans-serif';const w2=g.measureText(nm).width;const w=Math.max(w1,w2)+14,h=34;
+  const right=p.x<W*.62,dx=right?1:-1,ex=p.x+dx*24,ey=p.y-22,id=shortID(n.id);
+  g.font='600 10.5px '+getComputedStyle(document.body).getPropertyValue('--mono');const w1=g.measureText(id).width;g.font='500 11px system-ui,sans-serif';const lines=wrap2(String(nameOf(n)),small?138:168);const w2=Math.max(...lines.map(l=>g.measureText(l).width));const w=Math.max(w1,w2)+14,h=lines.length>1?47:34;
   const bx=right?ex+16:ex-16-w,by=ey-h/2;const rect={x:bx-4,y:by-4,w:w+8,h:h+8};if(bx<6||bx+w>W-6||by<60)continue;
   if(placed.some(r=>!(rect.x+rect.w<r.x||r.x+r.w<rect.x||rect.y+rect.h<r.y||r.y+r.h<rect.y)))continue;placed.push(rect);shown.add(n.id);count++;
   const sel=n===selected;g.strokeStyle=sel?'rgba(255,255,255,.85)':'rgba(170,195,255,.55)';g.lineWidth=.8;g.beginPath();g.moveTo(p.x+dx*3,p.y-3);g.lineTo(ex,ey);g.lineTo(right?bx:bx+w,ey);g.stroke();
   g.fillStyle='rgba(5,8,16,.82)';g.strokeStyle=sel?'rgba(59,130,246,.9)':'rgba(120,150,220,.32)';g.beginPath();g.roundRect?g.roundRect(bx,by,w,h,4):g.rect(bx,by,w,h);g.fill();g.stroke();
   g.fillStyle='#3b82f6';g.fillRect(right?bx:bx+w-2,by+5,2,h-10);
-  g.font='600 10.5px '+getComputedStyle(document.body).getPropertyValue('--mono');g.fillStyle='#a9c2ff';g.fillText(id,bx+8,by+11);g.font='500 11px system-ui,sans-serif';g.fillStyle='#f2f5ff';g.fillText(nm,bx+8,by+24)}}
+  g.font='600 10.5px '+getComputedStyle(document.body).getPropertyValue('--mono');g.fillStyle='#a9c2ff';g.fillText(id,bx+8,by+11);g.font='500 11px system-ui,sans-serif';g.fillStyle='#f2f5ff';lines.forEach((l,i)=>g.fillText(l,bx+8,by+24+i*13))}}
+// two lines at most, word-wrapped; ellipsis only if the second line still overflows (font must be set)
+function wrap2(text,max){const words=text.split(/\s+/).filter(Boolean),out=[''];for(const w of words){const cur=out[out.length-1],t=cur?cur+' '+w:w;if(g.measureText(t).width<=max||!cur)out[out.length-1]=t;else if(out.length<2)out.push(w);else{out[1]+=' '+w}}
+ return out.map(l=>{if(g.measureText(l).width<=max)return l;while(l.length>1&&g.measureText(l+'…').width>max)l=l.slice(0,-1);return l+'…'})}
 
 
 /* ---------- event comets (real ledger events only) ---------- */
@@ -453,7 +513,7 @@ let lastSeq=-1,cometQ=[],comets=[],pulses=[],evPoll=0;
 const MAXC=()=>W<700?4:8;
 function cometTarget(e){const n=byID.get(e.emergion_id);if(n&&(n.kind!=='pending'||showGov))return {n};
  const em=field&&['AtGOV','Approved','Held','Rejected','Returned'].map(k=>(field[k]||{})[e.emergion_id]).find(Boolean),fs=em?(meta(em).f||[]):[],fi=fs.length?facetOrder.indexOf(fs[0]):-1;
- if(fi>=0){const a=fi/Math.max(1,facetOrder.length)*Math.PI*2;return {x:Math.cos(a),y:.1,z:Math.sin(a)}}return {x:0,y:.12,z:0}}
+ const A=fs.length&&anchors.find(a=>a.facet===fs[0]);if(A)return {x:A.x,y:A.y,z:A.z};return {x:0,y:0,z:0}}
 function targetPoint(tg,t){if(tg.n){const n=tg.n;return P(n.x,n.y+.012*Math.sin(t*.8+n.tw),n.z)}return P(tg.x,tg.y,tg.z)}
 function launch(e,delay){cometQ.push({e,at:performance.now()+delay});want()}
 function drawComets(t){const now=performance.now();
@@ -485,7 +545,7 @@ c.addEventListener('pointerdown',e=>{c.setPointerCapture(e.pointerId);ptr.set(e.
 c.addEventListener('pointermove',e=>{if(!ptr.has(e.pointerId)){if(e.pointerType==='mouse'){const r=c.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,ev=hitEvent(x,y);if(ev)showEvent(ev,x,y)}return}const o=ptr.get(e.pointerId);ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});
  if(ptr.size===2){const a=[...ptr.values()],d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);if(pinch)cam.zoom=Math.max(.6,Math.min(2.6,cam.zoom*d/pinch));pinch=d}
  else if(drag){cam.yaw+=(e.clientX-o.x)*.006;cam.pitch=Math.max(.12,Math.min(.95,cam.pitch+(e.clientY-o.y)*.004));if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>6)drag.moved=true}want()});
-function up(e){if(drag&&!drag.moved&&ptr.size===1&&e.type==='pointerup'){const r=c.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const hev=hitEvent(x,y);if(hev){showEvent(hev,x,y)}let best=null,bd=24;for(const n of proj2){const d=Math.hypot(n.p.x-x,n.p.y-y);if(d<bd){bd=d;best=n}}if(!best){bd=10;for(const n of govP){const d=Math.hypot(n.p.x-x,n.p.y-y);if(d<bd){bd=d;best=n}}}if(best||!hev)select(best)}ptr.delete(e.pointerId);if(!ptr.size){drag=null;pinch=0;c.classList.remove('grab')}}
+function up(e){if(drag&&!drag.moved&&ptr.size===1&&e.type==='pointerup'){const r=c.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;const hev=hitEvent(x,y);if(hev){showEvent(hev,x,y)}let best=null,bd=24;for(const n of proj2){const d=Math.hypot(n.p.x-x,n.p.y-y);if(d<bd){bd=d;best=n}}if(!best){bd=10;for(const n of govP){const d=Math.hypot(n.p.x-x,n.p.y-y);if(d<bd){bd=d;best=n}}}if(!best&&!hev){for(const A of anchors){if(A.p&&Math.abs(A.p.x-x)<48&&Math.abs(A.p.y-6-y)<12){filter=filter===A.facet?'ALL':A.facet;renderNav();break}}}if(best||!hev)select(best)}ptr.delete(e.pointerId);if(!ptr.size){drag=null;pinch=0;c.classList.remove('grab')}}
 c.addEventListener('pointerup',up);c.addEventListener('pointercancel',up);
 c.addEventListener('wheel',e=>{e.preventDefault();auto=false;cam.zoom=Math.max(.6,Math.min(2.6,cam.zoom*Math.exp(-e.deltaY*.0015)));want()},{passive:false});
 $('bGov').onclick=()=>{showGov=!showGov;$('bGov').setAttribute('aria-pressed',String(showGov));if(!showGov&&selected&&selected.kind==='pending')select(null);renderTimeline();want()};

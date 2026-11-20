@@ -150,7 +150,7 @@ process.stdout.write([ids.length,new Set(ids).size,one.kind,one.facets.join('+')
 // never scrolls sideways on a phone.
 func TestLivingUniverseLabelsShowIDNOnce(t *testing.T) {
 	src := livingUniverseHTML(t)
-	for _, want := range []string{"overflow-x:hidden", "nm=String(nameOf(n)).slice(0,28)", "renderQueue()", "govP.length<=400"} {
+	for _, want := range []string{"overflow-x:hidden", "lines=wrap2(String(nameOf(n))", "renderQueue()", "govP.length<=400"} {
 		if !strings.Contains(src, want) {
 			t.Fatalf("living-universe.html missing %q", want)
 		}
@@ -162,5 +162,34 @@ const c={id:"E-2",label:"Skyhook Runtime",kind:"accepted",em:{}};
 process.stdout.write([nameOf(a),nameOf(b),nameOf(c)].join("|"));`)
 	if out != "REG-accepted record|execution observation|Skyhook Runtime" {
 		t.Fatalf("nameOf = %q", out)
+	}
+}
+
+// The layout emerges from the data: no preset ring or polyhedron. Positions are
+// deterministic, facet attractors exist only for facets records carry, each
+// AtGOV record sits in a haze around the accepted record it references, facet
+// edges exist only where facets share relationships, and AtGOV points are not
+// concentrated in a band (radius std/mean > 0.35).
+func TestLivingUniverseLayoutEmergesFromData(t *testing.T) {
+	src := livingUniverseHTML(t)
+	nodeSet := block(t, src, "node-set")
+	for _, bad := range []string{"facetOrder.indexOf", "/nF)*Math.PI*2", "dodeca"} {
+		if strings.Contains(nodeSet, bad) {
+			t.Fatalf("node-set imposes preset geometry: %q", bad)
+		}
+	}
+	out := runNode(t, nodeSet+`
+const acc={},gov={},recs=[],ids=[];
+for(let i=0;i<40;i++){const id="E-"+(0xa000+i).toString(16).toUpperCase()+"00000000";ids.push(id);acc[id]={i:id,r:i===5?{kin_emergion:ids[1]}:{}};recs.push({id,facets:i<6?["PATENT_IP"]:i<9?["PATENT_IP","GRANT_FUNDING"]:[],kin_root:id})}
+for(let i=0;i<2000;i++){const id="E-"+(0xb0000+i).toString(16).toUpperCase()+"0000";const t=ids[i%31];gov[id]=i%10===9?{m:{s:"observation"}}:{r:{target_emergion:t},m:{s:"comparison: TARGET_EMERGION:"+t}}}
+const f={Accepted:acc,AtGOV:gov},p={records:recs};
+const a=nodeSet(f,p,["FIELD_COMMAND","PATENT_IP","GRANT_FUNDING"]),b=nodeSet(f,p,["FIELD_COMMAND","PATENT_IP","GRANT_FUNDING"]);
+const same=a.nodes.every((n,i)=>n.x===b.nodes[i].x&&n.y===b.nodes[i].y&&n.z===b.nodes[i].z);
+const pend=a.nodes.filter(n=>n.kind==="pending"),near=pend.filter(n=>n.target).every(n=>Math.hypot(n.x-n.target.x,n.y-n.target.y,n.z-n.target.z)<1);
+const rs=pend.map(n=>Math.hypot(n.x,n.z)),m=rs.reduce((x,y)=>x+y,0)/rs.length,sd=Math.sqrt(rs.reduce((x,y)=>x+(y-m)*(y-m),0)/rs.length);
+const fe=a.anchorEdges.map(e=>[e.a.facet,e.b.facet].sort().join("+")+":"+e.w).join(";");
+process.stdout.write([same,a.anchors.map(x=>x.facet).sort().join("+"),fe,a.stats.govLinked,a.stats.linkedAcc,near,sd/m>0.35,a.threads.length].join(","));`)
+	if out != "true,GRANT_FUNDING+PATENT_IP,GRANT_FUNDING+PATENT_IP:3,1800,2,true,true,31" {
+		t.Fatalf("layout = %s", out)
 	}
 }
