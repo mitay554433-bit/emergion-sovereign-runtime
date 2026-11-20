@@ -113,7 +113,8 @@ process.stdout.write(JSON.stringify({pre,all,before,kept,after:savedReason(),p1:
 
 // batchBlocks is the batch code plus the reference resolver the haze uses.
 func batchBlocks(t *testing.T, src string) string {
-	return block(t, src, "ref-resolve") + "\n" + block(t, src, "ref-resolve-fn") + "\n" + block(t, src, "trajectory-rows") + "\n" + block(t, src, "governed-accept")
+	prelude := "const fmt=n=>Number(n).toLocaleString('en-US');\nconst SHORT=12;const shortID=id=>{id=String(id||'');return id.length>SHORT?id.slice(0,SHORT)+'\u2026':id};\n"
+	return prelude + block(t, src, "ref-resolve") + "\n" + block(t, src, "ref-resolve-fn") + "\n" + block(t, src, "trajectory-rows") + "\n" + block(t, src, "governed-accept")
 }
 
 // A provider trajectory is ONE row: in the group list and in the HUMAN_FINAL
@@ -125,7 +126,7 @@ func TestLivingTrajectoryOneRowAcceptNewestHoldRest(t *testing.T) {
 const acc={"E-AAAAAA01":{e:{m:{h:"F;C;T",f:["ANALYTICS_FORECAST"]}}}};
 const gov={"E-X00001":{r:{source_kind:"EXECUTION_OBSERVATION",target_emergion:"E-AAAAAA01"}}};
 const members=[];for(let i=1;i<=5;i++){const id="E-T0000"+i;members.push(id);gov[id]={r:{source_name:"provider_population",capability_providers:"ANALYZE:E-AAAAAA01,CMP:E-C"+i}}}
-const proj={trajectories:[{key:"DERIVE_CAPABILITY|ANALYZE+CMP+RLT|E-AAAAAA01",required_capability:"DERIVE_CAPABILITY",first_provider:"E-AAAAAA01",first_provider_title:"F;C;T",count:6,first_at:"2026-11-01T10:00:00Z",last_at:"2026-11-19T22:00:00Z",newest_id:"E-T00004",members:members.concat(["E-GONE01"])}]};
+const proj={trajectories:[{key:"DERIVE_CAPABILITY|ANALYZE+CMP+RLT|E-AAAAAA01",required_capability:"DERIVE_CAPABILITY",capability_composition:"ANALYZE+CMP+RLT",first_provider:"E-AAAAAA01",first_provider_title:"F;C;T",count:6,first_at:"2026-11-01T10:00:00Z",last_at:"2026-11-19T22:00:00Z",newest_id:"E-T00004",members:members.concat(["E-GONE01"])}]};
 const trs=trajList(proj,gov),idx=batchIndex(gov,acc,trs),g=idx.groups.find(g=>g.traj),f={kind:'group',value:g.key};
 const s=batchSelect(gov,f,500,idx),pl=batchPlan(s,f,idx),other=batchPlan(batchSelect(gov,{kind:'group',value:idx.groups.find(g=>!g.traj).key},500,idx),{kind:'group',value:idx.groups.find(g=>!g.traj).key},idx);
 const q=collapseTraj([{id:"E-X00001",summary:"x"}].concat(members.map(id=>({id,summary:"deterministic capability provider trajectory"}))),trs);
@@ -147,8 +148,8 @@ process.stdout.write(JSON.stringify({count:trs[0].count,label:g.label,groups:idx
 	if err := json.Unmarshal([]byte(out), &r); err != nil {
 		t.Fatalf("%v: %s", err, out)
 	}
-	if r.Count != 5 || !strings.HasPrefix(r.Label, "provider trajectory · DERIVE_CAPABILITY → F;C;T · 5 runs · ") || !strings.Contains(r.Label, "…") {
-		t.Fatalf("label/count: %d %q", r.Count, r.Label)
+	if r.Count != 5 || r.Label != "via F;C;T · ANALYZE×CMP×RLT · 4 held" {
+		t.Fatalf("row label/count: %d %q", r.Count, r.Label)
 	}
 	if fmt.Sprint(r.Groups) != "[5 1]" {
 		t.Fatalf("groups = %v (trajectory members must leave the haze groups)", r.Groups)
@@ -382,7 +383,7 @@ func TestLivingHoldAllTrajectoriesPlanAndConfirm(t *testing.T) {
 	if !strings.Contains(src, `haBtn.textContent=armHA?'CONFIRM HOLD '+fmt(ha.hold.length):'Hold all trajectories ('+fmt(ha.hold.length)+')'`) {
 		t.Fatal("Hold all trajectories must use the two-press CONFIRM HOLD N label")
 	}
-	if !strings.Contains(src, "batchStep(batchArm,'HA|'+batchKey(ids)") || !strings.Contains(src, "batchAccept(ids,HOLD_ALL_REASON,res,'HOLD')") {
+	if !strings.Contains(src, "armAndSend('HA|'+batchKey(ids),ids,HOLD_ALL_REASON,'HOLD')") {
 		t.Fatal("Hold all must arm with HA| and send HOLD_ALL_REASON via the existing batch route")
 	}
 	if strings.Contains(src, "Accept all") {

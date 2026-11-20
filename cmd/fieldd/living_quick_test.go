@@ -103,17 +103,19 @@ func TestLivingUniversePageIsReadOnlyProjection(t *testing.T) {
 	}
 	// The batch is sent only from the button, only after a reason and the
 	// human-typed count are checked.
-	// batchAccept is defined once and called only from the armed second press
-	// of the three buttons (Accept, Hold the rest, and Hold all trajectories).
-	armed := "if(!st.send){batchArmTimer=setTimeout(disarm,BATCH_ARM_MS);renderBatch();return}\n   renderBatch();batchAccept("
-	if n := strings.Count(src, "batchAccept("); n != 4 || strings.Count(acc, armed) != 3 ||
-		!strings.Contains(acc, armed+"ids,rs.value,res)}") || !strings.Contains(acc, armed+"ids,rs.value,res,'HOLD')}") ||
-		!strings.Contains(acc, armed+"ids,HOLD_ALL_REASON,res,'HOLD')}") {
-		t.Fatalf("batchAccept( appears %d times; want definition + the three armed second presses only", n)
+	// batchAccept is defined once and called only from armAndSend after the
+	// armed second press (Accept, Hold the rest, Hold all trajectories, Hold all newest).
+	if n := strings.Count(src, "batchAccept("); n != 2 || !strings.Contains(acc, "afterArmPaint();batchAccept(ids,reason,batchSink(),decision)") {
+		t.Fatalf("batchAccept( appears %d times; want definition + armAndSend only", n)
+	}
+	if !strings.Contains(acc, "function armAndSend(") || !strings.Contains(acc, "HOLD_ALL_NEWEST_REASON") ||
+		!strings.Contains(src, "Hold all newest (") || !strings.Contains(src, "hfHoldNewest") ||
+		strings.Contains(src, "Accept all") {
+		t.Fatal("Hold all newest must use the two-press armAndSend path and must not add Accept all")
 	}
 	if !strings.Contains(acc, "Hold all trajectories (") || !strings.Contains(acc, "CONFIRM HOLD ") ||
-		!strings.Contains(acc, "function holdAllPlan(trs)") || strings.Contains(src, "Accept all") {
-		t.Fatal("batch panel must have Hold all trajectories with CONFIRM HOLD, and must not add Accept all")
+		!strings.Contains(acc, "function holdAllPlan(trs)") || !strings.Contains(acc, "function holdAllNewestPlan(trs)") {
+		t.Fatal("batch panel must have Hold all trajectories and Hold all newest with CONFIRM HOLD")
 	}
 	if !strings.Contains(acc, "await refresh(true)") || !strings.Contains(src, "getJSON('/projection.json')") {
 		t.Fatal("after a batch, the page must force-refresh including /projection.json")
