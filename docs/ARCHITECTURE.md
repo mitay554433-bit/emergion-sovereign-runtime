@@ -321,7 +321,7 @@ This preserves SELF_BUILDING != SELF_AUTHORIZING without wrapping ordinary engin
 
 1. FIELD is reconstructed state, not an authority replacement.
 2. COSL/REG remain canonical governance lineage.
-3. HUMAN_FINAL remains final authority for consequential transitions.
+3. HUMAN_FINAL remains final authority for consequential transitions. A01 amendment A01-AUTO-1 (approved by Michael, 2026-11-20): the low-risk classes in `policy/auto-accept.json` may be decided by the `AUTO_POLICY` decision source only while a HUMAN_FINAL switch has that exact policy on; each auto decision has its own receipt and a one-press HUMAN_FINAL undo. See `docs/A01_AUTO_POLICY.md`.
 4. AI proposes/analyses within bounded schemas; it does not self-authorize.
 5. Execution must originate from an accepted EmergION.
 6. Consequential actions require their existing HUMAN_FINAL gate.
