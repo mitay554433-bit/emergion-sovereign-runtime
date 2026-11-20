@@ -178,6 +178,9 @@ func main() {
 		printJSON(doctor.Run(context.Background(), *state, gemma))
 		return
 	}
+	if runAutoCommand(*state, args) {
+		return
+	}
 	s := openStore(*state)
 	mkReasoner := func() reason.Reasoner {
 		switch *reasonerName {
@@ -885,6 +888,12 @@ Commands:
                                propose a contradiction mark between two REG-accepted records; stops at GOV
   contradictions               list REG-accepted contradiction marks only
   daemon <start|status|stop>   manage background runtime daemon via IPC
+  policy auto-accept <status|on|off> [-reason R]
+                               A01-AUTO policy; on/off is itself a HUMAN_FINAL press
+  work [-once] [-batch N] [-mode local|online|auto] [-interval D]
+                               nonstop worker: insights + kin links AtGOV; low-risk
+                               ones decided by the policy only when it is on
+  undo-auto <id> <reason>      HUMAN_FINAL undo of an AUTO_POLICY decision
 
 Environment:
   GEMMA_BIN, GEMMA_MODEL, GEMMA_THREADS, GEMMA_CONTEXT,
@@ -893,6 +902,9 @@ Environment:
   FIELD_PROBE_WORKTREE (or -probe-worktree; -max-rounds, default 3),
   FIELD_HTTP (default 127.0.0.1:8899; empty disables HTTP),
   FIELD_SOCKET, FIELD_PID, FIELDD_BIN,
+  UNIFUSION_REASONER_MODE (local|online|auto), UNIFUSION_REASONER_URL,
+  UNIFUSION_REASONER_MODEL, UNIFUSION_REASONER_KEY or _KEY_FILE,
+  UNIFUSION_SOURCES_ROOT, UNIFUSION_WORKER_TOKENS,
   FIELDD_TOKEN (bearer token for fieldd mutating routes; otherwise
   $FIELD_HOME/fieldd.token, mode 0600, created on first loopback start)
 
