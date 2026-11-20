@@ -6,3 +6,5 @@ outputs/
 .DS_Store
 
 dist/
+
+.field-work/
