@@ -24,6 +24,7 @@ type WorkerStatus struct {
 	OnlineConfigured bool              `json:"online_configured"`
 	LastReasoner     string            `json:"last_reasoner,omitempty"`
 	Pending          int               `json:"pending"`
+	InsightRecords   int               `json:"insight_records"`
 	Checkpoint       worker.Checkpoint `json:"checkpoint"`
 }
 
@@ -41,6 +42,7 @@ func (r *Runtime) AutoStatusOf(w *worker.Worker, sw *reason.SwitchInsighter) (Au
 		out.Worker.LastReasoner = sw.LastUsed()
 	}
 	insights, _ := worker.Done(st)
+	out.Worker.InsightRecords = len(insights)
 	for id, em := range st.Accepted {
 		if em.REL["source_kind"] == "SOURCE_UPLOAD" && !insights[id] && out.Worker.Checkpoint.Failures[id] < worker.MaxFailures {
 			out.Worker.Pending++
