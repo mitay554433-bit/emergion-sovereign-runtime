@@ -232,8 +232,24 @@ type State struct {
 	Rejected             map[string]EmergION
 	Returned             map[string]EmergION
 	ActionAuthorizations []ActionAuthorizationReceipt
-	Events               int
-	TipHash              string
+	// ArchonymConflicts lists REG receipts that replay refused because the
+	// record's Archonym already belongs to another sovereign REG-accepted or
+	// HUMAN_FINAL RETURNED EmergION. Derived on replay only, never written:
+	// the ledger keeps every event, the refused record stays Approved (not
+	// Accepted) and the existing owner keeps the Archonym.
+	ArchonymConflicts []ArchonymConflict `json:",omitempty"`
+	Events            int
+	TipHash           string
+}
+
+// ArchonymConflict is one REG receipt refused on replay by Archonym
+// uniqueness. Derived, read-only.
+type ArchonymConflict struct {
+	EmergIONID string `json:"emergion_id"`
+	Archonym   string `json:"archonym"`
+	OwnerID    string `json:"owner_id"`
+	OwnerState string `json:"owner_state"`
+	REGEventID string `json:"reg_event_id"`
 }
 
 func EmptyState() State {

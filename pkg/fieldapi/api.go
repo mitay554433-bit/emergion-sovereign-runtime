@@ -150,6 +150,13 @@ func (r *Runtime) Decide(id, decision, reasonText string) error {
 	if !ok {
 		return fmt.Errorf("candidate not at GOV")
 	}
+	if strings.EqualFold(strings.TrimSpace(decision), string(gov.Approve)) {
+		// Archonym uniqueness stays strict at accept time: refuse before
+		// any decision is written.
+		if err := livefield.CheckArchonymForAccept(st, em); err != nil {
+			return err
+		}
+	}
 	em, receipt, err := gov.Decide(em, gov.Decision(decision), "HUMAN_FINAL", reasonText)
 	if err != nil {
 		return err

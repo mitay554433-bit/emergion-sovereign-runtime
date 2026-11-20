@@ -161,6 +161,14 @@ func (r *Runtime) DecideBatchHumanDecision(ids []string, reason string, confirm,
 				res.StoppedAt = id
 				return fmt.Errorf("candidate not at GOV: %s", id)
 			}
+			if d == gov.Approve {
+				// Strict Archonym uniqueness at accept time, checked against
+				// the state including records accepted earlier in this batch.
+				if err := livefield.CheckArchonymForAccept(st, em); err != nil {
+					res.StoppedAt = id
+					return err
+				}
+			}
 			em, receipt, err := gov.Decide(em, d, "HUMAN_FINAL", text)
 			if err != nil {
 				res.StoppedAt = id

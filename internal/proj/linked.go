@@ -29,6 +29,25 @@ type LinkedProjection struct {
 	// Trajectories is filled by the caller that holds the events (capture
 	// times); Linked(st) leaves it empty. Derived, read-only.
 	Trajectories []LinkedTrajectory `json:"trajectories"`
+	// ArchonymConflicts lists REG receipts that replay refused because the
+	// Archonym already belongs to another sovereign EmergION (the owner keeps
+	// it; the refused record stays Approved). Derived, read-only.
+	ArchonymConflicts []core.ArchonymConflict `json:"archonym_conflicts"`
+	// ArchonymWaiting lists AtGOV records whose proposed Archonym already
+	// belongs to another sovereign EmergION. They stay visible by ID and
+	// summary; a HUMAN_FINAL APPROVE of them is refused at accept time.
+	ArchonymWaiting []string `json:"archonym_waiting_conflicts"`
+	// DerivedFacetGroups groups REG-accepted SOURCE_UPLOAD records that have
+	// no REG facet by their recorded REL source_topic. Display grouping only
+	// (facet_source "source_topic"); never a REG facet. Derived, read-only.
+	DerivedFacetGroups []LinkedDerivedFacetGroup `json:"derived_facet_groups"`
+	// RegUnassigned lists every accepted record with no REG facet, including
+	// those shown in a derived SOURCE topic group. Unassigned lists only the
+	// records with neither a REG facet nor a derived grouping.
+	RegUnassigned []string `json:"reg_unassigned"`
+	// SourceRefGroups lists accepted SOURCE records that name the same
+	// manifest related id (REL source_related). Shared reference, not KIN.
+	SourceRefGroups []LinkedSourceRefGroup `json:"source_ref_groups"`
 }
 
 type LinkedFacetGroup struct {
@@ -45,6 +64,10 @@ type LinkedRecord struct {
 	KinRootError string   `json:"kin_root_error,omitempty"`
 	Capabilities []string `json:"capabilities,omitempty"`
 	Summary      string   `json:"summary,omitempty"`
+	// DerivedFacets is set only for a record with no REG facet that is shown
+	// in a derived display group; FacetSource names where it came from.
+	DerivedFacets []string `json:"derived_facets,omitempty"`
+	FacetSource   string   `json:"facet_source,omitempty"`
 }
 
 type LinkedLink struct {
@@ -91,6 +114,10 @@ func Linked(st core.State) LinkedProjection {
 		Realizations:    []LinkedRealization{},
 		HumanFinalQueue: []LinkedHumanFinalItem{},
 		Trajectories:    []LinkedTrajectory{},
+		ArchonymConflicts: append(
+			[]core.ArchonymConflict{},
+			st.ArchonymConflicts...,
+		),
 	}
 	for _, f := range spatialFacetOrder() {
 		out.FacetOrder = append(out.FacetOrder, string(f))
@@ -104,15 +131,28 @@ func Linked(st core.State) LinkedProjection {
 		}
 		out.FacetGroups = append(out.FacetGroups, LinkedFacetGroup{Facet: string(g.Facet), Members: members})
 	}
+	out.RegUnassigned = []string{}
+	byTopic := map[string][]string{}
 	for _, em := range spatialUnassigned(spatial) {
+		out.RegUnassigned = append(out.RegUnassigned, em.ID)
+		if t := sourceTopicOf(st.Accepted[em.ID]); t != "" {
+			byTopic[t] = append(byTopic[t], em.ID)
+			continue
+		}
 		out.Unassigned = append(out.Unassigned, em.ID)
 	}
+	out.DerivedFacetGroups = derivedSourceTopicGroups(byTopic)
+	out.SourceRefGroups = sourceRefGroups(st)
 
 	for _, s := range spatial {
 		em := st.Accepted[s.ID]
 		rec := LinkedRecord{ID: s.ID, Archonym: s.Archonym, Topology: s.Topology, Summary: em.MEM.Summary}
 		for _, f := range s.Facets {
 			rec.Facets = append(rec.Facets, string(f))
+		}
+		if df := derivedSourceTopicFacet(em, s.Facets); df != "" {
+			rec.DerivedFacets = []string{df}
+			rec.FacetSource = FacetSourceTopic
 		}
 		for _, c := range em.CAP {
 			if c != "" {
@@ -162,6 +202,14 @@ func Linked(st core.State) LinkedProjection {
 	for _, r := range realizationRows(st) {
 		out.Realizations = append(out.Realizations, LinkedRealization(r))
 	}
+
+	out.ArchonymWaiting = []string{}
+	for id, em := range st.AtGOV {
+		if owner, _, err := livefield.ArchonymOwner(st, em); err != nil || owner != "" {
+			out.ArchonymWaiting = append(out.ArchonymWaiting, id)
+		}
+	}
+	sort.Strings(out.ArchonymWaiting)
 
 	lifecycle := rows(st)
 	sort.Slice(lifecycle, func(i, j int) bool { return lifecycle[i].ID < lifecycle[j].ID })
