@@ -32,7 +32,7 @@ import (
 const Version = "worker-1"
 
 // failRev bumps when old failure counts must be forgotten.
-const failRev = 3
+const failRev = 4
 
 // Limits.
 const (
