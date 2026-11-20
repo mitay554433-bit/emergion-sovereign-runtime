@@ -241,6 +241,7 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
     <div class="st" title="Records accepted by AUTO_POLICY (each has its own receipt and a one-press undo)"><small>Auto-accepted</small><b id="auAcc">—</b></div>
     <div class="st" title="Duplicates and generated combinations held by AUTO_POLICY"><small>Auto-held</small><b id="auHeld">—</b></div>
     <div class="st" title="AtGOV records waiting for a decision"><small>AtGOV to decide</small><b id="auWait">—</b></div>
+    <div class="st" title="SOURCE records the worker has written an insight for (any GOV state)"><small>Insights</small><b id="auIns">—</b></div>
    </div>
    <div class="aurow"><button class="acc" id="auPolB" type="button">Policy</button><button class="acc" id="auWkB" type="button">Worker</button><select id="auModeS" aria-label="Reasoner mode"><option value="local">Local (phone)</option><option value="auto">Auto (online if reachable)</option><option value="online">Online</option></select></div>
    <small class="ps" id="auLine" aria-live="polite"></small>
@@ -937,7 +938,7 @@ function armTap(b,label,fn){if(b.dataset.armed==='1'){b.dataset.armed='';b.class
 function autoLine(a){const p=a.policy||{},w=a.worker||{};return 'Policy '+(p.effective?'ON':(p.on&&p.stale?'ON (stale, switch again)':'OFF'))+' · Worker '+(w.on?'ON':'OFF')+' · '+(w.mode||'local')+(w.last_reasoner?' ('+w.last_reasoner+')':'')+' · '+fmt(p.auto_accepted||0)+' auto-accepted · '+fmt(p.auto_held||0)+' auto-held · '+fmt(p.waiting||0)+' waiting'+(p.eligible&&!p.effective?' · '+fmt(p.eligible)+' would auto-decide':'')+(w.on?' · '+fmt(w.pending||0)+' sources left':'')+(a.worker_error?' · worker error: '+a.worker_error:'')+((w.checkpoint&&w.checkpoint.last_error)?' · last reasoner error: '+w.checkpoint.last_error:'')}
 function renderAuto(){const a=autoSt;if(!a){setText('auPol','—');setText('auLine','');return}const p=a.policy||{},w=a.worker||{};
  setText('auPol',p.effective?'ON':'OFF');setText('auWk',w.on?'ON':'OFF');setText('auMode',(w.mode||'local')+(w.mode!=='local'&&!w.online_configured?' · online not set':''));
- setText('auAcc',fmt(p.auto_accepted||0));setText('auHeld',fmt(p.auto_held||0));setText('auWait',fmt(p.waiting||0));setText('auLine',autoLine(a));
+ setText('auAcc',fmt(p.auto_accepted||0));setText('auHeld',fmt(p.auto_held||0));setText('auWait',fmt(p.waiting||0));setText('auIns',fmt(w.insight_records||0));setText('auLine',autoLine(a));
  const pb=$('auPolB'),wb=$('auWkB'),ms=$('auModeS');
  if(pb&&pb.dataset.armed!=='1'){pb.textContent=p.effective?'Policy ON · turn off':'Policy OFF · turn on';pb.classList.toggle('on',!!p.effective)}
  if(wb&&wb.dataset.armed!=='1'){wb.textContent=w.on?'Worker ON · stop':'Worker OFF · start';wb.classList.toggle('on',!!w.on)}
