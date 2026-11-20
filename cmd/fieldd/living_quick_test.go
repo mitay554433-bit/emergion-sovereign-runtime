@@ -115,7 +115,7 @@ func TestLivingUniversePageIsReadOnlyProjection(t *testing.T) {
 		!strings.Contains(acc, "function holdAllPlan(trs)") || strings.Contains(src, "Accept all") {
 		t.Fatal("batch panel must have Hold all trajectories with CONFIRM HOLD, and must not add Accept all")
 	}
-	if !strings.Contains(acc, "await refresh(true)") || !strings.Contains(src, "proj=await getJSON('/projection.json')") {
+	if !strings.Contains(acc, "await refresh(true)") || !strings.Contains(src, "getJSON('/projection.json')") {
 		t.Fatal("after a batch, the page must force-refresh including /projection.json")
 	}
 	// No typed count: the page fills confirm_count from the shown batch.

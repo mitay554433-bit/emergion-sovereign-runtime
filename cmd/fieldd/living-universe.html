@@ -525,7 +525,7 @@ async function acceptAtGOV(id,btn){const tok=savedToken();if(!tok){if(!injectedT
  try{const r=await fetch('/decide',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:acceptBody(id,reason.trim())});
   if(r.status===401){storeToken('');alert(injectedToken()?'Token refused (401). Restart fieldd and refresh.':'Token refused (401). Paste the current fieldd token and retry.');if(selected)select(selected);return}
   const res=await r.json().catch(()=>({error:'HTTP '+r.status}));if(!r.ok||res.error){alert(res.error||('HUMAN_FINAL decision was not accepted (HTTP '+r.status+').'));return}
-  await refresh();const n=byID.get(id);if(n)select(n)}
+  await refreshAfterDecision([id]);const n=byID.get(id);if(n)select(n)}
  catch(e){alert('HUMAN_FINAL decision could not be confirmed. Refresh before retrying.')}
  finally{if(btn)btn.disabled=false}}
 function acceptButton(id){const b=el('button','acc','Accept');b.title='Record HUMAN_FINAL APPROVE for '+id+' (reason required)';b.onclick=e=>{e.stopPropagation();acceptAtGOV(id,b)};return b}
@@ -580,6 +580,20 @@ function batchPlan(s,f,idx){const g=f.kind==='group'&&idx&&idx.groups.find(g=>g.
 // N is the number of records to hold. Nothing is accepted.
 const HOLD_ALL_REASON='Trajectory HUMAN_FINAL hold-all: keep newest of each, hold rest';
 function holdAllPlan(trs){const hold=[];let trajCount=0;for(const t of (trs||[])){const m=t.members||[];if(!m.length)continue;trajCount++;const nid=m.includes(t.newest_id)?t.newest_id:m[m.length-1];for(const id of m)if(id!==nid)hold.push(id)}return {trajCount,hold}}
+// After a HUMAN_FINAL accept/hold, drop decided IDs immediately and pick the largest remaining group
+// if the current group is empty. A later refresh may still be a cached snapshot; drop again after it.
+function dropAtGOVIDs(f,ids){if(!f)return f;const at={...((f.AtGOV)||{})};for(const id of ids)delete at[id];return {...f,AtGOV:at}}
+function dropDecidedFromProj(p,ids){if(!p)return p;const gone=new Set(ids),out={...p};
+ if(Array.isArray(p.human_final_queue))out.human_final_queue=p.human_final_queue.filter(it=>it&&!gone.has(it.id));
+ if(Array.isArray(p.trajectories))out.trajectories=p.trajectories.map(t=>{const members=(t.members||[]).filter(id=>!gone.has(id));return {...t,members,count:members.length,newest_id:members.includes(t.newest_id)?t.newest_id:members[members.length-1]}}).filter(t=>(t.members||[]).length);
+ return out}
+function nextBatchValue(kind,value,idx,opts){if(kind==='group'){const list=(idx&&idx.groups)||[];if(value&&list.some(g=>g.key===value&&g.count>0))return value;return list.length?list[0].key:''}
+ if(kind==='facet'||kind==='class'||kind==='target'){const list=(opts&&opts[kind])||[];if(value&&list.some(x=>x[0]===value))return value;return list.length?list[0][0]:''}
+ return value}
+function applyLocalDecisions(ids){if(!ids||!ids.length)return;field=dropAtGOVIDs(field,ids);proj=dropDecidedFromProj(proj,ids);trajCache=null;batchIdxCache=null;
+ const gov=(field&&field.AtGOV)||{},idx=batchIndex(gov,(field&&field.Accepted)||{},trajNow(proj,gov)),opts=batchOptions(gov,idx);
+ BS.value=nextBatchValue(BS.kind,BS.value,idx,opts);batchArm=null}
+async function refreshAfterDecision(ids){applyLocalDecisions(ids);build();renderPanels();await refresh(true);applyLocalDecisions(ids);build();renderPanels()}
 function batchTitle(em,id){const m=(em&&em.e&&em.e.m)||{};return m.h||(em&&em.m&&em.m.s)||id}
 function facetName(f){return (typeof FACET_LABEL!=='undefined'&&FACET_LABEL[f])||f}
 function batchLabel(f,idx){if(f.kind==='group'){const g=idx&&idx.groups.find(g=>g.key===f.value);return 'group '+(g?g.label:f.value)}return f.kind==='all'?'all AtGOV':f.kind==='facet'?'facet '+facetName(f.value):f.kind==='class'?'class '+f.value:'target '+f.value}
@@ -599,17 +613,17 @@ async function batchAccept(ids,reason,out,decision){const tok=savedToken();const
  if(!ids.length)return;
  // One press, then cap-sized chunks in order; all chunks share the first chunk's batch id. Each
  // chunk is checked by the server (reason, count, cap). The first error or refusal stops it.
- batchBusy=true;let bid='',acc=0,skip=0;const total=ids.length,prog=()=>verb+' '+fmt(acc)+' / '+fmt(total)+(skip?' · '+fmt(skip)+' already '+verb:'')+(bid?' · '+bid:'');
+ batchBusy=true;let bid='',acc=0,skip=0,done=[];const total=ids.length,prog=()=>verb+' '+fmt(acc)+' / '+fmt(total)+(skip?' · '+fmt(skip)+' already '+verb:'')+(bid?' · '+bid:'');
  out.textContent='Recording '+fmt(total)+' HUMAN_FINAL '+(hold?'HOLD ':'')+'decisions…';
  try{for(const part of batchChunks(ids,batchCap)){
    const r=await fetch('/decide-batch-human',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:batchBody(part,reason.trim(),bid,decision)});
    if(r.status===401){storeToken('');out.textContent=injectedToken()?'Token refused (401) after '+prog()+'. Restart fieldd and refresh.':'Token refused (401) after '+prog()+'. Paste the current fieldd token and retry.';return}
    const j=await r.json().catch(()=>({error:'HTTP '+r.status}));acc+=(hold?j.held:j.accepted)||0;skip+=j.skipped||0;if(j.batch_id)bid=j.batch_id;
-   if(j.error||!r.ok){out.textContent=(j.stopped_at?'Stopped at '+j.stopped_at:'Refused')+' · '+prog()+': '+(j.error||('HTTP '+r.status));return}
-   out.textContent=prog()}
-  out.textContent='Done · '+prog()+' · next batch loaded'}
- catch(e){out.textContent='Batch result could not be confirmed after '+prog()+'. Refresh before retrying.'}
- finally{batchBusy=false;await refresh(true).catch(()=>{});renderBatch()}}
+   if(j.error||!r.ok){out.textContent=(j.stopped_at?'Stopped at '+j.stopped_at:'Refused')+' · '+prog()+': '+(j.error||('HTTP '+r.status));if(done.length)await refreshAfterDecision(done).catch(()=>{});return}
+   done.push.apply(done,part);out.textContent=prog()}
+  out.textContent='Done · '+prog()+' · next batch loaded';await refreshAfterDecision(done)}
+ catch(e){out.textContent='Batch result could not be confirmed after '+prog()+'. Refresh before retrying.';if(done.length)await refreshAfterDecision(done).catch(()=>{})}
+ finally{batchBusy=false;renderBatch()}}
 function disarm(){batchArm=null;clearTimeout(batchArmTimer);renderBatch()}
 function renderBatch(){const P=$('hfbP'),B=$('hfb');if(!P||!B)return;const gov=(field&&field.AtGOV)||{},n=Object.keys(gov).length;P.hidden=!n;if(!n)return;readBatchCap();
  if(!$('bKind')){const sel=el('div','bsel'),k=el('select'),v=el('select');k.id='bKind';v.id='bVal';k.setAttribute('aria-label','Batch filter');v.setAttribute('aria-label','Batch filter value');
@@ -636,8 +650,8 @@ function renderBatch(){const P=$('hfbP'),B=$('hfb');if(!P||!B)return;const gov=(
    renderBatch();batchAccept(ids,HOLD_ALL_REASON,res,'HOLD')};
   inp.append(rs,go,hb);B.append(sel,sum,warn,allHint,sam,inp,ha,res)}
  const k=$('bKind'),v=$('bVal');k.value=BS.kind;const idx=batchIndex(gov,(field&&field.Accepted)||{},trajNow(proj,gov)),opts=batchOptions(gov,idx),fc=new Map(opts.facet);opts.group=idx.groups.map(g=>[g.key,g.count,g.label]);
- if(BS.kind==='group'||BS.kind==='facet'||BS.kind==='class'||BS.kind==='target'){const list=opts[BS.kind].slice(0,BS.kind==='group'?200:60);if(!BS.value||!list.some(x=>x[0]===BS.value))BS.value=list.length?list[0][0]:'';
-  if(document.activeElement!==v){v.replaceChildren();for(const [x,c,lb] of list){const o=el('option',null,(BS.kind==='group'?(String(x).startsWith('traj:')?lb:lb+' · '+fmt(c)):BS.kind==='facet'?facetName(x)+' · '+fmt(c)+' waiting':x+' · '+fmt(c)));o.value=x;v.append(o)}v.value=BS.value}v.disabled=false}
+ if(BS.kind==='group'||BS.kind==='facet'||BS.kind==='class'||BS.kind==='target'){const list=opts[BS.kind].slice(0,BS.kind==='group'?200:60);BS.value=nextBatchValue(BS.kind,BS.value,idx,opts);
+  v.replaceChildren();for(const [x,c,lb] of list){const o=el('option',null,(BS.kind==='group'?(String(x).startsWith('traj:')?lb:lb+' · '+fmt(c)):BS.kind==='facet'?facetName(x)+' · '+fmt(c)+' waiting':x+' · '+fmt(c)));o.value=x;v.append(o)}v.value=BS.value;v.disabled=false}
  else{v.replaceChildren(el('option',null,BS.kind==='tap'?(filter&&filter!=='ALL'?'facet '+facetName(filter)+' · '+fmt(fc.get(filter)||0)+' waiting':'no tap filter · all AtGOV'):'every AtGOV record'));v.disabled=true}
  const f=batchFilter(BS.kind,BS.value,filter),s=batchSelect(gov,f,batchCap,idx),pl=batchPlan(s,f,idx),sum=$('bSum');sum.replaceChildren();$('bWarn').hidden=!pl.traj;
  const nch=batchChunks(s.ids,batchCap).length;if(pl.traj)sum.append(document.createTextNode('One trajectory: '),el('b',null,fmt(s.ids.length)),document.createTextNode(' run'+(s.ids.length===1?'':'s')+' · Accept takes the newest only ('+(pl.accept[0]||'—')+')'+(pl.hold.length?' · Hold the rest = '+fmt(pl.hold.length):'')));else if(s.whole)sum.append(document.createTextNode('This group: '),el('b',null,fmt(s.ids.length)),document.createTextNode(' record'+(s.ids.length===1?'':'s')+(nch>1?' · one press, sent in '+nch+' chunks of ≤'+fmt(batchCap):'')));else sum.append(document.createTextNode('This batch: '),el('b',null,fmt(s.ids.length)),document.createTextNode(s.total>s.ids.length?' of '+fmt(s.total)+' matching (cap '+fmt(batchCap)+', first by IDN)':' record'+(s.ids.length===1?'':'s')+' matching'));
@@ -844,13 +858,15 @@ reduced.addEventListener&&reduced.addEventListener('change',want);
 
 /* ---------- data ---------- */
 const ax=$('ax');for(const [k,v] of AXIOMS){const d=el('div');d.append(el('b',null,k),el('span',null,v));ax.append(d)}
-async function getJSON(u){const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw Error(u+' HTTP '+r.status);return r.json()}
-let loading=false;
-async function refresh(force){if(loading){if(!force)return;for(let i=0;i<40&&loading;i++)await new Promise(r=>setTimeout(r,50))}else if(!force&&document.hidden)return;
- loading=true;if(force){trajCache=null;batchIdxCache=null}
- try{const f=await getJSON('/field.json');if(!f||typeof f.Accepted!=='object')throw Error('not a FIELD state');field=f;live=true}catch(e){live=false}
- try{proj=await getJSON('/projection.json')}catch(e){proj=null}
- try{build();renderPanels()}finally{loading=false}want()}
+async function getJSON(u){const q=u+(u.indexOf('?')>=0?'&':'?')+'_='+Date.now();const r=await fetch(q,{cache:'no-store'});if(!r.ok)throw Error(u+' HTTP '+r.status);return r.json()}
+let loading=false,refreshGen=0;
+async function refresh(force){const gen=++refreshGen;if(loading){if(!force)return;for(let i=0;i<40&&loading;i++)await new Promise(r=>setTimeout(r,50))}else if(!force&&document.hidden)return;
+ if(gen!==refreshGen)return;loading=true;if(force){trajCache=null;batchIdxCache=null}
+ try{let nextField=field,nextLive=live,nextProj=proj,got=false;
+  try{const f=await getJSON('/field.json');if(!f||typeof f.Accepted!=='object')throw Error('not a FIELD state');nextField=f;nextLive=true;got=true}catch(e){nextLive=false}
+  try{nextProj=await getJSON('/projection.json')}catch(e){nextProj=null}
+  if(gen!==refreshGen)return;if(got){field=nextField;live=true}else live=false;proj=nextProj;build();renderPanels()}
+ finally{if(gen===refreshGen)loading=false}if(gen===refreshGen)want()}
 getJSON('/real_temporal_wave.json').then(d=>{wave=d;renderPanels()}).catch(()=>{wave=null});
 sprites0();resize();renderPanels();refresh().then(pollEvents);setInterval(refresh,120000);setInterval(pollEvents,7000);
 </script></body></html>
