@@ -76,7 +76,7 @@ func livingUniverseHTML(t *testing.T) string {
 // routes, and never posts to a mutating route.
 func TestLivingUniversePageIsReadOnlyProjection(t *testing.T) {
 	src := livingUniverseHTML(t)
-	for _, want := range []string{"COSL + REG remain authoritative", "visualization only", "/field.json", "/projection.json", "/real_temporal_wave.json", "Verified references", "Pending (AtGOV)", "NOT_FOUND_YET"} {
+	for _, want := range []string{"COSL + REG remain authoritative", "visualization only", "/field.json", "/projection.json", "/real_temporal_wave.json", "Verified references", "Pending references (AtGOV)", "NOT_FOUND_YET"} {
 		if !strings.Contains(src, want) {
 			t.Fatalf("living-universe.html missing %q", want)
 		}
@@ -89,7 +89,7 @@ func TestLivingUniversePageIsReadOnlyProjection(t *testing.T) {
 }
 
 // Verified references count only links with both ends REG-accepted; links
-// touching an AtGOV record are counted separately as Pending (AtGOV).
+// touching an AtGOV record are counted separately as Pending references (AtGOV).
 func TestLivingUniverseVerifiedExcludesPending(t *testing.T) {
 	src := livingUniverseHTML(t)
 	fn := regexp.MustCompile(`function refCounts\(es\)\{[^\n]*\}`).FindString(src)
