@@ -265,10 +265,18 @@ func TestParseInsightKeepsOnlyListedPeers(t *testing.T) {
 
 func TestLocalArgsUseAllCoresAndNoConversation(t *testing.T) {
 	args := strings.Join(reason.LocalInsighter{Binary: "llama-completion", Model: "m.gguf", Threads: 8}.Args("p"), " ")
-	for _, want := range []string{"-no-cnv", "-t 8", "--temp 0", "-m m.gguf"} {
+	for _, want := range []string{"-t 8", "--temp 0", "-m m.gguf"} {
 		if !strings.Contains(args, want) {
 			t.Fatalf("args %q lack %q", args, want)
 		}
+	}
+	// llama-completion is one-shot and some builds reject -no-cnv.
+	if strings.Contains(args, "-no-cnv") {
+		t.Fatalf("llama-completion args must not carry -no-cnv: %q", args)
+	}
+	cli := strings.Join(reason.LocalInsighter{Binary: "/usr/bin/llama-cli", Model: "m.gguf", Threads: 8}.Args("p"), " ")
+	if !strings.Contains(cli, "-no-cnv") {
+		t.Fatalf("llama-cli args need -no-cnv: %q", cli)
 	}
 }
 
