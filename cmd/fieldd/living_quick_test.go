@@ -104,11 +104,19 @@ func TestLivingUniversePageIsReadOnlyProjection(t *testing.T) {
 	// The batch is sent only from the button, only after a reason and the
 	// human-typed count are checked.
 	// batchAccept is defined once and called only from the armed second press
-	// of the two buttons (Accept, and Hold the rest on a trajectory row).
+	// of the three buttons (Accept, Hold the rest, and Hold all trajectories).
 	armed := "if(!st.send){batchArmTimer=setTimeout(disarm,BATCH_ARM_MS);renderBatch();return}\n   renderBatch();batchAccept("
-	if n := strings.Count(src, "batchAccept("); n != 3 || strings.Count(acc, armed) != 2 ||
-		!strings.Contains(acc, armed+"ids,rs.value,res)}") || !strings.Contains(acc, armed+"ids,rs.value,res,'HOLD')}") {
-		t.Fatalf("batchAccept( appears %d times; want definition + the two armed second presses only", n)
+	if n := strings.Count(src, "batchAccept("); n != 4 || strings.Count(acc, armed) != 3 ||
+		!strings.Contains(acc, armed+"ids,rs.value,res)}") || !strings.Contains(acc, armed+"ids,rs.value,res,'HOLD')}") ||
+		!strings.Contains(acc, armed+"ids,HOLD_ALL_REASON,res,'HOLD')}") {
+		t.Fatalf("batchAccept( appears %d times; want definition + the three armed second presses only", n)
+	}
+	if !strings.Contains(acc, "Hold all trajectories (") || !strings.Contains(acc, "CONFIRM HOLD ") ||
+		!strings.Contains(acc, "function holdAllPlan(trs)") || strings.Contains(src, "Accept all") {
+		t.Fatal("batch panel must have Hold all trajectories with CONFIRM HOLD, and must not add Accept all")
+	}
+	if !strings.Contains(acc, "await refresh(true)") || !strings.Contains(src, "proj=await getJSON('/projection.json')") {
+		t.Fatal("after a batch, the page must force-refresh including /projection.json")
 	}
 	// No typed count: the page fills confirm_count from the shown batch.
 	if strings.Contains(src, "bCount") || strings.Contains(src, "type count") || !strings.Contains(acc, "confirm_count:ids.length") {
