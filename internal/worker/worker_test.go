@@ -354,3 +354,14 @@ func TestLocalPrefersCompletionBesideCLI(t *testing.T) {
 		t.Fatalf("want llama-completion beside llama-cli, got %s", got)
 	}
 }
+
+func TestParseInsightWithoutLabels(t *testing.T) {
+	in := reason.InsightInput{Peers: []reason.InsightPeer{{N: 1, ID: "E-1"}, {N: 2, ID: "E-2"}}}
+	r, err := reason.ParseInsight("**A pitch deck for the BDC grant.**\nKIN: 2\nGAP: none", in)
+	if err != nil || r.Summary != "A pitch deck for the BDC grant." || len(r.Kin) != 1 {
+		t.Fatalf("%+v %v", r, err)
+	}
+	if _, err := reason.ParseInsight("ok", in); err == nil || !strings.Contains(err.Error(), `"ok"`) {
+		t.Fatalf("error should quote the reply: %v", err)
+	}
+}
