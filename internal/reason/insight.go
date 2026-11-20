@@ -91,18 +91,28 @@ func ValidMode(m string) bool {
 const insightPromptTail = "GAP: <one thing missing to make it useful, or none>"
 
 // InsightPrompt is the short prompt both local and online models get.
-func InsightPrompt(in InsightInput) string { return insightPrompt(in, 160, 100, 160) }
+func InsightPrompt(in InsightInput) string { return insightPrompt(in, 160, 100, 160, false) }
 
 // LocalPeers caps the peers a slow on-device model reads per source.
 const LocalPeers = 4
 
 // LocalPrompt is the shorter prompt for the on-device model: at most
-// LocalPeers peers and short titles, so a slow phone finishes in time.
+// LocalPeers peers and short titles, so a slow phone finishes in time. The
+// fixed instructions come first so a kept-loaded llama-server reuses their
+// evaluated prefix (cache_prompt) from one record to the next.
 func LocalPrompt(in InsightInput) string {
 	if len(in.Peers) > LocalPeers {
 		in.Peers = in.Peers[:LocalPeers]
 	}
-	return insightPrompt(in, 80, 50, 60)
+	return insightPrompt(in, 80, 50, 60, true)
+}
+
+func insightInstructions(b *strings.Builder) {
+	b.WriteString("Reply with exactly 4 lines:\n")
+	b.WriteString("SUMMARY: <one sentence on what this file likely is>\n")
+	b.WriteString("KIN: <numbers of other files it truly relates to, comma separated, or none>\n")
+	b.WriteString("COMBO: <one useful combination with a listed file, or none>\n")
+	b.WriteString(insightPromptTail + "\n")
 }
 
 // localTurn wraps the short prompt for llama-completion: Gemma's chat turns
@@ -115,8 +125,11 @@ func localTurn(model, prompt string) string {
 	return prompt + "\nSUMMARY:"
 }
 
-func insightPrompt(in InsightInput, titleMax, peerMax, tagMax int) string {
+func insightPrompt(in InsightInput, titleMax, peerMax, tagMax int, instrFirst bool) string {
 	var b strings.Builder
+	if instrFirst {
+		insightInstructions(&b)
+	}
 	fmt.Fprintf(&b, "Source file: %q (topic %s", oneLineText(in.Title, titleMax), oneLineText(in.Topic, 40))
 	if in.Mime != "" {
 		fmt.Fprintf(&b, ", %s", oneLineText(in.Mime, 60))
@@ -131,11 +144,9 @@ func insightPrompt(in InsightInput, titleMax, peerMax, tagMax int) string {
 			fmt.Fprintf(&b, "%d %s (%s)\n", p.N, oneLineText(p.Title, peerMax), oneLineText(p.Topic, 40))
 		}
 	}
-	b.WriteString("Reply with exactly 4 lines:\n")
-	b.WriteString("SUMMARY: <one sentence on what this file likely is>\n")
-	b.WriteString("KIN: <numbers of other files it truly relates to, comma separated, or none>\n")
-	b.WriteString("COMBO: <one useful combination with a listed file, or none>\n")
-	b.WriteString(insightPromptTail + "\n")
+	if !instrFirst {
+		insightInstructions(&b)
+	}
 	return b.String()
 }
 
@@ -463,7 +474,7 @@ type SwitchInsighter struct {
 // NewSwitchInsighter builds the switch from the environment.
 func NewSwitchInsighter(mode string) *SwitchInsighter {
 	on := OnlineInsighterFromEnv()
-	s := &SwitchInsighter{Local: LocalInsighterFromEnv(), Online: &on, Heuristic: HeuristicInsighter{}}
+	s := &SwitchInsighter{Local: ServerInsighterFromEnv(), Online: &on, Heuristic: HeuristicInsighter{}}
 	s.SetMode(mode)
 	return s
 }
@@ -535,7 +546,22 @@ func (s *SwitchInsighter) Insight(ctx context.Context, in InsightInput) (Insight
 		}
 	}
 	s.use(s.Local.Name())
-	return s.Local.Insight(ctx, in)
+	r, err := s.Local.Insight(ctx, in)
+	if lu, ok := s.Local.(interface{ LastUsed() string }); ok && lu.LastUsed() != "" {
+		s.use(lu.LastUsed())
+	}
+	return r, err
+}
+
+// Warm starts the kept-loaded local model ahead of the first record, when
+// the local reasoner supports it. It never blocks the caller for long.
+func (s *SwitchInsighter) Warm(ctx context.Context) {
+	if s.Mode() == ModeOnline || s.Mode() == ModeHeuristic {
+		return
+	}
+	if w, ok := s.Local.(interface{ Warm(context.Context) }); ok {
+		w.Warm(ctx)
+	}
 }
 
 // stderrTail keeps the last non-banner lines of llama.cpp stderr (at most n
