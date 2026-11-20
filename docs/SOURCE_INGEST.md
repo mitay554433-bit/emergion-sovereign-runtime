@@ -34,3 +34,12 @@ Accepted uploads carry no REG facet, so the Living Universe showed them all as U
 - `source_ref_groups` lists accepted SOURCE records that name the same manifest `related` id. Related ids are not EmergION ids, so this is a shared reference, never KIN. The page uses it only as weak springs to hidden hubs.
 - The page treats a derived facet like a facet attractor, so topics cluster through the same emergent spring layout (no preset geometry). Facet tiles name topics readably and mark them "SOURCE topic"; the detail panel says "(SOURCE topic, not a REG facet)". Canvas text still appears only with Labels on.
 - No HUMAN_FINAL is needed for display. GOV, A01/A02 and the Archonym rules are unchanged.
+
+## Derived groups for records with no facet (display grouping, 2026-11-20)
+
+Older REG-accepted records often have no REG facet and no SOURCE topic, so they used to sit in Unassigned after the topic grouping. `/projection.json` now derives a display group for those too, on every read; nothing is written and `.field` evidence is untouched.
+
+- A REG-accepted record with no REG facet is placed in one of the existing topics (`inventions-ip`, `runtime-code-docs`, `grants-funding`, `archives`, `other`, `design-visuals`, `business-legal`, `math-formulas`, `investor`, `data`), marked `derived_facets: ["SOURCE_TOPIC:<topic>"]`. Its `facets` (REG) stay empty. A record with any REG facet is never given a derived one.
+- Origin is recorded per record as `facet_source`: `source_topic` (a SOURCE_UPLOAD with a safe recorded topic), `derived_keyword` (Archonym, summary, source title/path/name, or target), `derived_kind` (a known `source_kind` / class), or `derived_fallback` (placed in Other). The same rules are applied in that order.
+- Anything that cannot be grouped any other way goes into a single Other derived group, so `unassigned` approaches zero. `reg_unassigned` stays the strict list (every accepted record with no REG facet).
+- A derived topic group whose members come from more than one origin is marked `facet_source: "derived"`. `facet_order` and `facet_groups` remain REG facets only. No HUMAN_FINAL is needed for display. GOV and A01/A02 are unchanged.

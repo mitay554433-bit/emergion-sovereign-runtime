@@ -37,7 +37,7 @@ var sourceTopicLabels = map[string]string{
 	"data":              "Data",
 }
 
-// LinkedDerivedFacetGroup is one SOURCE topic group (derived, not REG).
+// LinkedDerivedFacetGroup is one derived topic group (display only, not REG).
 type LinkedDerivedFacetGroup struct {
 	Facet       string   `json:"facet"`
 	Label       string   `json:"label"`
@@ -87,43 +87,6 @@ func sourceTopicOf(em core.EmergION) string {
 		return ""
 	}
 	return normalizeSourceTopic(em.REL["source_topic"])
-}
-
-// derivedSourceTopicFacet returns the derived facet key for an accepted
-// record, or "" when it has a REG facet or is not a topic-bearing SOURCE.
-func derivedSourceTopicFacet(em core.EmergION, regFacets []core.Facet) string {
-	if len(regFacets) > 0 {
-		return ""
-	}
-	t := sourceTopicOf(em)
-	if t == "" {
-		return ""
-	}
-	return SourceTopicFacetPrefix + t
-}
-
-// derivedSourceTopicGroups groups derived members by topic, largest first,
-// then by topic name, so the order is deterministic.
-func derivedSourceTopicGroups(byTopic map[string][]string) []LinkedDerivedFacetGroup {
-	out := make([]LinkedDerivedFacetGroup, 0, len(byTopic))
-	for t, ms := range byTopic {
-		ms = append([]string(nil), ms...)
-		sort.Strings(ms)
-		out = append(out, LinkedDerivedFacetGroup{
-			Facet:       SourceTopicFacetPrefix + t,
-			Label:       SourceTopicLabel(t),
-			Topic:       t,
-			FacetSource: FacetSourceTopic,
-			Members:     ms,
-		})
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if len(out[i].Members) != len(out[j].Members) {
-			return len(out[i].Members) > len(out[j].Members)
-		}
-		return out[i].Topic < out[j].Topic
-	})
-	return out
 }
 
 // sourceRefGroups lists related ids shared by at least two accepted SOURCE
