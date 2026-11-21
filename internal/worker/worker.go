@@ -62,6 +62,7 @@ type Checkpoint struct {
 	Processed int            `json:"processed"`
 	Insights  int            `json:"insights"`
 	Links     int            `json:"links"`
+	Gaps      int            `json:"gaps,omitempty"`
 	LastError string         `json:"last_error,omitempty"`
 	LastRun   string         `json:"last_run,omitempty"`
 	LastUsed  string         `json:"last_reasoner,omitempty"`
@@ -243,6 +244,7 @@ type StepReport struct {
 	Processed int    `json:"processed"`
 	Insights  int    `json:"insights"`
 	Links     int    `json:"links"`
+	Gaps      int    `json:"gaps,omitempty"`
 	Failed    int    `json:"failed"`
 	Reasoner  string `json:"reasoner,omitempty"`
 	// Unavailable is set when the reasoner could not run at all; the step
@@ -374,6 +376,25 @@ func (w *Worker) Step(ctx context.Context, batch int) (StepReport, error) {
 		rep.Processed++
 		if err := w.saveCheckpoint(cp); err != nil {
 			return rep, err
+		}
+	}
+	// Gap pass: no model call, bounded, runs even when the reasoner is down.
+	if ctx.Err() == nil {
+		gst, err := w.state()
+		if err != nil {
+			return rep, err
+		}
+		for _, c := range w.PlanGaps(gst, MaxGapsPerStep) {
+			if _, err := w.captureGap(ctx, c); err != nil {
+				return rep, err
+			}
+			rep.Gaps++
+			cp.Gaps++
+		}
+		if rep.Gaps > 0 {
+			if err := w.saveCheckpoint(cp); err != nil {
+				return rep, err
+			}
 		}
 	}
 	return rep, nil
