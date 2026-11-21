@@ -152,6 +152,7 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .row .l div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .row .l small{display:block;color:var(--ink3);font-family:var(--mono);font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .row .r{font-family:var(--mono);font-size:11px;color:var(--ink2);white-space:nowrap}
+.gapc{display:flex;justify-content:space-between;gap:8px;align-items:baseline;padding:8px 0 4px;border-top:1px solid var(--line);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--pale)}.gapc:first-child{border-top:0}.gapc small{font-family:var(--mono);font-size:10px;color:var(--ink3);text-transform:none;letter-spacing:0}.gapi{padding:6px 0 6px 8px;border-left:2px solid var(--royal);margin:4px 0;background:#05070d}.gapi .row{border-top:0;padding:0}.gapi .tok{display:flex;gap:6px;margin-top:5px}
 .row[aria-pressed=true] .l div{color:#fff}.row[aria-pressed=true]{box-shadow:inset 2px 0 0 #3b82f6;padding-left:8px}
 /* bars */
 .bars{display:grid;gap:7px}
@@ -281,6 +282,7 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
  <aside class="right">
   <section class="panel"><div class="ph"><span class="pt">Axiom Code <i>• CPSL</i></span><span class="seg"><button id="cPrev" aria-label="Previous assembly">‹</button><span class="ps mono" id="cIdx">—</span><button id="cNext" aria-label="Next assembly">›</button></span></div><div class="pb" style="padding-bottom:6px"><div class="ps mono" id="cName" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">—</div></div><div class="code" id="code"><div><span class="k3">NOT_FOUND_YET · no composition assembly in the projection</span></div></div></section>
   <section class="panel"><div class="ph"><span class="pt">Kin Assemblies</span><span class="ps">SAAB · composed with</span></div><div class="pb list" id="saabs"><span class="nf">NOT_FOUND_YET</span></div></section>
+  <section class="panel" id="gapP"><div class="ph"><span class="pt">Gaps</span><span class="ps" id="gapS">SOURCE_GAP · HUMAN_FINAL</span></div><div class="pb list" id="gaps"><span class="nf">NOT_FOUND_YET</span></div></section>
   <section class="panel"><div class="ph"><span class="pt">Axiom Dictionary</span><span class="ps mono">internal/axiom</span></div><div class="pb ax" id="ax"></div></section>
   <section class="panel" id="realP" hidden><div class="ph"><span class="pt">Realizations</span><span class="ps">projection engine</span></div><div class="pb list" id="real"></div></section>
  </aside>
@@ -496,7 +498,7 @@ function renderPanels(){
  // wave
  if(wave){const cw=Array.isArray(wave.compressed_wave)?wave.compressed_wave.length:0;setText('sWave',fmt(cw));setText('mWave',fmt(cw));setText('mWaveS',wave.locked?'locked':'recorded');setText('mWaveT',(wave.state||'RECORDED')+(wave.compression_ratio!=null?' · ratio '+wave.compression_ratio:''))}
  else{setText('sWave','NOT_FOUND_YET');setText('mWave','NOT_FOUND_YET');setText('mWaveT','temporal wave unavailable')}
- renderNav();renderCode();renderSaabs();renderReal();renderTimeline();renderBatch();
+ renderNav();renderCode();renderSaabs();renderGaps();renderReal();renderTimeline();renderBatch();
 }
 let hfReal=[],hfGen=[],hfPage=0,showGen=false;const HF_PAGE=5;
 function queueRealRow(it){const n=byID.get(it.id),b=el('button','row'),l=el('span','l'),nm=n?nameOf(n):(it.summary&&it.summary!==it.id?it.summary:'AtGOV record');l.append(el('div',null,nm),el('small',null,it.id));b.title=nm;b.append(l,el('span','r','AtGOV'));if(n)b.onclick=()=>select(n,true);const q=el('div','qrow');q.append(b,acceptButton(it.id));return q}
@@ -533,6 +535,18 @@ function renderSaabs(){const as=proj&&Array.isArray(proj.assemblies)?proj.assemb
  if(!as.length){S.append(el('span','nf',proj&&proj.assemblies_error?'ASSEMBLY ERROR · '+proj.assemblies_error:'NOT_FOUND_YET'));return}
  as.forEach((a,i)=>{if(i>=8)return;const b=el('button','row'),l=el('span','l'),names=(a.members||[]).map(id=>{const n=byID.get(id);return n&&n.label!==n.id?n.label:shortID(id)});l.append(el('div',null,names.slice(0,3).join(' + ')+(names.length>3?' +'+(names.length-3):'')),el('small',null,(a.capabilities||[]).slice(0,3).join(' · ')||a.id));b.append(l,el('span','r',(a.members||[]).length+' kin'));b.setAttribute('aria-pressed',String(asmSel===a.id));b.onclick=()=>{asmSel=asmSel===a.id?null:a.id;asmIdx=i;renderCode();renderSaabs();want()};S.append(b)});
  if(as.length>8)S.append(el('div','ps',`and ${as.length-8} more assemblies`))}
+// <gaps-panel> Worker SOURCE_GAP records from /projection.json "gaps", grouped by class. Never
+// auto-accepted: each AtGOV gap uses the same HUMAN_FINAL Accept / Hold path as any AtGOV record
+// (decideAtGOV: reason prompt, then a confirm press, then POST /decide).
+function gapControls(id){const f=el('div','tok');if(!savedToken()){f.append(el('small','nf','fieldd token needed to decide'));return f}f.append(acceptButton(id),holdButton(id));return f}
+function renderGaps(){const G=$('gaps');if(!G)return;G.replaceChildren();const gs=proj&&Array.isArray(proj.gaps)?proj.gaps:[];
+ let gov=0,acc=0;for(const g of gs){gov+=g.at_gov||0;acc+=g.accepted||0}
+ setText('gapS',gs.length?fmt(gov)+' AtGOV · '+fmt(acc)+' accepted':'SOURCE_GAP · HUMAN_FINAL');
+ if(!gs.length){G.append(el('span','nf','NOT_FOUND_YET'));return}
+ for(const g of gs){const h=el('div','gapc');h.append(el('span',null,g.class),el('small',null,(g.pivot||'')+' · '+fmt(g.at_gov||0)+' AtGOV · '+fmt(g.accepted||0)+' accepted'+(g.held?' · '+fmt(g.held)+' held':'')));G.append(h);
+  (g.items||[]).slice(0,5).forEach(it=>{const w=el('div','gapi'),r=el('div','row'),l=el('span','l');l.append(el('div',null,it.source_title||shortID(it.of||it.id)),el('small',null,it.summary||it.id));r.append(l,el('span','r',it.state==='AtGOV'?'AtGOV':'ACCEPTED'));w.append(r);if(it.state==='AtGOV')w.append(gapControls(it.id));G.append(w)});
+  if((g.items||[]).length>5)G.append(el('div','ps','and '+fmt(g.items.length-5)+' more'))}}
+// </gaps-panel>
 function renderReal(){const r=proj&&Array.isArray(proj.realizations)?proj.realizations:[];$('realP').hidden=!r.length;const R=$('real');R.replaceChildren();for(const x of r.slice(0,6)){const b=el('div','row'),l=el('span','l');l.append(el('div',null,x.target_thing+' → '+x.selected),el('small',null,x.source_id));b.append(l,el('span','r',x.status));R.append(b)}}
 function renderTimeline(){const T=$('tl');T.replaceChildren();const ev=nodes.filter(n=>n.t&&(showGov||n.kind==='accepted')).sort((a,b)=>String(b.t).localeCompare(String(a.t))).slice(0,16);
  setText('tlMeta',ev.length?`${ev.length} most recent · by capture time`:'NOT_FOUND_YET');
