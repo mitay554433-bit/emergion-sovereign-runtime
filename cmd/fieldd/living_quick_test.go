@@ -73,9 +73,9 @@ func livingUniverseHTML(t *testing.T) string {
 }
 
 // The page keeps the authority banner and reads only the read-only projection
-// routes. Its single write is the governed Accept block: a human press posts
-// a HUMAN_FINAL APPROVE to the existing /decide route with a pasted token.
-// Outside that block nothing posts, authorizes or touches storage.
+// routes. Writes live in marked blocks: governed-accept (HUMAN_FINAL /decide),
+// governed-auto (/auto routes), and source-submit (POST /sources, AtGOV only).
+// Outside those blocks nothing posts, authorizes or touches storage.
 func TestLivingUniversePageIsReadOnlyProjection(t *testing.T) {
 	src := livingUniverseHTML(t)
 	for _, want := range []string{"COSL + REG remain authoritative", "visualization", "/field.json", "/projection.json", "/real_temporal_wave.json", "Verified references", "Pending references (AtGOV)", "NOT_FOUND_YET"} {
@@ -96,6 +96,16 @@ func TestLivingUniversePageIsReadOnlyProjection(t *testing.T) {
 		t.Fatal("governed-auto block must post only to /auto/policy, /auto/worker and /auto/undo")
 	}
 	rest = strings.Replace(rest, auto, "", 1)
+	// Phase 1 Android / living submit: one write block that posts only to /sources.
+	// The record stops at AtGOV; Accept remains in the governed-accept block.
+	submit := regexp.MustCompile(`(?s)// <source-submit>.*?// </source-submit>`).FindString(src)
+	if submit == "" || strings.Count(submit, "fetch(") != 1 ||
+		!strings.Contains(submit, "fetch('/sources',{method:'POST'") ||
+		strings.Contains(submit, "/decide") || strings.Contains(submit, "/authorize") ||
+		strings.Contains(submit, "/auto/") {
+		t.Fatal("source-submit block must post only to /sources")
+	}
+	rest = strings.Replace(rest, submit, "", 1)
 	for _, banned := range []string{"/decide'", "/authorize", "method:'POST'", "method:\"POST\"", "localStorage", "parent_child", "hierarchy"} {
 		if strings.Contains(rest, banned) {
 			t.Fatalf("living-universe.html outside governed-accept must not contain %q", banned)
