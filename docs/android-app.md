@@ -11,7 +11,11 @@ existing Termux install. A Termux-free inference engine is still unverified.
 ## What it does
 
 - Starts a foreground service that execs the bundled arm64 `libfieldd.so`
-  (the `fieldd` binary) on `127.0.0.1:8899`.
+  (the `fieldd` binary) on loopback. The default port is **8896**, so it
+  can run beside the Termux `fieldd` on `127.0.0.1:8899` and `llama-server`
+  on `8897`. If 8896 is taken, the app picks the next free port and points
+  the WebView at it. If no port can be bound, the app shows a clear error
+  instead of a blank screen.
 - Opens `/living` in a WebView (carbon black `#0a0a0a`, royal blue `#2f6bff`).
 - Uses an **app-private** ledger under the app's files directory
   (`…/files/field`). It never reads or writes the Termux `.field` tree.
@@ -22,9 +26,10 @@ existing Termux install. A Termux-free inference engine is still unverified.
 
 ## Install (sideload)
 
-1. Copy `unifusion-android-v1-phase1-arm64-debug.apk` to the phone, for example
+1. Copy `unifusion-android-v1-phase1b-arm64-debug.apk` to the phone, for example
    into **Download**. (If you got it from a GitHub Release or Actions artifact
    on this branch, save that file. The APK is not stored in the git tree.)
+   This 1b build is the one that avoids port 8899.
 2. Open the APK in Files / Downloads. Allow install from that source if Android
    asks.
 3. Open **UNIFUSION**. Allow notifications if asked, and allow the app to ignore
@@ -53,6 +58,19 @@ a native library so Android will extract it to an executable path), then runs
 `android/app/build/outputs/apk/debug/app-debug.apk`.
 
 `libfieldd.so` and the APK are build outputs; they are not committed.
+
+## Coexistence with Termux
+
+The sideload app and the existing Termux UNIFUSION can both be on the phone.
+They are **two separate runtimes**:
+
+- Termux `fieldd` stays on `127.0.0.1:8899` (Gemma / llama-server on `8897`).
+  Its ledger remains the Termux `.field` tree.
+- The app uses `127.0.0.1:8896` (or another free loopback port) and an
+  **app-private** ledger. It does not open or copy the Termux ledger.
+
+Uninstalling the app does not stop Termux fieldd. Stopping Termux does not
+remove the app's ledger.
 
 ## Safety
 
