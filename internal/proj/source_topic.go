@@ -44,6 +44,10 @@ type LinkedDerivedFacetGroup struct {
 	Topic       string   `json:"topic"`
 	FacetSource string   `json:"facet_source"`
 	Members     []string `json:"members"`
+	// SourceUploads counts the members that are REG-accepted SOURCE_UPLOAD
+	// records grouped by their recorded topic (facet_source source_topic).
+	// Derived, display only.
+	SourceUploads int `json:"source_uploads"`
 }
 
 // LinkedSourceRefGroup lists accepted SOURCE records whose manifest lines

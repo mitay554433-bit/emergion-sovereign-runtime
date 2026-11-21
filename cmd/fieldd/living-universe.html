@@ -226,7 +226,7 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
     <div class="st" title="Distinct recorded REL kin references whose two ends are both REG-accepted"><small>Verified references</small><b id="sRef">—</b></div>
     <div class="st" title="Distinct recorded REL kin references (kin, parent, successor, origin, composition, capability provider) between two records in the FIELD where at least one end is AtGOV. Counts references, not records."><small>Pending references (AtGOV)</small><b id="sPend">—</b></div>
     <div class="st"><small>Kin assemblies</small><b id="sSaab">—</b></div>
-    <div class="st"><small>Temporal states</small><b id="sWave">—</b></div>
+    <div class="st" title="Compressed states in the recorded MAXIOM temporal wave file (outputs/real_temporal_wave.json). It is a fixed recorded artifact, not a count of REG records, so uploads do not change it."><small>Temporal states · wave file</small><b id="sWave">—</b></div>
     <div class="st"><small>Linked accepted</small><b id="sLinked">—</b></div>
     <div class="st"><small>AtGOV → target</small><b id="sGovT">—</b></div>
     <div class="st"><small>Same-SOURCE IDNs</small><b id="sDup" title="Records sharing one SOURCE hash under different IDNs">—</b></div>
@@ -518,12 +518,18 @@ function renderQueue(){const L=$('hfList'),box=$('hfGenBox'),gl=$('hfGenList'),g
 function renderNav(){if($('bKind'))renderBatch();const nav=$('nav');nav.replaceChildren();
  const groups=proj&&Array.isArray(proj.facet_groups)?proj.facet_groups.map(g=>({key:g.facet,n:(g.members||[]).length})):facetOrder.map(f=>({key:f,n:nodes.filter(x=>x.kind==='accepted'&&x.facets.includes(f)).length}));
  const govN=f=>nodes.filter(x=>x.kind==='pending'&&x.facets.includes(f)).length;
- const items=[{key:'ALL',title:'FIELD View',sub:fmt(nodes.filter(n=>n.kind==='accepted').length)+' accepted · all facets'}];
- for(const g of groups){if(!g.n&&!govN(g.key))continue;items.push({key:g.key,title:FACET_LABEL[g.key]||g.key,sub:fmt(g.n)+' accepted'+(govN(g.key)?' · '+fmt(govN(g.key))+' AtGOV':'')})}
- const dgroups=proj&&Array.isArray(proj.derived_facet_groups)?proj.derived_facet_groups.map(g=>({key:g.facet,n:(g.members||[]).length,src:g.facet_source})):[...new Set(nodes.filter(x=>x.kind==='accepted').flatMap(x=>x.derived||[]))].map(f=>({key:f,n:nodes.filter(x=>x.kind==='accepted'&&x.facets.includes(f)).length,src:'source_topic'})).sort((a,b)=>b.n-a.n);
- for(const g of dgroups){if(!g.n)continue;items.push({key:g.key,title:FACET_LABEL[g.key]||topicLabel(g.key),sub:fmt(g.n)+' accepted · '+derivedSub(g),icon:'SOURCE_TOPIC'})}
+ const items=[{key:'ALL',title:'FIELD View',sub:fmt(nodes.filter(n=>n.kind==='accepted').length)+' accepted · all facets'}],regItems=[];
+ // <nav-tiles> Topic tiles (derived from /projection.json derived_facet_groups, largest first) come
+ // before the REG facet tiles so the groups holding most accepted records are visible without
+ // scrolling. Order is display only; REG facets stay the only canonical facets.
+ for(const g of groups){if(!g.n&&!govN(g.key))continue;regItems.push({key:g.key,title:FACET_LABEL[g.key]||g.key,sub:fmt(g.n)+' accepted · REG facet'+(govN(g.key)?' · '+fmt(govN(g.key))+' AtGOV':'')})}
+ const dgroups=proj&&Array.isArray(proj.derived_facet_groups)?proj.derived_facet_groups.map(g=>({key:g.facet,n:(g.members||[]).length,up:g.source_uploads||0,src:g.facet_source})):[...new Set(nodes.filter(x=>x.kind==='accepted').flatMap(x=>x.derived||[]))].map(f=>({key:f,n:nodes.filter(x=>x.kind==='accepted'&&x.facets.includes(f)).length,src:'source_topic'})).sort((a,b)=>b.n-a.n);
+ for(const g of dgroups){if(!g.n)continue;items.push({key:g.key,title:FACET_LABEL[g.key]||topicLabel(g.key),sub:topicSub(g),icon:'SOURCE_TOPIC'})}
+ items.push(...regItems);
+ // </nav-tiles>
  if(proj&&proj.unassigned&&proj.unassigned.length)items.push({key:'UNASSIGNED',title:'Unassigned',sub:fmt(proj.unassigned.length)+' accepted · no facet'});
  for(const it of items){const b=el('button','tile');b.setAttribute('aria-pressed',String(filter===it.key));const ic=el('span','ic');ic.innerHTML=svg(ICON[it.icon||it.key]||ICON.ALL);const t=el('span');t.append(el('div','tt',it.title),el('div','ts',it.sub));b.append(ic,t);b.onclick=()=>{showField();if(it.key==='ALL'){filter='ALL';renderNav();flyHome()}else flyToFacet(it.key)};nav.append(b)}heroSub()}
+function topicSub(g){return fmt(g.n)+' accepted · '+derivedSub(g)+(g.up&&g.up!==g.n?' · '+fmt(g.up)+' uploads':'')}
 function inFilter(n){if(filter==='ALL')return true;if(filter==='UNASSIGNED')return n.kind==='accepted'&&!n.facets.length;return n.facets.includes(filter)}
 function hl(line){const d=el('div');const m=line.match(/^([A-Z])(\|.*)?$/);if(!m){d.append(el('span','k2',line));return d}
  d.append(el('span','k1',m[1]));if(m[2]){for(const part of m[2].slice(1).split('|')){d.append(el('span','k3',' | '));const s=part.replace(/^"|"$/g,'');d.append(el('span',/_KIN$|^[A-Z_]+$/.test(s)?'k4':/^E-/.test(s)||/^SAAB:/.test(s)?'k2':'k5',part))}}return d}
@@ -956,14 +962,18 @@ let autoSt=null;
 function armTap(b,label,fn){if(b.dataset.armed==='1'){b.dataset.armed='';b.classList.remove('arm');clearTimeout(b._t);fn();return}
  b.dataset.armed='1';b.classList.add('arm');const old=b.textContent;b.textContent='Tap again: '+label;b._t=setTimeout(()=>{b.dataset.armed='';b.classList.remove('arm');b.textContent=old},4000)}
 function autoLine(a){const p=a.policy||{},w=a.worker||{};return 'Policy '+(p.effective?'ON':(p.on&&p.stale?'ON (stale, switch again)':'OFF'))+' · Worker '+(w.on?'ON':'OFF')+' · '+(w.mode||'local')+(w.last_reasoner?' ('+w.last_reasoner+')':'')+' · '+fmt(p.auto_accepted||0)+' auto-accepted · '+fmt(p.auto_held||0)+' auto-held · '+fmt(p.waiting||0)+' waiting'+(p.eligible&&!p.effective?' · '+fmt(p.eligible)+' would auto-decide':'')+(w.on?' · '+fmt(w.pending||0)+' sources left':'')+(a.worker_error?' · worker error: '+a.worker_error:'')+((w.checkpoint&&w.checkpoint.last_error)?' · last reasoner error: '+w.checkpoint.last_error:'')}
-function renderAuto(){const a=autoSt;if(!a){setText('auPol','—');setText('auLine','');return}const p=a.policy||{},w=a.worker||{};
- setText('auPol',p.effective?'ON':'OFF');setText('auWk',w.on?'ON':'OFF');setText('auMode',(w.mode||'local')+(w.mode!=='local'&&!w.online_configured?' · online not set':''));
- setText('auAcc',fmt(p.auto_accepted||0));setText('auHeld',fmt(p.auto_held||0));setText('auWait',fmt(p.waiting||0));setText('auIns',fmt(w.insight_records||0));setText('auLine',autoLine(a));
+function renderAuto(){const a=autoSt;if(!a){setText('auPol','—');setText('auLine',autoErr?'auto status unavailable: '+autoErr:'');return}const p=a.policy||{},w=a.worker||{};
+ setText('auPol',policyCell(p));setText('auWk',w.on?'ON':'OFF');setText('auMode',(w.mode||'local')+(w.mode!=='local'&&!w.online_configured?' · online not set':''));
+ setText('auAcc',fmt(p.auto_accepted||0));setText('auHeld',fmt(p.auto_held||0));setText('auWait',fmt(p.waiting||0));setText('auIns',fmt(w.insight_records||0));setText('auLine',autoLine(a)+(autoErr?' · last refresh failed ('+autoErr+'), showing the previous status':''));
  const pb=$('auPolB'),wb=$('auWkB'),ms=$('auModeS');
- if(pb&&pb.dataset.armed!=='1'){pb.textContent=p.effective?'Policy ON · turn off':'Policy OFF · turn on';pb.classList.toggle('on',!!p.effective)}
+ if(pb&&pb.dataset.armed!=='1'){pb.textContent=policyCell(p)==='ON'?'Policy ON · turn off':'Policy OFF · turn on';pb.classList.toggle('on',!!p.effective)}
  if(wb&&wb.dataset.armed!=='1'){wb.textContent=w.on?'Worker ON · stop':'Worker OFF · start';wb.classList.toggle('on',!!w.on)}
  if(ms&&document.activeElement!==ms)ms.value=w.mode||'local'}
-async function pollAuto(){try{autoSt=await getJSON('/auto/status')}catch(e){autoSt=null}renderAuto()}
+let autoErr='';
+// A failed poll keeps the last good /auto/status so the policy cell and the Policy button always
+// read the same object; the failure is shown in the auto line instead of blanking one cell.
+async function pollAuto(){try{autoSt=await getJSON('/auto/status');autoErr=''}catch(e){autoErr=String(e&&e.message||e||'error')}renderAuto()}
+function policyCell(p){return p&&p.effective?'ON':'OFF'}
 async function autoPost(path,body){const tok=savedToken();if(!tok){alert('The fieldd token is needed. Open /living from this phone (127.0.0.1) or paste the token on a record.');return null}
  try{const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:JSON.stringify(body)});const j=await r.json().catch(()=>({error:'HTTP '+r.status}));if(!r.ok||j.error){alert(j.error||('HTTP '+r.status));return null}return j}
  catch(e){alert('Could not reach fieldd. Refresh before retrying.');return null}}

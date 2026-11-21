@@ -89,6 +89,9 @@ func TestLinkedWireIsAdditiveOverF3fb0d5(t *testing.T) {
 	for _, r := range newM["records"].([]any) {
 		delete(r.(map[string]any), "kin_family")
 	}
+	for _, g := range newM["derived_facet_groups"].([]any) {
+		delete(g.(map[string]any), "source_uploads")
+	}
 	if !reflect.DeepEqual(oldM, newM) {
 		t.Fatalf("old wire changed:\nold %s\nnew %s", oldB, newB)
 	}
@@ -103,6 +106,9 @@ func TestLinkedWireIsAdditiveOverF3fb0d5(t *testing.T) {
 		t.Fatalf("decoded old JSON grew gaps: %v", backM["gaps"])
 	}
 	delete(backM, "gaps")
+	for _, g := range backM["derived_facet_groups"].([]any) {
+		delete(g.(map[string]any), "source_uploads") // additive, defaults to 0
+	}
 	if !reflect.DeepEqual(oldM, backM) {
 		t.Fatalf("old JSON round-trip changed:\n%s", back)
 	}

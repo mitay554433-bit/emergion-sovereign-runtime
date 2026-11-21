@@ -178,6 +178,12 @@ func derivedTopicGroups(byTopic map[string][]string, srcByID map[string]string) 
 			srcs = append(srcs, srcByID[id])
 		}
 		src := uniqueGroupSource(srcs)
+		uploads := 0
+		for _, s := range srcs {
+			if s == FacetSourceTopic {
+				uploads++
+			}
+		}
 		label := SourceTopicLabel(t)
 		if t == "other" && src != FacetSourceTopic {
 			label = "Other"
@@ -188,6 +194,8 @@ func derivedTopicGroups(byTopic map[string][]string, srcByID map[string]string) 
 			Topic:       t,
 			FacetSource: src,
 			Members:     ms,
+
+			SourceUploads: uploads,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {
