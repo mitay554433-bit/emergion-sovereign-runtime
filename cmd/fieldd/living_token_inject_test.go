@@ -230,11 +230,13 @@ func TestLivingPageUsesInjectedTokenAutomatically(t *testing.T) {
 		}
 	}
 	// Paste UI and message stay as a fallback, but are skipped when a token was injected.
+	// Single Accept/Hold no longer uses a native alert: the same paste message is
+	// written into the batch panel, and only when savedToken() is empty.
 	if !strings.Contains(src, "Paste the fieldd token first (Next Governed Step panel).") {
 		t.Fatal("fallback paste message missing")
 	}
-	if !strings.Contains(src, "if(!injectedToken())alert('Paste the fieldd token first") {
-		t.Fatal("paste alert must be skipped when a token was injected")
+	if !strings.Contains(src, "if(!savedToken()){const out=batchSink();out.textContent=injectedToken()?") {
+		t.Fatal("paste message must be skipped when a token was injected")
 	}
 	// Static source must not itself contain a real token.
 	if strings.Contains(src, testToken) {

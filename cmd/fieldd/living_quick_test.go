@@ -251,3 +251,35 @@ process.stdout.write(ks.map(k=>kindColor(k)).join(";"));`)
 		}
 	}
 }
+
+// Single Accept/Hold opens the batch screen. Confirm is a double-press. There is
+// no native dialog and no reason box; a silent reason is still sent on the same
+// /decide (one record) or /decide-batch-human (many) payload.
+func TestLivingDecisionsUseBatchScreenNoDialogs(t *testing.T) {
+	src := livingUniverseHTML(t)
+	for _, banned := range []string{"prompt(", "alert(", "confirm("} {
+		if strings.Contains(src, banned) {
+			t.Fatalf("living-universe.html must not contain %q", banned)
+		}
+	}
+	if strings.Contains(src, `rs.id='bReason'`) || strings.Contains(src, `placeholder='HUMAN_FINAL reason`) {
+		t.Fatal("batch screen must not show a reason box")
+	}
+	acc := regexp.MustCompile(`(?s)// <governed-accept>.*?// </governed-accept>`).FindString(src)
+	if acc == "" {
+		t.Fatal("governed-accept block missing")
+	}
+	for _, want := range []string{
+		"function decideAtGOV(id,btn,decision){const hold=decision==='HOLD';BS.kind='one';BS.value=id",
+		"function silentLivingReason(ids,decision){",
+		"'HUMAN_FINAL double-press on /living'",
+		"armAndSend((hold?'H|':'A|')+batchKey(ids),ids,silentLivingReason(ids,hold?'HOLD':undefined),hold?'HOLD':undefined)",
+		"if(ids.length===1){const id=ids[0];batchBusy=true",
+		"fetch('/decide',{method:'POST'",
+		"body:decideBody(id,reason.trim(),hold?'HOLD':'APPROVE')",
+	} {
+		if !strings.Contains(acc, want) {
+			t.Fatalf("governed-accept missing %q", want)
+		}
+	}
+}
