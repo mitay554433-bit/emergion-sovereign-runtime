@@ -48,11 +48,35 @@ cap_log() {
   fi
 }
 
+# A pidfile PID is only "ours" if it is still running and its command
+# line matches. kill -0 alone is not enough: $TMPDIR persists across
+# Termux reboots, and a leftover PID can be reused by another process.
+
+pid_cmdline() {
+  tr '\0' ' ' < "/proc/$1/cmdline" 2>/dev/null
+}
+
+pid_is_watchdog() {
+  [ -n "$1" ] || return 1
+  kill -0 "$1" 2>/dev/null || return 1
+  case "$(pid_cmdline "$1")" in
+    *fieldd-watchdog.sh*) return 0 ;;
+  esac
+  return 1
+}
+
+pid_is_fieldd() {
+  [ -n "$1" ] || return 1
+  kill -0 "$1" 2>/dev/null || return 1
+  case "$(pid_cmdline "$1")" in
+    *fieldd*-http*) return 0 ;;
+  esac
+  return 1
+}
+
 watchdog_pid_live() {
   [ -f "$PIDFILE" ] || return 1
-  wp=$(cat "$PIDFILE" 2>/dev/null)
-  [ -n "$wp" ] || return 1
-  kill -0 "$wp" 2>/dev/null
+  pid_is_watchdog "$(cat "$PIDFILE" 2>/dev/null)"
 }
 
 already_running() {
@@ -72,10 +96,10 @@ take_lock() {
     echo $$ > "$LOCKDIR/pid"
     return 0
   fi
-  if [ -f "$LOCKDIR/pid" ] && kill -0 "$(cat "$LOCKDIR/pid" 2>/dev/null)" 2>/dev/null; then
+  if pid_is_watchdog "$(cat "$LOCKDIR/pid" 2>/dev/null)"; then
     return 1
   fi
-  # Stale lock from a previous boot or a killed process.
+  # Stale lock from a previous boot, a killed process, or a reused PID.
   rm -rf "$LOCKDIR"
   if mkdir "$LOCKDIR" 2>/dev/null; then
     echo $$ > "$PIDFILE"
@@ -120,7 +144,7 @@ stop_fieldd() {
   if [ -f "$CHILD_PIDFILE" ]; then
     old=$(cat "$CHILD_PIDFILE" 2>/dev/null)
   fi
-  if [ -n "$old" ] && kill -0 "$old" 2>/dev/null; then
+  if pid_is_fieldd "$old"; then
     say "stopping fieldd pid $old"
     kill "$old" 2>/dev/null
     i=0
