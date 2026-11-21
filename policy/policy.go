@@ -43,11 +43,15 @@ const (
 	KindSwitch       = "AUTO_POLICY_SWITCH"
 	KindKinLink      = "SOURCE_KIN_LINK"
 	KindInsight      = "SOURCE_INSIGHT"
+	// KindGap is a worker-written gap read from an accepted insight. It is
+	// never low-risk: A01-AUTO never decides it, it waits for HUMAN_FINAL.
+	KindGap = "SOURCE_GAP"
 
 	ProvenanceSourceUpload = "governed_source_upload"
 	ProvenanceSwitch       = "governed_policy_switch"
 	ProvenanceKinLink      = "worker_source_kin_link"
 	ProvenanceInsight      = "worker_source_insight"
+	ProvenanceGap          = "worker_source_gap"
 )
 
 // Classes (must match auto-accept.json).
@@ -385,6 +389,11 @@ func classifyVersion(st core.State, x *Index, em core.EmergION, legacy bool) Ver
 	}
 	if kind == KindSwitch || em.MEM.Provenance == ProvenanceSwitch {
 		return Verdict{Why: "the policy itself needs HUMAN_FINAL"}
+	}
+	if kind == KindGap || em.MEM.Provenance == ProvenanceGap {
+		// SOURCE_GAP is never low-risk under any policy version: no class,
+		// no decision, so it stays AtGOV for HUMAN_FINAL.
+		return Verdict{Why: "SOURCE_GAP needs HUMAN_FINAL"}
 	}
 	if !legacy && st.HumanResumed[em.IDN] {
 		// one RESUME press sticks: the policy does not hold it again

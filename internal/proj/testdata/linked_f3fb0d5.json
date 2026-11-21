@@ -1,0 +1,160 @@
+{
+  "authority": "COSL + REG remain authoritative · visualization only",
+  "tip_hash": "tip-fixture",
+  "events": 9,
+  "facet_order": [
+    "FIELD_COMMAND",
+    "EMERGENCE_CAPTURE",
+    "PROGRAM_FORGE",
+    "PRODUCT_STORE",
+    "CUSTOMERS_SALES",
+    "COMMUNICATIONS",
+    "PAYMENTS_FINANCE",
+    "GRANT_FUNDING",
+    "PATENT_IP",
+    "MA_PARTNERSHIPS",
+    "DOCS_PROJECTION",
+    "ANALYTICS_FORECAST"
+  ],
+  "facet_groups": [
+    {
+      "facet": "FIELD_COMMAND",
+      "members": []
+    },
+    {
+      "facet": "EMERGENCE_CAPTURE",
+      "members": []
+    },
+    {
+      "facet": "PROGRAM_FORGE",
+      "members": []
+    },
+    {
+      "facet": "PRODUCT_STORE",
+      "members": []
+    },
+    {
+      "facet": "CUSTOMERS_SALES",
+      "members": []
+    },
+    {
+      "facet": "COMMUNICATIONS",
+      "members": []
+    },
+    {
+      "facet": "PAYMENTS_FINANCE",
+      "members": []
+    },
+    {
+      "facet": "GRANT_FUNDING",
+      "members": []
+    },
+    {
+      "facet": "PATENT_IP",
+      "members": []
+    },
+    {
+      "facet": "MA_PARTNERSHIPS",
+      "members": []
+    },
+    {
+      "facet": "DOCS_PROJECTION",
+      "members": []
+    },
+    {
+      "facet": "ANALYTICS_FORECAST",
+      "members": []
+    }
+  ],
+  "unassigned": [],
+  "records": [
+    {
+      "id": "E-i1",
+      "kin_root": "E-i1",
+      "capabilities": [
+        "OBS"
+      ],
+      "summary": "Insight on Helix brief 1",
+      "derived_facets": [
+        "SOURCE_TOPIC:inventions-ip"
+      ],
+      "facet_source": "derived_keyword"
+    },
+    {
+      "id": "E-l1",
+      "kin_root": "E-l1",
+      "capabilities": [
+        "OBS"
+      ],
+      "derived_facets": [
+        "SOURCE_TOPIC:other"
+      ],
+      "facet_source": "derived_fallback"
+    },
+    {
+      "id": "E-u1",
+      "kin_root": "E-u1",
+      "capabilities": [
+        "OBS"
+      ],
+      "summary": "upload Helix brief 1",
+      "derived_facets": [
+        "SOURCE_TOPIC:inventions-ip"
+      ],
+      "facet_source": "source_topic"
+    },
+    {
+      "id": "E-u2",
+      "kin_root": "E-u2",
+      "capabilities": [
+        "OBS"
+      ],
+      "summary": "upload Helix brief 2",
+      "derived_facets": [
+        "SOURCE_TOPIC:inventions-ip"
+      ],
+      "facet_source": "source_topic"
+    }
+  ],
+  "assemblies": [],
+  "saws": [],
+  "realizations": [],
+  "human_final_queue": [
+    {
+      "id": "E-g0",
+      "summary": "pending upload"
+    }
+  ],
+  "trajectories": [],
+  "archonym_conflicts": [],
+  "archonym_waiting_conflicts": [],
+  "derived_facet_groups": [
+    {
+      "facet": "SOURCE_TOPIC:inventions-ip",
+      "label": "Inventions \u0026 IP",
+      "topic": "inventions-ip",
+      "facet_source": "derived",
+      "members": [
+        "E-i1",
+        "E-u1",
+        "E-u2"
+      ]
+    },
+    {
+      "facet": "SOURCE_TOPIC:other",
+      "label": "Other",
+      "topic": "other",
+      "facet_source": "derived_fallback",
+      "members": [
+        "E-l1"
+      ]
+    }
+  ],
+  "reg_unassigned": [
+    "E-i1",
+    "E-l1",
+    "E-u1",
+    "E-u2"
+  ],
+  "source_ref_groups": []
+}

@@ -49,6 +49,9 @@ type LinkedProjection struct {
 	// SourceRefGroups lists accepted SOURCE records that name the same
 	// manifest related id (REL source_related). Shared reference, not KIN.
 	SourceRefGroups []LinkedSourceRefGroup `json:"source_ref_groups"`
+	// Gaps groups worker SOURCE_GAP records by gap class with accepted,
+	// AtGOV and held counts. Derived, read-only; HUMAN_FINAL decides each.
+	Gaps []LinkedGapGroup `json:"gaps"`
 }
 
 type LinkedFacetGroup struct {
@@ -151,6 +154,7 @@ func Linked(st core.State) LinkedProjection {
 	}
 	out.DerivedFacetGroups = derivedTopicGroups(byTopic, srcByID)
 	out.SourceRefGroups = sourceRefGroups(st)
+	out.Gaps = gapGroups(st)
 
 	for _, s := range spatial {
 		em := st.Accepted[s.ID]
