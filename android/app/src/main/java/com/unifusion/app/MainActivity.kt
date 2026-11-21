@@ -33,6 +33,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var startingText: TextView
     private val io = Executors.newSingleThreadExecutor()
     private var livingLoaded = false
+    private var shownError: String = ""
 
     private val fileChooser = registerForActivityResult(
         ActivityResultContracts.GetMultipleContents(),
@@ -110,13 +111,22 @@ class MainActivity : AppCompatActivity() {
             var attempt = 0
             while (!isDestroyed && !isFinishing) {
                 attempt++
-                if (healthOk()) {
-                    runOnUiThread { showLiving() }
+                val port = FielddService.listenPort.get()
+                if (port > 0 && healthOk(port)) {
+                    runOnUiThread { showLiving(port) }
                     return@execute
                 }
-                if (attempt == 8) {
+                val err = FielddService.lastError.get()
+                if (err.isNotEmpty() && err != shownError) {
+                    shownError = err
+                    runOnUiThread { showStartupMessage(err) }
+                } else if (attempt == 10 && shownError.isEmpty()) {
                     runOnUiThread {
-                        startingText.text = "Still starting the local runtime…"
+                        showStartupMessage(getString(R.string.still_starting))
+                    }
+                } else if (attempt == 25 && shownError.isEmpty()) {
+                    runOnUiThread {
+                        showStartupMessage(getString(R.string.start_timeout))
                     }
                 }
                 try {
@@ -128,9 +138,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun healthOk(): Boolean {
+    private fun healthOk(port: Int): Boolean {
         return try {
-            val conn = URL(FielddService.HEALTH).openConnection() as HttpURLConnection
+            val conn = URL(FielddService.healthUrl(port)).openConnection() as HttpURLConnection
             conn.connectTimeout = 800
             conn.readTimeout = 800
             conn.useCaches = false
@@ -143,12 +153,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showLiving() {
+    private fun showStartupMessage(msg: String) {
+        if (isDestroyed) return
+        livingLoaded = false
+        webView.visibility = View.INVISIBLE
+        starting.visibility = View.VISIBLE
+        startingText.text = msg
+    }
+
+    private fun showLiving(port: Int) {
         if (isDestroyed || livingLoaded) return
         livingLoaded = true
+        shownError = ""
         starting.visibility = View.GONE
         webView.visibility = View.VISIBLE
-        webView.loadUrl(FielddService.LIVING)
+        webView.loadUrl(FielddService.livingUrl(port))
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -165,17 +184,21 @@ class MainActivity : AppCompatActivity() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val host = request.url.host
                 val scheme = request.url.scheme
+                val port = request.url.port
+                val expected = FielddService.listenPort.get()
                 // Stay on the local fieldd surface. Never send the loopback
                 // session to a remote site.
-                return !(scheme == "http" && (host == "127.0.0.1" || host == "localhost"))
+                val local = scheme == "http" && (host == "127.0.0.1" || host == "localhost")
+                val samePort = expected <= 0 || port == -1 || port == expected
+                return !(local && samePort)
             }
 
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
                 if (request.isForMainFrame) {
-                    starting.visibility = View.VISIBLE
-                    webView.visibility = View.INVISIBLE
-                    startingText.text = "fieldd is restarting, try again in a few seconds"
-                    livingLoaded = false
+                    val err = FielddService.lastError.get().ifEmpty {
+                        getString(R.string.fieldd_restarting)
+                    }
+                    showStartupMessage(err)
                     waitForFieldd()
                 }
             }

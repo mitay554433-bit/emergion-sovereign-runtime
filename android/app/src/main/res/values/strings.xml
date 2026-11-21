@@ -3,5 +3,9 @@
     <string name="app_name">UNIFUSION</string>
     <string name="notification_title">UNIFUSION is running</string>
     <string name="notification_text">Local runtime on this phone. Ledger stays in the app.</string>
+    <string name="notification_text_port">Local runtime on 127.0.0.1:%d. Ledger stays in the app.</string>
     <string name="starting">Starting UNIFUSION…</string>
+    <string name="still_starting">Still starting the local runtime on a loopback port (8896, or the next free port). Termux fieldd on 8899 is left alone.</string>
+    <string name="start_timeout">The local runtime did not come up. This app does not use Termux port 8899 or llama-server port 8897. If the message does not change, force-stop the app and open it again.</string>
+    <string name="fieldd_restarting">The local runtime is restarting. This screen will return to /living when it answers.</string>
 </resources>
