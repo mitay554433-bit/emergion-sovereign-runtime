@@ -226,6 +226,7 @@ command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock
 say "watchdog loop starting (pid $$, addr $ADDR, interval ${INTERVAL}s, repo $REPO)"
 
 fails=0
+foreign_said=""
 while true; do
   cap_log
   if ! ensure_bin; then
@@ -238,6 +239,19 @@ while true; do
   fi
   if up; then
     fails=0
+    # Something answers on $ADDR. If it is not this watchdog's binary (for
+    # example an older dist/fieldd started with -state), say so: it is never
+    # killed here, but it serves an old build in place of $BIN.
+    if command -v pgrep >/dev/null 2>&1 && ! pgrep -f "$BIN -http $ADDR" >/dev/null 2>&1; then
+      foreign=$(pgrep -af 'fieldd' 2>/dev/null | grep -v 'fieldd-watchdog' | grep -vF "$BIN -http" | head -3 | tr '\n' ';')
+      if [ "$foreign" != "$foreign_said" ]; then
+        say "FOREIGN: $ADDR is answered by a process that is not $BIN -http $ADDR (${foreign:-unknown}); stop it so this build can serve"
+        foreign_said="$foreign"
+      fi
+      sleep "$INTERVAL"
+      continue
+    fi
+    foreign_said=""
     sleep "$INTERVAL"
     continue
   fi
