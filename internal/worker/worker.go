@@ -55,9 +55,12 @@ type Control struct {
 // Checkpoint makes the worker resumable. The ledger is the source of truth
 // for what is done; the checkpoint keeps the cursor, failures and counters.
 type Checkpoint struct {
-	Version   string         `json:"version"`
-	Cursor    string         `json:"cursor,omitempty"`
-	Failures  map[string]int `json:"failures,omitempty"`
+	Version  string         `json:"version"`
+	Cursor   string         `json:"cursor,omitempty"`
+	Failures map[string]int `json:"failures,omitempty"`
+	// Timeouts counts model timeouts per source (never blamed as failures);
+	// each one halves the file text that source gets on its next try.
+	Timeouts  map[string]int `json:"timeouts,omitempty"`
 	FailRev   int            `json:"failures_rev,omitempty"`
 	Processed int            `json:"processed"`
 	Insights  int            `json:"insights"`
@@ -131,11 +134,29 @@ func (w *Worker) LoadCheckpoint() Checkpoint {
 	if b, err := os.ReadFile(w.checkpointPath()); err == nil {
 		_ = json.Unmarshal(b, &cp)
 	}
+	if cp.Timeouts == nil {
+		cp.Timeouts = map[string]int{}
+	}
 	if cp.Failures == nil || cp.FailRev != failRev {
 		// counts from before failRev blamed sources for model-run errors
 		cp.Failures, cp.FailRev = map[string]int{}, failRev
 	}
 	return cp
+}
+
+// MaxTimeoutShrink is the number of timeouts after which a source is sent
+// with no file text at all (title, topic and peers only).
+const MaxTimeoutShrink = 3
+
+// ShrinkText halves the text budget once per earlier timeout of a source.
+func ShrinkText(chars, timeouts int) int {
+	if timeouts <= 0 || chars <= 0 {
+		return chars
+	}
+	if timeouts >= MaxTimeoutShrink {
+		return -1
+	}
+	return chars >> uint(timeouts)
 }
 
 func (w *Worker) saveCheckpoint(cp Checkpoint) error { return writeJSON(w.checkpointPath(), cp) }
@@ -284,6 +305,24 @@ func (w *Worker) Step(ctx context.Context, batch int) (StepReport, error) {
 	}
 	sort.Strings(todo)
 	rep.Pending = len(todo)
+	// Gap pass first: no model call, bounded. It runs at the start of every
+	// step so a slow or timed-out reasoner (or a fieldd restart mid-step)
+	// can never starve it: SOURCE_GAP candidates for accepted insights are
+	// proposed AtGOV (HUMAN_FINAL) even when the model never answers.
+	if ctx.Err() == nil {
+		for _, c := range w.PlanGaps(st, MaxGapsPerStep) {
+			if _, err := w.captureGap(ctx, c); err != nil {
+				return rep, err
+			}
+			rep.Gaps++
+			cp.Gaps++
+		}
+		if rep.Gaps > 0 {
+			if err := w.saveCheckpoint(cp); err != nil {
+				return rep, err
+			}
+		}
+	}
 	// resume after the cursor, wrapping
 	start := sort.SearchStrings(todo, cp.Cursor)
 	if start < len(todo) && todo[start] == cp.Cursor {
@@ -307,6 +346,9 @@ func (w *Worker) Step(ctx context.Context, batch int) (StepReport, error) {
 		if tc == 0 {
 			tc = DefaultTextChars
 		}
+		// a source whose earlier runs timed out gets half the text per timeout
+		// (none after MaxTimeoutShrink), so a slow phone still finishes it
+		tc = ShrinkText(tc, cp.Timeouts[id])
 		in.Text = ExtractText(ctx, w.SourcesRoot, src.REL["source_path"], src.REL["source_mime"], tc)
 		for i, p := range peers {
 			in.Peers = append(in.Peers, reason.InsightPeer{N: i + 1, ID: p.IDN, Title: p.REL["source_title"], Topic: p.REL["source_topic"]})
@@ -340,6 +382,14 @@ func (w *Worker) Step(ctx context.Context, batch int) (StepReport, error) {
 			cp.LastError = err.Error()
 			cp.Cursor = id
 			rep.Failed++
+			if errors.Is(err, reason.ErrModelTimeout) {
+				// Remember the timeout so the next try sends less text, and
+				// end the step: the next step starts with the next source
+				// instead of queueing more work on a model that is busy.
+				cp.Timeouts[id]++
+				_ = w.saveCheckpoint(cp)
+				break
+			}
 			_ = w.saveCheckpoint(cp)
 			continue
 		}
@@ -378,6 +428,7 @@ func (w *Worker) Step(ctx context.Context, batch int) (StepReport, error) {
 			rep.Links++
 			cp.Links++
 		}
+		delete(cp.Timeouts, id)
 		cp.Cursor = id
 		cp.Processed++
 		cp.LastError = ""
@@ -385,25 +436,6 @@ func (w *Worker) Step(ctx context.Context, batch int) (StepReport, error) {
 		rep.Processed++
 		if err := w.saveCheckpoint(cp); err != nil {
 			return rep, err
-		}
-	}
-	// Gap pass: no model call, bounded, runs even when the reasoner is down.
-	if ctx.Err() == nil {
-		gst, err := w.state()
-		if err != nil {
-			return rep, err
-		}
-		for _, c := range w.PlanGaps(gst, MaxGapsPerStep) {
-			if _, err := w.captureGap(ctx, c); err != nil {
-				return rep, err
-			}
-			rep.Gaps++
-			cp.Gaps++
-		}
-		if rep.Gaps > 0 {
-			if err := w.saveCheckpoint(cp); err != nil {
-				return rep, err
-			}
 		}
 	}
 	return rep, nil
