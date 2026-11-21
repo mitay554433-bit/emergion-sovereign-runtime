@@ -613,45 +613,40 @@ function collapseTraj(q,trs){const mem=new Map();for(const t of trs)for(const id
  for(const it of q){const t=mem.get(it.id);if(!t){out.push(it);continue}if(done.has(t.key))continue;done.add(t.key);out.push({id:t.newest_id,summary:trajLabel(t),traj:t})}
  for(const t of trs)if(!done.has(t.key)){done.add(t.key);out.push({id:t.newest_id,summary:trajLabel(t),traj:t})}return out}
 // </trajectory-rows>
-// <governed-accept> The ONLY write on this page. A human pressing Accept records a HUMAN_FINAL
-// APPROVE through the existing POST /decide route (fieldapi.Decide: gov.Decide with authority
-// HUMAN_FINAL, then reg.Accept), the same receipts `field decide <id> APPROVE <reason>` writes.
-// A reason is required. On loopback fieldd the bearer token is injected into
-// meta[name="fieldd-token"] and used automatically. The paste box is only a fallback
-// (kept in this browser's localStorage under fieldd.token). Nothing here accepts automatically.
+// <governed-accept> The ONLY write on this page. Every HUMAN_FINAL decision (one record or
+// many) goes through the Batch accept screen. Confirm is a double-press; there is no
+// native dialog, reason box or question. A silent reason is still sent
+// (HUMAN_FINAL double-press on /living · id · title). One record uses the existing POST
+// /decide payload; two or more use POST /decide-batch-human. On loopback fieldd the bearer
+// token is injected into meta[name="fieldd-token"] and used automatically. The paste box is
+// only a fallback (kept in this browser's localStorage under fieldd.token). Nothing here
+// accepts automatically.
 const TOKEN_KEY='fieldd.token';
 function injectedToken(){const m=document.querySelector('meta[name="fieldd-token"]');return (m&&m.getAttribute('content')||'').trim()}
 function savedToken(){const t=injectedToken();if(t)return t;try{return localStorage.getItem(TOKEN_KEY)||''}catch(e){return ''}}
 function storeToken(v){if(injectedToken())return;try{v?localStorage.setItem(TOKEN_KEY,v):localStorage.removeItem(TOKEN_KEY)}catch(e){}}
 function acceptBody(id,reason){return JSON.stringify({emergion_id:id,decision:'APPROVE',reason:reason})}
 function decideBody(id,reason,decision){return decision==='HOLD'?JSON.stringify({emergion_id:id,decision:'HOLD',reason:reason}):acceptBody(id,reason)}
-async function decideAtGOV(id,btn,decision){const tok=savedToken(),hold=decision==='HOLD';if(!tok){if(!injectedToken())alert('Paste the fieldd token first (from fieldd.token in the state directory).');return}
- const reason=prompt('HUMAN_FINAL reason for '+(hold?'holding ':'accepting ')+id+' (required):');if(reason===null)return;if(!reason.trim()){alert('A HUMAN_FINAL decision requires an explicit reason.');return}
- if(!confirm((hold?'Hold ':'Accept ')+id+'?\nThis records a HUMAN_FINAL '+(hold?'HOLD. The record stays on file and can be resumed.':'APPROVE and REG acceptance.')))return;
- if(btn)btn.disabled=true;
- try{const r=await fetch('/decide',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:decideBody(id,reason.trim(),hold?'HOLD':'APPROVE')});
-  if(r.status===401){storeToken('');alert(injectedToken()?'Token refused (401). Restart fieldd and refresh.':'Token refused (401). Paste the current fieldd token and retry.');if(selected)select(selected);return}
-  const res=await r.json().catch(()=>({error:'HTTP '+r.status}));if(!r.ok||res.error){alert(res.error||('HUMAN_FINAL decision was not accepted (HTTP '+r.status+').'));return}
-  await refreshAfterDecision([id]);const n=byID.get(id);if(n)select(n);else select(null)}
- catch(e){alert('HUMAN_FINAL decision could not be confirmed. Refresh before retrying.')}
- finally{if(btn)btn.disabled=false}}
+function decideAtGOV(id,btn,decision){const hold=decision==='HOLD';BS.kind='one';BS.value=id;BS.act=hold?'HOLD':'APPROVE';batchArm=null;
+ const P=$('hfbP');if(P)P.hidden=false;renderBatch();if(P)P.scrollIntoView({block:'center',behavior:'smooth'});
+ if(!savedToken()){const out=batchSink();out.textContent=injectedToken()?'Token missing from this page. Refresh.':'Paste the fieldd token first (Next Governed Step panel).'}}
 function acceptAtGOV(id,btn){return decideAtGOV(id,btn)}
 function holdAtGOV(id,btn){return decideAtGOV(id,btn,'HOLD')}
-function acceptButton(id){const b=el('button','acc','Accept');b.title='Record HUMAN_FINAL APPROVE for '+id+' (reason required)';b.onclick=e=>{e.stopPropagation();acceptAtGOV(id,b)};return b}
-function holdButton(id){const b=el('button','acc hold','Hold');b.title='Record HUMAN_FINAL HOLD for '+id+' (reason required)';b.onclick=e=>{e.stopPropagation();holdAtGOV(id,b)};return b}
+function acceptButton(id){const b=el('button','acc','Accept');b.title='HUMAN_FINAL APPROVE for '+id;b.onclick=e=>{e.stopPropagation();acceptAtGOV(id,b)};return b}
+function holdButton(id){const b=el('button','acc hold','Hold');b.title='HUMAN_FINAL HOLD for '+id;b.onclick=e=>{e.stopPropagation();holdAtGOV(id,b)};return b}
 function acceptControls(id){const w=el('div');const gen=isGeneratedRecord(id,(field&&field.AtGOV||{})[id],trajNow(proj,(field&&field.AtGOV)||{}));
  const acts=()=>{const f=el('div','tok');if(gen){const a=acceptButton(id);a.className='acc sec';f.append(holdButton(id),a)}else f.append(acceptButton(id));return f};
  if(gen&&injectedToken()){w.append(genTag());w.append(acts());return w}
  if(injectedToken()){w.append(acceptButton(id));return w}
  if(!savedToken()){const f=el('div','tok'),i=el('input');i.type='password';i.placeholder='paste fieldd token once';i.autocomplete='off';const s=el('button','acc','Save');s.onclick=()=>{const v=i.value.trim();if(v){storeToken(v);select(byID.get(id)||selected)}};f.append(i,s);w.append(f)}
  else{const f=acts(),fg=el('button','acc','Forget token');fg.style.background='none';fg.onclick=()=>{storeToken('');select(byID.get(id)||selected)};if(gen)w.append(genTag());f.append(fg);w.append(f)}return w}
-// Batch accept: one human double-press over many AtGOV records. The human picks a filter and sees
-// the exact count and a sample. The reason is pre-filled from the filter, count and sample (editable;
-// an edited reason is remembered in this browser). The first press arms the button as
-// "CONFIRM ACCEPT N" for 4 s; only a second press inside that window sends. The batch is the first
-// min(N,cap) matching records by IDN; the page sends those exact IDs with confirm_count = the shown
-// count to POST /decide-batch-human, where each record gets its own gov.Decide(HUMAN_FINAL) +
-// reg.Accept receipts and the server re-checks reason, count and cap. A single press never sends.
+// Batch accept: one human double-press over one or many AtGOV records. The human picks a filter
+// (or opens this panel from a single Accept/Hold) and sees the exact count and a sample. The
+// first press arms the button as "CONFIRM ACCEPT N" for 4 s; only a second press inside that
+// window sends. A single press never sends. The reason is filled silently and is not shown.
+// One record is posted to /decide; a larger set is posted to /decide-batch-human as
+// confirm_count = the shown count, where each record gets its own gov.Decide(HUMAN_FINAL) +
+// reg.Accept receipts and the server re-checks reason, count and cap.
 const REASON_KEY='fieldd.batchReason',BATCH_ARM_MS=4000;
 let batchCap=500,batchCapRead=false,batchBusy=false,batchArm=null,batchArmTimer=0;const BS={kind:'group',value:''};
 function batchMatch(em,f,fs){const r=(em&&em.r)||{};
@@ -680,7 +675,7 @@ const NO_TRAJ=[];function batchIndex(gov,acc,trs){trs=trs||NO_TRAJ;if(batchIdxCa
  idx.group=group;idx.groups=[...gc.values()].sort((a,b)=>b.count-a.count||(a.key<b.key?-1:1));
  batchIdxCache={gov,acc,trs,idx};return idx}
 // A group is accepted whole (sent in cap-sized chunks); other filters take the first cap records.
-function batchSelect(gov,f,cap,idx){const whole=f.kind==='group',ids=Object.keys(gov||{}).filter(id=>whole?!!f.value&&!!idx&&idx.group.get(id)===f.value:batchMatch(gov[id],f,idx&&idx.get(id))).sort();return {total:ids.length,whole,ids:whole?ids:ids.slice(0,Math.max(0,cap))}}
+function batchSelect(gov,f,cap,idx){if(f&&f.kind==='one'){const id=f.value,ok=!!(id&&gov&&gov[id]);return {total:ok?1:0,whole:false,ids:ok?[id]:[]}}const whole=f.kind==='group',ids=Object.keys(gov||{}).filter(id=>whole?!!f.value&&!!idx&&idx.group.get(id)===f.value:batchMatch(gov[id],f,idx&&idx.get(id))).sort();return {total:ids.length,whole,ids:whole?ids:ids.slice(0,Math.max(0,cap))}}
 function batchChunks(ids,cap){const out=[];for(let i=0;i<ids.length;i+=Math.max(1,cap))out.push(ids.slice(i,i+Math.max(1,cap)));return out}
 function batchOptions(gov,idx){const o={facet:{},class:{},target:{}},inc=(m,k)=>{if(k)m[k]=(m[k]||0)+1};
  for(const [id,em] of Object.entries(gov||{})){const r=(em&&em.r)||{};for(const f of ((idx&&idx.get(id))||[]))inc(o.facet,f);inc(o.class,String(r.source_kind||'').trim());inc(o.target,String(r.target_emergion||'').trim())}
@@ -716,6 +711,7 @@ function batchLabel(f,idx){if(f.kind==='group'){const g=idx&&idx.groups.find(g=>
 function titlePrefix(gov,ids){const c=new Map();for(const id of ids){const t=String(batchTitle(gov[id],id)).trim(),p=(t.includes(':')?t.slice(0,t.indexOf(':')):t.split(/\s+/).slice(0,3).join(' ')).trim();if(p)c.set(p,(c.get(p)||0)+1)}
  let best='',n=0;for(const [p,k] of c)if(k>n||(k===n&&p<best)){best=p;n=k}return best}
 function autoReason(gov,f,ids,idx){const p=titlePrefix(gov,ids.slice(0,2000));return 'Batch HUMAN_FINAL: '+batchLabel(f,idx)+' · '+ids.length+' record'+(ids.length===1?'':'s')+(p?' · sample '+p:'')}
+function silentLivingReason(ids,decision){const gov=(field&&field.AtGOV)||{},bits=['HUMAN_FINAL double-press on /living'];if(decision==='HOLD')bits.push('HOLD');const parts=[];for(const id of (ids||[]).slice(0,3)){const t=String(batchTitle(gov[id],id)||'').trim();parts.push(t&&t!==id?id+' · '+t:id)}if(ids&&ids.length>3)parts.push('+'+ (ids.length-3));return bits.concat(parts).join(' · ')}
 function savedReason(){try{return localStorage.getItem(REASON_KEY)||''}catch(e){return ''}}
 function storeReason(v){try{v?localStorage.setItem(REASON_KEY,v):localStorage.removeItem(REASON_KEY)}catch(e){}}
 function batchKey(ids){return ids.length+'|'+(ids[0]||'')+'|'+(ids[ids.length-1]||'')}
@@ -726,6 +722,13 @@ async function batchAccept(ids,reason,out,decision){const tok=savedToken();const
  if(!tok){out.textContent=injectedToken()?'Token missing from this page. Refresh.':'Paste the fieldd token first (Next Governed Step panel).';return}
  if(!reason.trim()){out.textContent='A HUMAN_FINAL reason is required.';return}
  if(!ids.length)return;
+ if(ids.length===1){const id=ids[0];batchBusy=true;out.textContent='Recording HUMAN_FINAL '+(hold?'HOLD':'APPROVE')+'…';
+  try{const r=await fetch('/decide',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:decideBody(id,reason.trim(),hold?'HOLD':'APPROVE')});
+   if(r.status===401){storeToken('');out.textContent=injectedToken()?'Token refused (401). Restart fieldd and refresh.':'Token refused (401). Paste the current fieldd token and retry.';return}
+   const res=await r.json().catch(()=>({error:'HTTP '+r.status}));if(!r.ok||res.error){out.textContent=res.error||('HUMAN_FINAL decision was not accepted (HTTP '+r.status+').');return}
+   out.textContent='Done · '+verb+' '+id;await refreshAfterDecision([id])}
+  catch(e){out.textContent='HUMAN_FINAL decision could not be confirmed. Refresh before retrying.'}
+  finally{batchBusy=false;renderBatch()}return}
  // One press, then cap-sized chunks in order; all chunks share the first chunk's batch id. Each
  // chunk is checked by the server (reason, count, cap). The first error or refusal stops it.
  batchBusy=true;let bid='',acc=0,skip=0,done=[];const total=ids.length,prog=()=>verb+' '+fmt(acc)+' / '+fmt(total)+(skip?' · '+fmt(skip)+' already '+verb:'')+(bid?' · '+bid:'');
@@ -746,23 +749,25 @@ function armAndSend(key,ids,reason,decision){if(batchBusy||!ids||!ids.length)ret
 function renderBatch(){const P=$('hfbP'),B=$('hfb');if(!P||!B)return;const gov=(field&&field.AtGOV)||{},n=Object.keys(gov).length;P.hidden=!n;if(!n)return;readBatchCap();
  if(!$('bKind')){const sel=el('div','bsel'),k=el('select'),v=el('select');k.id='bKind';v.id='bVal';k.setAttribute('aria-label','Batch filter');v.setAttribute('aria-label','Batch filter value');
   for(const [x,t] of [['group','Group (target · kind)'],['tap','Current tap filter'],['all','All AtGOV'],['facet','Facet'],['class','Class (source_kind)'],['target','Target emergion']]){const o=el('option',null,t);o.value=x;k.append(o)}
-  k.onchange=()=>{BS.kind=k.value;BS.value='';batchArm=null;renderBatch()};v.onchange=()=>{BS.value=v.value;batchArm=null;renderBatch()};sel.append(k,v);
+  k.onchange=()=>{BS.kind=k.value;BS.value='';BS.act=undefined;batchArm=null;renderBatch()};v.onchange=()=>{BS.value=v.value;batchArm=null;renderBatch()};sel.append(k,v);
   const sum=el('div','bsum');sum.id='bSum';const sam=el('ul','bsam');sam.id='bSam';
-  const inp=el('div','bin'),rs=el('input'),go=el('button','acc','Accept batch');rs.id='bReason';rs.placeholder='HUMAN_FINAL reason (pre-filled)';rs.autocomplete='off';rs.setAttribute('aria-label','HUMAN_FINAL reason');go.id='bGo';
-  rs.oninput=()=>{rs.dataset.auto='';storeReason(rs.value.trim())};
+  const inp=el('div','bin'),go=el('button','acc','Accept batch');go.id='bGo';
   const res=el('div','bres');res.id='bRes';
   const hb=el('button','acc hold','Hold the rest');hb.id='bHold';hb.hidden=true;const warn=el('div','twarn',TRAJ_WARN);warn.id='bWarn';warn.hidden=true;
   const expl=el('div','gexpl',GEN_EXPLAIN);expl.id='bExpl';expl.hidden=true;
   const allHint=el('div','');allHint.id='bAll';const ha=el('button','acc hold','Hold all trajectories');ha.id='bHoldAll';ha.hidden=true;
   const hn=el('button','acc hold','Hold all newest');hn.id='bHoldNewest';hn.hidden=true;
   const plan=()=>{const g=(field&&field.AtGOV)||{},f=batchFilter(BS.kind,BS.value,filter),idx=batchIndex(g,(field&&field.Accepted)||{},trajNow(proj,g));return batchPlan(batchSelect(g,f,batchCap,idx),f,idx)};
-  go.onclick=()=>{const pl=plan();armAndSend('A|'+batchKey(pl.accept),pl.accept,rs.value)};
-  hb.onclick=()=>{const pl=plan();armAndSend('H|'+batchKey(pl.hold),pl.hold,rs.value,'HOLD')};
+  go.onclick=()=>{const pl=plan();const hold=BS.kind==='one'&&BS.act==='HOLD';const ids=hold?(pl.hold.length?pl.hold:pl.accept):pl.accept;armAndSend((hold?'H|':'A|')+batchKey(ids),ids,silentLivingReason(ids,hold?'HOLD':undefined),hold?'HOLD':undefined)};
+  hb.onclick=()=>{const pl=plan();armAndSend('H|'+batchKey(pl.hold),pl.hold,silentLivingReason(pl.hold,'HOLD'),'HOLD')};
   ha.onclick=()=>{const ids=holdAllPlan(trajNow(proj,(field&&field.AtGOV)||{})).hold;armAndSend('HA|'+batchKey(ids),ids,HOLD_ALL_REASON,'HOLD')};
   hn.onclick=()=>{const ids=holdAllNewestPlan(trajNow(proj,(field&&field.AtGOV)||{})).hold;armAndSend('HN|'+batchKey(ids),ids,HOLD_ALL_NEWEST_REASON,'HOLD')};
-  inp.append(rs,go,hb);B.append(sel,sum,expl,warn,allHint,sam,inp,hn,ha,res)}
- const k=$('bKind'),v=$('bVal');k.value=BS.kind;const idx=batchIndex(gov,(field&&field.Accepted)||{},trajNow(proj,gov)),opts=batchOptions(gov,idx),fc=new Map(opts.facet);opts.group=idx.groups.map(g=>[g.key,g.count,g.label]);
- if(BS.kind==='group'||BS.kind==='facet'||BS.kind==='class'||BS.kind==='target'){const list=opts[BS.kind].slice(0,BS.kind==='group'?200:60);BS.value=nextBatchValue(BS.kind,BS.value,idx,opts);
+  inp.append(go,hb);B.append(sel,sum,expl,warn,allHint,sam,inp,hn,ha,res)}
+ const k=$('bKind'),v=$('bVal');
+ const oneOpt=[...k.options].find(o=>o.value==='one');if(BS.kind==='one'){if(!oneOpt){const o=el('option',null,'This record');o.value='one';k.append(o)}}else if(oneOpt)oneOpt.remove();
+ k.value=BS.kind==='one'?'one':BS.kind;if(BS.kind!=='one')BS.act=undefined;const idx=batchIndex(gov,(field&&field.Accepted)||{},trajNow(proj,gov)),opts=batchOptions(gov,idx),fc=new Map(opts.facet);opts.group=idx.groups.map(g=>[g.key,g.count,g.label]);
+ if(BS.kind==='one'){const id=BS.value;v.replaceChildren();const o=el('option',null,(id||'')+' · '+batchTitle(gov[id],id||''));o.value=id||'';v.append(o);v.value=id||'';v.disabled=true}
+ else if(BS.kind==='group'||BS.kind==='facet'||BS.kind==='class'||BS.kind==='target'){const list=opts[BS.kind].slice(0,BS.kind==='group'?200:60);BS.value=nextBatchValue(BS.kind,BS.value,idx,opts);
   v.replaceChildren();const real=[],gen=[];for(const row of list){if(BS.kind==='group'&&(idx.groups.find(g=>g.key===row[0])||{}).traj)gen.push(row);else real.push(row)}
   const add=(parent,rows)=>{for(const [x,c,lb] of rows){const o=el('option',null,(BS.kind==='group'?(String(x).startsWith('traj:')?lb:lb+' · '+fmt(c)):BS.kind==='facet'?facetName(x)+' · '+fmt(c)+' waiting':x+' · '+fmt(c)));o.value=x;parent.append(o)}};
   add(v,real);if(gen.length){const og=el('optgroup');og.label='Generated';add(og,gen);v.append(og)}v.value=BS.value;v.disabled=false}
@@ -774,10 +779,10 @@ function renderBatch(){const P=$('hfbP'),B=$('hfb');if(!P||!B)return;const gov=(
  if(s.ids.length>10)sam.append(el('li',null,'… and '+fmt(s.ids.length-10)+' more'));
  if(!s.ids.length)sam.append(el('li','bhint',f.kind==='facet'?'No waiting records point at this facet':'No waiting records match this filter'));
  if(s.whole&&s.ids.length>10)sam.lastChild.textContent='… and '+fmt(s.ids.length-10)+' more in this group';
- const rs=$('bReason');if(document.activeElement!==rs){const kept=savedReason();rs.value=kept||(pl.traj?'Trajectory HUMAN_FINAL: '+trajLabel(pl.traj)+' · newest '+(pl.accept[0]||''):autoReason(gov,f,s.ids,idx));rs.dataset.auto=kept?'':'1'}
  const ha=holdAllPlan(trajNow(proj,gov)),hn=holdAllNewestPlan(trajNow(proj,gov)),ka='A|'+batchKey(pl.accept),kh='H|'+batchKey(pl.hold),kha='HA|'+batchKey(ha.hold),khn='HN|'+batchKey(hn.hold);if(batchArm&&batchArm.key!==ka&&batchArm.key!==kh&&batchArm.key!==kha&&batchArm.key!==khn)batchArm=null;
  const go=$('bGo'),hb=$('bHold'),haBtn=$('bHoldAll'),hnBtn=$('bHoldNewest'),allHint=$('bAll'),armA=!!batchArm&&batchArm.key===ka,armH=!!batchArm&&batchArm.key===kh,armHA=!!batchArm&&batchArm.key===kha,armHN=!!batchArm&&batchArm.key===khn;
- go.textContent=armA?(pl.traj?'Confirm accept newest':'Confirm accept '+fmt(pl.accept.length)):(pl.traj?'Accept newest':'Accept batch');go.classList.toggle('arm',armA);go.disabled=!pl.accept.length||batchBusy;
+ const oneHold=BS.kind==='one'&&BS.act==='HOLD';const goN=oneHold?(pl.hold.length||pl.accept.length):pl.accept.length;const goArm=oneHold?armH:armA;
+ go.textContent=goArm?(pl.traj&&!oneHold?'Confirm accept newest':(oneHold?'Confirm hold ':'Confirm accept ')+fmt(goN)):(pl.traj&&!oneHold?'Accept newest':(oneHold?'Hold':(s.ids.length===1?'Accept':'Accept batch')));go.classList.toggle('arm',goArm);go.disabled=!pl.accept.length||batchBusy;
  hb.hidden=!pl.traj||!pl.hold.length;hb.textContent=armH?'Confirm hold '+fmt(pl.hold.length):'Hold the rest ('+fmt(pl.hold.length)+')';hb.classList.toggle('arm',armH);hb.disabled=!pl.hold.length||batchBusy;
  if(allHint){allHint.hidden=!ha.hold.length;if(ha.hold.length){allHint.replaceChildren();allHint.append(el('b',null,fmt(ha.trajCount)),document.createTextNode(' trajector'+(ha.trajCount===1?'y':'ies')+' · hold rest of each = '),el('b',null,fmt(ha.hold.length)),document.createTextNode(' (newest of each stays AtGOV)'))}}
  if(haBtn){haBtn.hidden=!ha.hold.length;haBtn.textContent=armHA?'CONFIRM HOLD '+fmt(ha.hold.length):'Hold all trajectories ('+fmt(ha.hold.length)+')';haBtn.title=fmt(ha.trajCount)+' trajectories · hold '+fmt(ha.hold.length)+' records, keep newest of each';haBtn.classList.toggle('arm',armHA);haBtn.disabled=!ha.hold.length||batchBusy}
@@ -993,12 +998,12 @@ let autoErr='';
 // read the same object; the failure is shown in the auto line instead of blanking one cell.
 async function pollAuto(){try{autoSt=await getJSON('/auto/status');autoErr=''}catch(e){autoErr=String(e&&e.message||e||'error')}renderAuto()}
 function policyCell(p){return p&&p.effective?'ON':'OFF'}
-async function autoPost(path,body){const tok=savedToken();if(!tok){alert('The fieldd token is needed. Open /living from this phone (127.0.0.1) or paste the token on a record.');return null}
- try{const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:JSON.stringify(body)});const j=await r.json().catch(()=>({error:'HTTP '+r.status}));if(!r.ok||j.error){alert(j.error||('HTTP '+r.status));return null}return j}
- catch(e){alert('Could not reach fieldd. Refresh before retrying.');return null}}
+async function autoPost(path,body){const tok=savedToken();if(!tok){setText('auLine','The fieldd token is needed. Open /living from this phone (127.0.0.1) or paste the token on a record.');return null}
+ try{const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:JSON.stringify(body)});const j=await r.json().catch(()=>({error:'HTTP '+r.status}));if(!r.ok||j.error){setText('auLine',j.error||('HTTP '+r.status));return null}return j}
+ catch(e){setText('auLine','Could not reach fieldd. Refresh before retrying.');return null}}
 function autoPolicyPress(){const on=!(autoSt&&autoSt.policy&&autoSt.policy.effective);
- const why=prompt('HUMAN_FINAL reason for turning the A01-AUTO auto-accept policy '+(on?'ON':'OFF')+' (required):',on?'Michael: low-risk records auto-accept under A01-AUTO-1':'Michael: pause auto-accept');if(why===null)return;if(!why.trim()){alert('A HUMAN_FINAL press needs a reason.');return}
- autoPost('/auto/policy',{state:on?'on':'off',reason:why.trim()}).then(j=>{if(j){pollAuto();refresh(true)}})}
+ const why='HUMAN_FINAL double-press on /living · policy '+(on?'ON':'OFF');
+ autoPost('/auto/policy',{state:on?'on':'off',reason:why}).then(j=>{if(j){pollAuto();refresh(true)}})}
 function autoWorkerPress(){const on=!(autoSt&&autoSt.worker&&autoSt.worker.on);autoPost('/auto/worker',{on:on}).then(j=>{if(j)pollAuto()})}
 {const pb=$('auPolB'),wb=$('auWkB'),ms=$('auModeS');
  if(pb)pb.onclick=()=>armTap(pb,(autoSt&&autoSt.policy&&autoSt.policy.effective)?'policy OFF':'policy ON',autoPolicyPress);
@@ -1006,8 +1011,7 @@ function autoWorkerPress(){const on=!(autoSt&&autoSt.worker&&autoSt.worker.on);a
  if(ms)ms.onchange=()=>{const m=ms.value;autoPost('/auto/worker',{mode:m}).then(j=>{if(!j&&autoSt)ms.value=autoSt.worker.mode;pollAuto()})}}
 // One-press HUMAN_FINAL undo of an AUTO_POLICY accept (REVERT to HELD), shown on the record.
 function undoAutoButton(id){const b=el('button','acc hold','Undo auto-accept');b.title='HUMAN_FINAL REVERT: move '+id+' from REG-accepted to HELD (append-only)';
- b.onclick=e=>{e.stopPropagation();armTap(b,'undo',()=>{const why=prompt('HUMAN_FINAL reason for undoing the auto-accept of '+id+' (required):');if(why===null||!why.trim())return;
-  autoPost('/auto/undo',{emergion_id:id,reason:why.trim()}).then(j=>{if(j){pollAuto();refreshAfterDecision([id]).then(()=>select(null))}})})};return b}
+ b.onclick=e=>{e.stopPropagation();armTap(b,'undo',()=>{autoPost('/auto/undo',{emergion_id:id,reason:'HUMAN_FINAL double-press on /living · undo '+id}).then(j=>{if(j){pollAuto();refreshAfterDecision([id]).then(()=>select(null))}})})};return b}
 // </governed-auto>
 
 /* ---------- data ---------- */
