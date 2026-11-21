@@ -119,10 +119,11 @@ blaming any source. Control and checkpoint live in `<state>-work/`
 
 ## Reasoner switch
 
-- `local` (default): `llama-completion` (or `GEMMA_BIN`), all cores
-  (`GEMMA_THREADS` overrides), short 4-line prompt with the file text, kept loaded in one `llama-server`
-  (127.0.0.1:8897, `-c 2048`; falls back to `llama-completion -c 2048 -no-cnv`),
-  64 tokens (`UNIFUSION_WORKER_TOKENS`), 20-minute limit
+- `local` (default): kept loaded in one `llama-server` that fieldd starts
+  (127.0.0.1:8897, `-c 2048`, `-t 4`; `GEMMA_THREADS` overrides; falls back to
+  `llama-completion -c 2048 -no-cnv`, never `llama-cli`), short 4-line prompt
+  capped at 1200 characters (`UNIFUSION_LLAMA_PROMPT_CHARS`), 64 tokens
+  (`UNIFUSION_WORKER_TOKENS`), 5-minute limit per call
   (`UNIFUSION_WORKER_TIMEOUT_SECONDS`).
 - `online`: an OpenAI-compatible endpoint: `UNIFUSION_REASONER_URL` (base,
   e.g. `https://host/v1`), `UNIFUSION_REASONER_MODEL`, key from

@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -120,7 +119,7 @@ func (s *ServerInsighter) setUsed(n string) { s.mu.Lock(); s.lastUsed = n; s.mu.
 func (s *ServerInsighter) ServerArgs() []string {
 	threads := s.Exec.Threads
 	if threads <= 0 {
-		threads = runtime.NumCPU()
+		threads = LocalThreads()
 	}
 	c := s.Ctx
 	if c <= 0 {

@@ -41,12 +41,32 @@ var ErrModelTimeout = errors.New("model timeout")
 const DefaultWorkerTimeoutSeconds = 300
 
 // DefaultLocalPromptChars caps the whole on-device prompt (instructions,
-// title, tags, peers and file text). Gemma on a phone CPU evaluates roughly
-// 3-4 characters per token, so this stays well inside the 2048-token
-// context with room for the 64-token answer.
-const DefaultLocalPromptChars = 2400
+// title, tags, peers and file text). Gemma on a phone CPU was measured at
+// about 1.25 prompt tokens/s with 8 threads; at roughly 3-4 characters per
+// token, 1200 characters (~300-400 tokens, the instruction prefix reused by
+// cache_prompt) fits inside the per-call timeout.
+const DefaultLocalPromptChars = 1200
 
-// LocalPromptChars reads UNIFUSION_LLAMA_PROMPT_CHARS (default 2400, at
+// DefaultLocalThreads is the llama.cpp thread count when GEMMA_THREADS is
+// unset: 4, or fewer on a smaller CPU. Phones have 4 fast cores; -t 8 adds
+// the slow efficiency cores and every step waits for them.
+const DefaultLocalThreads = 4
+
+// LocalThreads reads GEMMA_THREADS (default DefaultLocalThreads, capped at
+// the CPU count when unset).
+func LocalThreads() int {
+	def := DefaultLocalThreads
+	if n := runtime.NumCPU(); n > 0 && n < def {
+		def = n
+	}
+	t := envInt("GEMMA_THREADS", def)
+	if t <= 0 {
+		t = def
+	}
+	return t
+}
+
+// LocalPromptChars reads UNIFUSION_LLAMA_PROMPT_CHARS (default 1200, at
 // least 600).
 func LocalPromptChars() int {
 	n := envInt("UNIFUSION_LLAMA_PROMPT_CHARS", DefaultLocalPromptChars)
@@ -353,7 +373,7 @@ func LocalInsighterFromEnv() LocalInsighter {
 	return LocalInsighter{
 		Binary:    bin,
 		Model:     discoverModel(os.Getenv("GEMMA_MODEL")),
-		Threads:   envInt("GEMMA_THREADS", runtime.NumCPU()),
+		Threads:   LocalThreads(),
 		MaxTokens: envInt("UNIFUSION_WORKER_TOKENS", 64),
 		Timeout:   time.Duration(envInt("UNIFUSION_WORKER_TIMEOUT_SECONDS", DefaultWorkerTimeoutSeconds)) * time.Second,
 	}
@@ -365,7 +385,7 @@ func (l LocalInsighter) Name() string { return "local-gemma" }
 func (l LocalInsighter) Args(prompt string) []string {
 	threads := l.Threads
 	if threads <= 0 {
-		threads = runtime.NumCPU()
+		threads = LocalThreads()
 	}
 	n := l.MaxTokens
 	if n <= 0 {
