@@ -135,6 +135,8 @@ func (r *Runtime) LinkedProjectionJSON() (string, error) {
 	}
 	lp := proj.Linked(st)
 	lp.Trajectories = proj.Trajectories(st, events)
+	tm := proj.Temporal(st, events)
+	lp.Temporal = &tm
 	b, err := json.Marshal(lp)
 	if err != nil {
 		return "", err

@@ -52,6 +52,12 @@ type LinkedProjection struct {
 	// Gaps groups worker SOURCE_GAP records by gap class with accepted,
 	// AtGOV and held counts. Derived, read-only; HUMAN_FINAL decides each.
 	Gaps []LinkedGapGroup `json:"gaps"`
+	// GapSummary is the real SOURCE_GAP totals (every GOV state) and the
+	// accepted insights the worker gap pass reads. Derived, read-only.
+	GapSummary LinkedGapSummary `json:"gap_summary"`
+	// Temporal is the live temporal view derived from the ledger events;
+	// filled by the caller that holds the events. Derived, read-only.
+	Temporal *LinkedTemporal `json:"temporal,omitempty"`
 }
 
 type LinkedFacetGroup struct {
@@ -155,6 +161,7 @@ func Linked(st core.State) LinkedProjection {
 	out.DerivedFacetGroups = derivedTopicGroups(byTopic, srcByID)
 	out.SourceRefGroups = sourceRefGroups(st)
 	out.Gaps = gapGroups(st)
+	out.GapSummary = gapSummary(st)
 
 	for _, s := range spatial {
 		em := st.Accepted[s.ID]
