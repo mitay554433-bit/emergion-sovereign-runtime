@@ -99,6 +99,8 @@ func newHTTPMuxOn(rt *fieldapi.Runtime, token string, loopback bool, bindAddr st
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
 
+	mux.HandleFunc("/sources", mutate(handlePostSource(rt)))
+
 	mux.HandleFunc("/decide", mutate(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
