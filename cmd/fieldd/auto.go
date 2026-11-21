@@ -110,6 +110,9 @@ func (e *autoEngine) once(ctx context.Context) {
 		log.Printf("worker: %v", err)
 		return
 	}
+	if rep.Gaps > 0 {
+		log.Printf("worker: proposed %d SOURCE_GAP records AtGOV (HUMAN_FINAL)", rep.Gaps)
+	}
 	if rep.Processed+rep.Failed > 0 {
 		log.Printf("worker: processed %d insights %d links %d failed %d pending %d via %s", rep.Processed, rep.Insights, rep.Links, rep.Failed, rep.Pending, rep.Reasoner)
 		if _, err := e.rt.ApplyAutoPolicy(fieldapi.AutoPolicyDefaultBatch, e.sourcesRoot); err != nil {
