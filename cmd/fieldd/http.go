@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"emergion-sovereign-runtime/pkg/fieldapi"
 )
@@ -26,6 +27,19 @@ func newHTTPMuxOn(rt *fieldapi.Runtime, token string, loopback bool, bindAddr st
 	mutate := func(fn http.HandlerFunc) http.HandlerFunc {
 		return requireBearer(token, fn)
 	}
+
+	// /healthz is the watchdog's liveness probe: it answers from memory and
+	// never reads the ledger, so a busy build or a slow disk cannot make a
+	// live fieldd look dead.
+	mux.HandleFunc("/healthz", protect(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet && req.Method != http.MethodHead {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "pid": os.Getpid(), "uptime_seconds": int(time.Since(processStart).Seconds())})
+	}))
 
 	mux.HandleFunc("/status", protect(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodGet {
@@ -145,20 +159,25 @@ func newHTTPMuxOn(rt *fieldapi.Runtime, token string, loopback bool, bindAddr st
 		}
 	})
 
+	// /field.json is served from a cache rebuilt in the background when the
+	// ledger changes (see fieldcache.go), so a slow projection build never
+	// holds a request for its whole duration.
+	fc := newFieldCache(rt, "outputs")
 	mux.HandleFunc("/field.json", protect(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		receipt, err := rt.RenderCurrent("outputs")
+		snap, fresh, err := fc.get(req.Context())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("X-Field-Tip", receipt.TipHash)
+		snap.setHeaders(w.Header(), fresh)
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
-		http.ServeFile(w, req, filepath.Join("outputs", "field.json"))
+		w.Header().Set("Content-Length", strconv.Itoa(len(snap.body)))
+		_, _ = w.Write(snap.body)
 	}))
 
 	// Read-only linked projection from the projection engine (proj.Linked).
@@ -237,19 +256,30 @@ func newHTTPMuxOn(rt *fieldapi.Runtime, token string, loopback bool, bindAddr st
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		receipt, err := rt.RenderCurrent("outputs")
+		// field.html is written by the same background build as field.json.
+		snap, fresh, err := fc.get(req.Context())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("X-Field-Tip", receipt.TipHash)
+		snap.setHeaders(w.Header(), fresh)
 		http.ServeFile(w, req, filepath.Join("outputs", "field.html"))
 	}))
 
 	mux.Handle("/deliverables/", maybeRequireBearerHandler(token, loopback, http.StripPrefix("/deliverables/", http.FileServer(http.Dir(filepath.Join("outputs", "deliverables"))))))
 
+	if warmFieldOnStart {
+		fc.warm()
+	}
 	return mux
 }
+
+// processStart is reported by /healthz.
+var processStart = time.Now()
+
+// warmFieldOnStart starts the first field build when the mux is created.
+// main sets it; tests leave it off so a build never runs unasked.
+var warmFieldOnStart = false
 
 const livingTokenMetaEmpty = `<meta name="fieldd-token" content="">`
 

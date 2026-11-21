@@ -109,6 +109,7 @@ func main() {
 	}()
 
 	if *httpAddr != "" {
+		warmFieldOnStart = true
 		mux := newHTTPMuxOn(rt, token, loopback, *httpAddr)
 		// Bind before serving: when another process (for example an older
 		// fieldd) already holds the address, exit loudly instead of running
@@ -128,7 +129,7 @@ func main() {
 	}
 
 	go autoEng.run(ctx)
-	log.Printf("A01-AUTO policy and worker loop running (both OFF until switched on); work dir %s", *workDir)
+	log.Printf("A01-AUTO policy and worker loop running (%s); work dir %s", autoEng.describe(), *workDir)
 
 	<-ctx.Done()
 	log.Println("Shutting down Field Sovereign Daemon gracefully...")

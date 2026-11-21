@@ -59,6 +59,30 @@ func newAutoEngine(rt *fieldapi.Runtime, workDir string, sw *reason.SwitchInsigh
 	return e
 }
 
+// describe reports the persisted switch states for the startup log. The
+// policy switch is a HUMAN_FINAL record in the ledger and the worker switch
+// is worker.json in the work dir, so both survive a restart.
+func (e *autoEngine) describe() string {
+	c := e.w.LoadControl()
+	worker := "worker OFF"
+	if c.On {
+		worker = "worker ON"
+	}
+	worker += ", mode " + c.Mode
+	st, err := e.rt.AutoStatusOf(e.w, e.sw)
+	if err != nil {
+		return "policy unknown (" + err.Error() + "), " + worker
+	}
+	policy := "policy OFF"
+	switch {
+	case st.Policy.Effective:
+		policy = "policy ON"
+	case st.Policy.On:
+		policy = "policy ON but not effective (switch is for another policy version)"
+	}
+	return policy + ", " + worker + "; both persist across restarts"
+}
+
 func (e *autoEngine) poke() {
 	select {
 	case e.kick <- struct{}{}:
