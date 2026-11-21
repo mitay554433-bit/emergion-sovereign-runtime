@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"emergion-sovereign-runtime/internal/adapters"
@@ -25,6 +27,12 @@ import (
 type Runtime struct {
 	store    *store.Store
 	reasoner reason.Reasoner
+
+	// statusMu guards the Status cache: the ledger-derived counts are
+	// reused until the ledger changes (see LedgerStamp).
+	statusMu    sync.Mutex
+	statusStamp string
+	statusCache analytics.Metrics
 }
 
 func Open(stateRoot string, reasoner reason.Reasoner) (*Runtime, error) {
@@ -134,13 +142,34 @@ func (r *Runtime) LinkedProjectionJSON() (string, error) {
 	return string(b), nil
 }
 
+// Status measures the current state. The ledger-derived counts are cached
+// until the ledger changes, so a frequent /status probe does not re-read
+// and replay the whole ledger each time; the live fields (CPU, goroutines,
+// measured_at) are refreshed on every call.
 func (r *Runtime) Status() (analytics.Metrics, error) {
+	stamp := r.store.LedgerStamp()
+	r.statusMu.Lock()
+	if stamp != "" && stamp == r.statusStamp {
+		m := r.statusCache
+		r.statusMu.Unlock()
+		m.CPU, m.GoRoutines, m.MeasuredAt = runtime.NumCPU(), runtime.NumGoroutine(), time.Now().UTC()
+		return m, nil
+	}
+	r.statusMu.Unlock()
 	st, err := r.state()
 	if err != nil {
 		return analytics.Metrics{}, err
 	}
-	return analytics.Measure(st), nil
+	m := analytics.Measure(st)
+	r.statusMu.Lock()
+	r.statusStamp, r.statusCache = stamp, m
+	r.statusMu.Unlock()
+	return m, nil
 }
+
+// LedgerStamp is a cheap read-only change marker for the ledger (size and
+// modification time of field.cosl). It changes whenever an event is appended.
+func (r *Runtime) LedgerStamp() string { return r.store.LedgerStamp() }
 func (r *Runtime) Decide(id, decision, reasonText string) error {
 	st, err := r.state()
 	if err != nil {

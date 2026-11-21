@@ -556,3 +556,14 @@ func staleLock(path string) bool {
 	}
 	return !pidAlive(pid)
 }
+
+// LedgerStamp is a cheap change marker for the COSL ledger: the size and
+// modification time of field.cosl. The ledger is append-only, so any new
+// event changes it. Read-only; "missing" when there is no ledger yet.
+func (s *Store) LedgerStamp() string {
+	fi, err := os.Stat(s.logPath())
+	if err != nil {
+		return "missing"
+	}
+	return strconv.FormatInt(fi.Size(), 10) + ":" + strconv.FormatInt(fi.ModTime().UnixNano(), 10)
+}

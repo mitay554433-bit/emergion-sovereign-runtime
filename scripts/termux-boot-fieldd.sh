@@ -24,7 +24,12 @@ mkdir -p "$TMPDIR"
 
 say() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$LOG"; }
 
-up() { [ "$(curl -s -o /dev/null -m 3 -w '%{http_code}' "http://$ADDR/status" 2>/dev/null)" = "200" ]; }
+# /healthz answers from memory; an older build without it falls back to /status.
+up() {
+  code=$(curl -s -o /dev/null -m 8 -w '%{http_code}' "http://$ADDR/healthz" 2>/dev/null)
+  [ "$code" = "404" ] && code=$(curl -s -o /dev/null -m 8 -w '%{http_code}' "http://$ADDR/status" 2>/dev/null)
+  [ "$code" = "200" ]
+}
 
 open_living() {
   case " $* " in *" --open "*) command -v termux-open-url >/dev/null 2>&1 && termux-open-url "$URL" ;; esac

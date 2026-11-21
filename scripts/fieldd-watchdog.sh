@@ -9,8 +9,11 @@
 # The loop:
 #   - takes termux-wake-lock if that command exists
 #   - rebuilds $TMPDIR/fieldd when it is missing or built from a different commit
-#   - checks http://$FIELDD_ADDR/status every 10 seconds
-#   - restarts fieldd with only `-http` (never -state) if the status is not 200
+#   - probes http://$FIELDD_ADDR/healthz every 10 seconds (falls back to
+#     /status on an older build without /healthz), curl timeout 8 seconds
+#   - restarts fieldd with only `-http` (never -state) only after 3
+#     consecutive failed probes, or at once when its process is gone; every
+#     failed probe is logged with the reason (timeout, refused, HTTP code)
 #   - backs off after repeated failed restarts
 #   - logs to $TMPDIR/fieldd-watchdog.log, capped at 1 MiB
 #
@@ -18,7 +21,9 @@
 # never exits with status 1.
 #
 # Settings (all optional): UNIFUSION_REPO, FIELDD_ADDR (default 127.0.0.1:8899),
-# FIELDD_WATCHDOG_INTERVAL (default 10), FIELDD_WATCHDOG_LOG.
+# FIELDD_WATCHDOG_INTERVAL (default 10), FIELDD_WATCHDOG_LOG,
+# FIELDD_WATCHDOG_PROBE_TIMEOUT (curl seconds, default 8),
+# FIELDD_WATCHDOG_FAILS (consecutive failed probes before a restart, default 3).
 
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 PATH="$PREFIX/bin:$HOME/go/bin:$PATH"
@@ -33,6 +38,8 @@ LOCKDIR="$TMPDIR/fieldd-watchdog.lock"
 PIDFILE="$TMPDIR/fieldd-watchdog.pid"
 CHILD_PIDFILE="$TMPDIR/fieldd-watchdog-child.pid"
 INTERVAL="${FIELDD_WATCHDOG_INTERVAL:-10}"
+PROBE_TIMEOUT="${FIELDD_WATCHDOG_PROBE_TIMEOUT:-8}"
+MAX_MISSES="${FIELDD_WATCHDOG_FAILS:-3}"
 SCRIPT="$REPO/scripts/fieldd-watchdog.sh"
 mkdir -p "$TMPDIR"
 
@@ -65,12 +72,21 @@ pid_is_watchdog() {
   return 1
 }
 
+# Only this watchdog's own binary on this address counts; a foreign fieldd
+# (for example an older dist/fieldd started with -state) is never ours.
 pid_is_fieldd() {
   [ -n "$1" ] || return 1
   kill -0 "$1" 2>/dev/null || return 1
   case "$(pid_cmdline "$1")" in
-    *fieldd*-http*) return 0 ;;
+    *"$BIN -http $ADDR"*) return 0 ;;
   esac
+  return 1
+}
+
+# fieldd_running: this watchdog's fieldd process exists (answering or not).
+fieldd_running() {
+  pid_is_fieldd "$(cat "$CHILD_PIDFILE" 2>/dev/null)" && return 0
+  command -v pgrep >/dev/null 2>&1 && pgrep -f "$BIN -http $ADDR" >/dev/null 2>&1 && return 0
   return 1
 }
 
@@ -114,7 +130,29 @@ drop_lock() {
   rm -rf "$LOCKDIR"
 }
 
-up() { [ "$(curl -s -o /dev/null -m 3 -w '%{http_code}' "http://$ADDR/status" 2>/dev/null)" = "200" ]; }
+# probe: 0 when fieldd answers. /healthz answers from memory, so a busy
+# field.json build or a long model call cannot make a live fieldd look dead.
+# On failure PROBE_WHY says why (no answer in time, refused, HTTP code).
+PROBE_WHY=""
+probe() {
+  code=$(curl -s -o /dev/null -m "$PROBE_TIMEOUT" -w '%{http_code}' "http://$ADDR/healthz" 2>/dev/null)
+  rc=$?
+  if [ "$code" = "404" ]; then
+    # older build without /healthz
+    code=$(curl -s -o /dev/null -m "$PROBE_TIMEOUT" -w '%{http_code}' "http://$ADDR/status" 2>/dev/null)
+    rc=$?
+  fi
+  [ "$code" = "200" ] && return 0
+  case "$rc" in
+    7) PROBE_WHY="connection refused" ;;
+    28) PROBE_WHY="no answer within ${PROBE_TIMEOUT}s" ;;
+    0) PROBE_WHY="HTTP $code" ;;
+    *) PROBE_WHY="curl exit $rc (HTTP ${code:-none})" ;;
+  esac
+  return 1
+}
+
+up() { probe; }
 
 ensure_bin() {
   if [ ! -d "$REPO" ]; then
@@ -182,15 +220,21 @@ start_fieldd() {
 
 wait_up() {
   i=0
-  while [ $i -lt 20 ]; do
+  while [ $i -lt 30 ]; do
     if up; then
       say "fieldd up on $ADDR (pid $(cat "$CHILD_PIDFILE" 2>/dev/null))"
       return 0
     fi
+    # kill -0, not the command line: right after the fork the child may
+    # not have exec'd fieldd yet.
+    if ! kill -0 "$(cat "$CHILD_PIDFILE" 2>/dev/null)" 2>/dev/null; then
+      say "fieldd exited during startup ($PROBE_WHY); see $TMPDIR/fieldd.log"
+      return 1
+    fi
     sleep 1
     i=$((i + 1))
   done
-  say "fieldd did not answer within 20s; see $TMPDIR/fieldd.log"
+  say "fieldd did not answer within 30s ($PROBE_WHY); see $TMPDIR/fieldd.log"
   return 1
 }
 
@@ -220,12 +264,14 @@ if ! take_lock; then
   say "could not take watchdog lock; another instance is starting"
   exit 0
 fi
-trap 'drop_lock' EXIT INT TERM HUP
+trap 'drop_lock' EXIT
+trap 'drop_lock; exit 0' INT TERM HUP
 
 command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock
-say "watchdog loop starting (pid $$, addr $ADDR, interval ${INTERVAL}s, repo $REPO)"
+say "watchdog loop starting (pid $$, addr $ADDR, interval ${INTERVAL}s, probe timeout ${PROBE_TIMEOUT}s, restart after $MAX_MISSES failed probes, repo $REPO)"
 
 fails=0
+misses=0
 foreign_said=""
 while true; do
   cap_log
@@ -239,13 +285,18 @@ while true; do
   fi
   if up; then
     fails=0
+    if [ "$misses" -gt 0 ]; then
+      say "fieldd answering again after $misses failed probe(s); no restart"
+      misses=0
+    fi
     # Something answers on $ADDR. If it is not this watchdog's binary (for
     # example an older dist/fieldd started with -state), say so: it is never
     # killed here, but it serves an old build in place of $BIN.
     if command -v pgrep >/dev/null 2>&1 && ! pgrep -f "$BIN -http $ADDR" >/dev/null 2>&1; then
       foreign=$(pgrep -af 'fieldd' 2>/dev/null | grep -v 'fieldd-watchdog' | grep -vF "$BIN -http" | head -3 | tr '\n' ';')
+      foreign="${foreign:-unknown}"
       if [ "$foreign" != "$foreign_said" ]; then
-        say "FOREIGN: $ADDR is answered by a process that is not $BIN -http $ADDR (${foreign:-unknown}); stop it so this build can serve"
+        say "FOREIGN: $ADDR is answered by a process that is not $BIN -http $ADDR ($foreign); it is never killed here; stop it so this build can serve"
         foreign_said="$foreign"
       fi
       sleep "$INTERVAL"
@@ -255,7 +306,18 @@ while true; do
     sleep "$INTERVAL"
     continue
   fi
-  say "fieldd not answering on $ADDR; restarting"
+  misses=$((misses + 1))
+  if fieldd_running && [ "$misses" -lt "$MAX_MISSES" ]; then
+    say "probe $misses/$MAX_MISSES failed on $ADDR ($PROBE_WHY); fieldd still running, not restarting yet"
+    sleep "$INTERVAL"
+    continue
+  fi
+  if fieldd_running; then
+    say "fieldd not answering on $ADDR ($PROBE_WHY; $misses consecutive failed probes); restarting"
+  else
+    say "fieldd not running on $ADDR ($PROBE_WHY); starting"
+  fi
+  misses=0
   stop_fieldd
   if start_fieldd && wait_up; then
     fails=0

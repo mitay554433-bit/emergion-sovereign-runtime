@@ -40,14 +40,26 @@ drawn over the field render.
 - takes `termux-wake-lock` when that command exists, so Android is less
   likely to freeze Termux
 - runs as a single instance, guarded by a pid and lock file in `$TMPDIR`
-- checks `http://127.0.0.1:8899/status` every 10 seconds
-- starts or restarts `$TMPDIR/fieldd -http 127.0.0.1:8899` from the repo
-  directory when the status is not 200, with backoff after repeated failures
+- probes `http://127.0.0.1:8899/healthz` every 10 seconds with an 8 second
+  curl timeout (`/healthz` answers from memory and never reads the ledger;
+  an older build without it is probed on `/status`)
+- restarts `$TMPDIR/fieldd -http 127.0.0.1:8899` from the repo directory only
+  after 3 consecutive failed probes (or at once when its process is gone),
+  logging each failed probe with the reason, with backoff after repeated
+  failed restarts; a foreign process on the port is reported, never killed
 - rebuilds `$TMPDIR/fieldd` only if it is missing or built from a different
   commit
 - logs to `$TMPDIR/fieldd-watchdog.log` (capped) and `$TMPDIR/fieldd.log`
 - never edits, resets or cleans the repo, never touches `.field`, and never
   passes `-state`
+
+`/field.json` is served from a cache: fieldd rebuilds the projection in the
+background, one build at a time, when the ledger changes, and answers with
+the last good snapshot if a rebuild takes longer than 1.5 seconds
+(`FIELDD_FIELD_WAIT_MS`). The JSON body is unchanged; the headers
+`X-Field-Generated`, `X-Field-Stale` and `X-Field-Build-Ms` say how fresh it
+is. After a restart the `field.json` left in `outputs/` is served (stale)
+until the first build lands.
 
 **Turn off battery optimization for Termux.** Android may stop Termux after a
 few minutes unless it is allowed to run in the background. On the phone open
