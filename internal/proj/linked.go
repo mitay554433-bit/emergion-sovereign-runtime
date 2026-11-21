@@ -63,6 +63,10 @@ type LinkedRecord struct {
 	Facets       []string `json:"facets,omitempty"`
 	KinRoot      string   `json:"kin_root,omitempty"`
 	KinRootError string   `json:"kin_root_error,omitempty"`
+	// KinFamily is the display kin family: the engine kin root joined with
+	// REG-accepted SOURCE_KIN_LINK records between accepted records (see
+	// kinFamilies). Derived, read-only; KinRoot stays the engine lineage.
+	KinFamily    string   `json:"kin_family,omitempty"`
 	Capabilities []string `json:"capabilities,omitempty"`
 	Summary      string   `json:"summary,omitempty"`
 	// DerivedFacets is set only for a record with no REG facet that is shown
@@ -169,6 +173,14 @@ func Linked(st core.State) LinkedProjection {
 			rec.KinRoot = root
 		}
 		out.Records = append(out.Records, rec)
+	}
+	roots := make(map[string]string, len(out.Records))
+	for _, r := range out.Records {
+		roots[r.ID] = r.KinRoot
+	}
+	families := kinFamilies(st, roots)
+	for i := range out.Records {
+		out.Records[i].KinFamily = families[out.Records[i].ID]
 	}
 
 	assemblies, err := deriveSAABs(st)

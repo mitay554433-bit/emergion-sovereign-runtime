@@ -265,7 +265,7 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
    </section>
    <div class="mini">
     <section class="panel"><div class="ph"><span class="pt">Field Principle</span><span class="ps mono">A06 · A09</span></div><div class="pb quote">PROJ is not authority. Indexes and projections are rebuildable and non-authoritative.<span>internal/axiom · REG accepts · GOV decides</span></div></section>
-    <section class="panel"><div class="ph"><span class="pt">Kin Families</span><span class="ps">engine kin roots</span></div><div class="pb"><div class="big" id="mFam">—</div><div class="ps" id="mFamS">accepted records sharing a kin root</div></div></section>
+    <section class="panel"><div class="ph"><span class="pt">Kin Families</span><span class="ps">kin roots + accepted kin links</span></div><div class="pb"><div class="big" id="mFam">—</div><div class="ps" id="mFamS">accepted records sharing a kin root</div></div></section>
     <section class="panel"><div class="ph"><span class="pt">Temporal Wave</span><span class="ps" id="mWaveS">recorded</span></div><div class="pb"><div class="big" id="mWave">—</div><div class="ps mono" id="mWaveT">—</div></div></section>
     <section class="panel"><div class="ph"><span class="pt">Projection Tip</span><span class="ps">rebuildable</span></div><div class="pb"><div class="mono" style="font-size:12px;color:#dfe6fb;overflow-wrap:anywhere" id="mTip">—</div><div class="ps" id="mTipS">—</div></div></section>
    </div>
@@ -471,7 +471,7 @@ function renderPanels(){
  const ld=$('sLive');ld.replaceChildren(el('span','dot'+(live?'':' off')),document.createTextNode(live?'LIVE':'OFFLINE'));
  $('liveDot').className='dot'+(live?'':' off');setText('liveTxt',live?'LIVE · FIELD LOADED':'FIELD UNAVAILABLE');
  // kin families
- if(proj&&Array.isArray(proj.records)){const fam={};for(const r of proj.records)if(r.kin_root)fam[r.kin_root]=(fam[r.kin_root]||0)+1;const multi=Object.values(fam).filter(v=>v>1).length;setText('mFam',fmt(Object.keys(fam).length));setText('mFamS',fmt(multi)+' with more than one member · '+fmt(proj.records.length)+' accepted')}else{setText('mFam','NOT_FOUND_YET');setText('mFamS','projection unavailable')}
+ if(proj&&Array.isArray(proj.records)){const fam={};for(const r of proj.records){const k=r.kin_family||r.kin_root;if(k)fam[k]=(fam[k]||0)+1}const multi=Object.values(fam).filter(v=>v>1).length;setText('mFam',fmt(Object.keys(fam).length));setText('mFamS',fmt(multi)+' with more than one member · '+fmt(proj.records.length)+' accepted')}else{setText('mFam','NOT_FOUND_YET');setText('mFamS','projection unavailable')}
  // bars
  const st=[['Accepted',nA,''],['AtGOV',nG,'g'],['Approved',Object.keys((field&&field.Approved)||{}).length,''],['Held',Object.keys((field&&field.Held)||{}).length,'g'],['Rejected',Object.keys((field&&field.Rejected)||{}).length,'g'],['Returned',Object.keys((field&&field.Returned)||{}).length,'g']];
  const mx=Math.max(1,...st.map(s=>s[1]));const bars=$('bars');bars.replaceChildren();
