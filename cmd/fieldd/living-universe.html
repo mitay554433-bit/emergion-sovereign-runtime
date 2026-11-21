@@ -276,6 +276,16 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
    <section class="panel"><div class="ph"><span class="pt">Live Projection</span><span class="ps">REG state counts</span></div><div class="pb bars" id="bars"></div></section>
    <section class="panel"><div class="ph"><span class="pt">Latest REG Difference</span><span class="pillst" id="ldPill">REG ACCEPTED</span></div><div class="pb" id="latest"><span class="nf">NOT_FOUND_YET</span></div></section>
    <section class="panel"><div class="ph"><span class="pt">Next Governed Step</span><span class="pillst g" id="hfPill">HUMAN_FINAL</span></div><div class="pb" id="hf"><span class="nf">NOT_FOUND_YET</span></div></section>
+   <section class="panel" id="upP"><div class="ph"><span class="pt">Submit a source</span><span class="pillst">AT GOV</span></div><div class="pb" id="upBox">
+     <p class="ps" style="margin:0 0 8px">The file is recorded as a SOURCE_UPLOAD and waits at AtGOV. Nothing is decided. A later Accept is still HUMAN_FINAL.</p>
+     <div class="tok" style="flex-wrap:wrap">
+       <input type="file" id="upFile" aria-label="Source file" style="color:var(--ink2);max-width:100%">
+       <input id="upTitle" placeholder="title (optional)" autocomplete="off" aria-label="Title" style="min-width:10rem;background:#05070d;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 10px">
+       <input id="upTopic" placeholder="topic (optional)" autocomplete="off" aria-label="Topic" style="min-width:8rem;background:#05070d;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 10px">
+       <button type="button" class="acc" id="upGo">Submit</button>
+     </div>
+     <div class="ps" id="upMsg" role="status" style="margin-top:8px"></div>
+   </div></section>
    <section class="panel wide" id="hfbP" hidden><div class="ph"><span class="pt">Batch accept <i>• HUMAN_FINAL</i></span><span class="pillst g" id="hfbPill">REVIEW</span></div><div class="pb" id="hfb"></div></section>
   </div>
  </main>
@@ -289,7 +299,7 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 </div>
 
 <section class="panel"><div class="ph"><span class="pt">Field Timeline <i>• Recent Manifestations</i></span><span class="ps" id="tlMeta">by capture time</span></div><div class="tlw"><div class="tl" id="tl"></div></div></section>
-<div class="foot">Projection of /field.json, /projection.json and /real_temporal_wave.json · the only write is a human Accept press, recorded as HUMAN_FINAL APPROVE through /decide (same path as <code>field decide</code>) · COSL + REG remain authoritative · visualization only</div>
+<div class="foot">Projection of /field.json, /projection.json and /real_temporal_wave.json · writes are a human Submit (SOURCE_UPLOAD at AtGOV through /sources) and a human Accept press, recorded as HUMAN_FINAL APPROVE through /decide (same path as <code>field decide</code>) · COSL + REG remain authoritative · visualization only</div>
 </div>
 
 <script>
@@ -613,7 +623,41 @@ function collapseTraj(q,trs){const mem=new Map();for(const t of trs)for(const id
  for(const it of q){const t=mem.get(it.id);if(!t){out.push(it);continue}if(done.has(t.key))continue;done.add(t.key);out.push({id:t.newest_id,summary:trajLabel(t),traj:t})}
  for(const t of trs)if(!done.has(t.key)){done.add(t.key);out.push({id:t.newest_id,summary:trajLabel(t),traj:t})}return out}
 // </trajectory-rows>
-// <governed-accept> The ONLY write on this page. A human pressing Accept records a HUMAN_FINAL
+
+// <source-submit> POST /sources with the injected bearer token. The token is
+// never written into the message area. First press arms the button; a second
+// press within 5s sends. The record stops at AtGOV.
+let upArm=0,upArmTimer=0;
+function armSourceSubmit(){
+  const file=$('upFile')&&$('upFile').files&&$('upFile').files[0];
+  const msg=$('upMsg'),go=$('upGo');
+  if(!file){if(msg)msg.textContent='Choose a file first.';return}
+  const tok=savedToken();
+  if(!tok){if(msg)msg.textContent=injectedToken()?'Token missing from this page. Refresh.':'Paste the fieldd token first (Next Governed Step panel).';return}
+  const now=Date.now();
+  if(!upArm||now-upArm>5000){
+    upArm=now;if(go){go.textContent='Confirm submit';go.classList.add('arm')}
+    clearTimeout(upArmTimer);upArmTimer=setTimeout(()=>{upArm=0;if(go){go.textContent='Submit';go.classList.remove('arm')}},5000);
+    if(msg)msg.textContent='Press again to record this file at AtGOV.';
+    return;
+  }
+  upArm=0;clearTimeout(upArmTimer);if(go){go.textContent='Submit';go.classList.remove('arm');go.disabled=true}
+  const fd=new FormData();fd.append('file',file,file.name);
+  const title=(($('upTitle')&&$('upTitle').value)||'').trim();if(title)fd.append('title',title);
+  const topic=(($('upTopic')&&$('upTopic').value)||'').trim();if(topic)fd.append('topic',topic);
+  if(msg)msg.textContent='Submitting…';
+  fetch('/sources',{method:'POST',headers:{Authorization:'Bearer '+tok},body:fd}).then(async r=>{
+    const j=await r.json().catch(()=>({error:'HTTP '+r.status}));
+    if(r.status===401){storeToken('');if(msg)msg.textContent=injectedToken()?'Token refused (401). Restart fieldd and refresh.':'Token refused (401). Paste the current fieldd token and retry.';return}
+    if(!r.ok||j.error){if(msg)msg.textContent=j.error||('Submit was not accepted (HTTP '+r.status+').');return}
+    if(msg)msg.textContent=(j.duplicate?'Already on file · ':'Recorded at AtGOV · ')+(j.id||'')+' · SHA-256 '+(j.source_sha256||'').slice(0,12)+'…';
+    await refresh(true);
+  }).catch(()=>{if(msg)msg.textContent='Submit could not be confirmed. Refresh before retrying.'}).finally(()=>{if(go)go.disabled=false});
+}
+(function(){const bind=()=>{const go=$('upGo');if(go)go.onclick=armSourceSubmit};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bind);else bind();})();
+// </source-submit>
+
+// <governed-accept> The Accept button is a HUMAN_FINAL write on this page. A human pressing Accept records a HUMAN_FINAL
 // APPROVE through the existing POST /decide route (fieldapi.Decide: gov.Decide with authority
 // HUMAN_FINAL, then reg.Accept), the same receipts `field decide <id> APPROVE <reason>` writes.
 // A reason is required. On loopback fieldd the bearer token is injected into
