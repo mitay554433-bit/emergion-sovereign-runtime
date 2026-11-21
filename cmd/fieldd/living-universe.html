@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="fieldd-token" content=""><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#05070d"><link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/icon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="/icon-192.png"><script>if("serviceWorker"in navigator)addEventListener("load",()=>navigator.serviceWorker.register("/sw.js",{scope:"/"}).catch(()=>{}))</script><title>MAXIOM Control Center · UNIFUSION Living Universe</title>
+<html lang="en"><head><meta charset="UTF-8"><meta name="fieldd-token" content=""><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#05070d"><link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/icon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="/icon-192.png"><script>if("serviceWorker"in navigator)addEventListener("load",()=>navigator.serviceWorker.register("/sw.js",{scope:"/",updateViaCache:"none"}).then(r=>r.update()).catch(()=>{}))</script><title>MAXIOM Control Center · UNIFUSION Living Universe</title>
 <style>
 :root{color-scheme:dark;--bg:#05070d;--bg2:#0a0f1a;--panel:rgba(11,16,30,.78);--panel2:rgba(14,21,40,.9);--line:rgba(120,150,220,.25);--line2:rgba(120,150,220,.14);--ink:#f2f5ff;--ink2:#aab6d3;--ink3:#6c7896;--blue:#3b82f6;--royal:#2f6bff;--deep:#1d4ed8;--pale:#c9d8ff;--gov:#d9a35b;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
 *{box-sizing:border-box}
@@ -200,7 +200,7 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 @media(max-width:759px){.app{padding-left:10px;padding-right:10px;gap:10px}.brand h1{font-size:16px}.hpills .pill.t{display:none}#c{height:70vh;min-height:420px;max-height:820px}.hero .ph{position:static;background:none;padding:11px 14px 6px}.auth{font-size:9px}.legend{gap:5px 10px;font-size:9px;padding:6px 8px}
  .cols{display:flex;flex-direction:column}.left,.center,.right,.centerg{display:contents}
  .mini{grid-template-columns:1fr 1fr}.mini>.panel:first-child{grid-column:1/-1}#tlMeta{display:none}
- #nav{order:1}.hero{order:2}#statusP{order:3}.mini{order:4}.bottom{order:5}.right>.panel{order:6}}
+ #nav{order:1}.hero{order:2}#statusP{order:3}#gapP{order:3}.mini{order:4}.bottom{order:5}.right>.panel{order:6}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style></head><body>
 <div class="app">
@@ -226,13 +226,14 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
     <div class="st" title="Distinct recorded REL kin references whose two ends are both REG-accepted"><small>Verified references</small><b id="sRef">—</b></div>
     <div class="st" title="Distinct recorded REL kin references (kin, parent, successor, origin, composition, capability provider) between two records in the FIELD where at least one end is AtGOV. Counts references, not records."><small>Pending references (AtGOV)</small><b id="sPend">—</b></div>
     <div class="st"><small>Kin assemblies</small><b id="sSaab">—</b></div>
-    <div class="st" title="Compressed states in the recorded MAXIOM temporal wave file (outputs/real_temporal_wave.json). It is a fixed recorded artifact, not a count of REG records, so uploads do not change it."><small>Temporal states · wave file</small><b id="sWave">—</b></div>
+    <div class="st" title="Live from the ledger (/projection.json temporal): distinct record states the hash-chained events produced (each capture, interpretation revision, decision value and REG acceptance of a record). It moves with every ledger event. The recorded MAXIOM wave file (outputs/real_temporal_wave.json) is shown below it as a secondary, fixed value."><small>Temporal states · live ledger</small><b id="sWave">—</b><small class="gsplit" id="sWaveF"></small></div>
     <div class="st"><small>Linked accepted</small><b id="sLinked">—</b></div>
     <div class="st"><small>AtGOV → target</small><b id="sGovT">—</b></div>
     <div class="st"><small>Same-SOURCE IDNs</small><b id="sDup" title="Records sharing one SOURCE hash under different IDNs">—</b></div>
-    <div class="st"><small>Last update · latest capture</small><b class="sm" id="sLast">—</b></div>
+    <div class="st" title="Time of the newest ledger event of any kind (capture, decision or REG acceptance), from /projection.json temporal.tip_at. The latest record capture time is shown below it."><small>Last update · ledger tip</small><b class="sm" id="sLast">—</b><small class="gsplit" id="sLastC"></small></div>
    </div>
   </section>
+  <section class="panel" id="gapP" aria-label="Gaps"><div class="ph"><span class="pt">Gaps</span><span class="ps" id="gapS">SOURCE_GAP · HUMAN_FINAL</span></div><div class="ps" id="gapSum" style="padding:6px 14px 0"></div><div class="pb list" id="gaps"><span class="nf">NOT_FOUND_YET</span></div></section>
   <section class="panel" id="autoP" aria-label="UNIFUSION auto: policy, worker and reasoner">
    <div class="ph"><span class="pt">Auto · A01-AUTO-2</span><span class="ps mono">/auto/status</span></div>
    <div class="status" style="margin-top:9px">
@@ -267,7 +268,7 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
    <div class="mini">
     <section class="panel"><div class="ph"><span class="pt">Field Principle</span><span class="ps mono">A06 · A09</span></div><div class="pb quote">PROJ is not authority. Indexes and projections are rebuildable and non-authoritative.<span>internal/axiom · REG accepts · GOV decides</span></div></section>
     <section class="panel"><div class="ph"><span class="pt">Kin Families</span><span class="ps">kin roots + accepted kin links</span></div><div class="pb"><div class="big" id="mFam">—</div><div class="ps" id="mFamS">accepted records sharing a kin root</div></div></section>
-    <section class="panel"><div class="ph"><span class="pt">Temporal Wave</span><span class="ps" id="mWaveS">recorded</span></div><div class="pb"><div class="big" id="mWave">—</div><div class="ps mono" id="mWaveT">—</div></div></section>
+    <section class="panel"><div class="ph"><span class="pt">Temporal States</span><span class="ps" id="mWaveS">live ledger</span></div><div class="pb"><div class="big" id="mWave">—</div><div class="ps mono" id="mWaveT">—</div></div></section>
     <section class="panel"><div class="ph"><span class="pt">Projection Tip</span><span class="ps">rebuildable</span></div><div class="pb"><div class="mono" style="font-size:12px;color:#dfe6fb;overflow-wrap:anywhere" id="mTip">—</div><div class="ps" id="mTipS">—</div></div></section>
    </div>
   </div>
@@ -282,7 +283,6 @@ header{min-width:0;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
  <aside class="right">
   <section class="panel"><div class="ph"><span class="pt">Axiom Code <i>• CPSL</i></span><span class="seg"><button id="cPrev" aria-label="Previous assembly">‹</button><span class="ps mono" id="cIdx">—</span><button id="cNext" aria-label="Next assembly">›</button></span></div><div class="pb" style="padding-bottom:6px"><div class="ps mono" id="cName" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">—</div></div><div class="code" id="code"><div><span class="k3">NOT_FOUND_YET · no composition assembly in the projection</span></div></div></section>
   <section class="panel"><div class="ph"><span class="pt">Kin Assemblies</span><span class="ps">SAAB · composed with</span></div><div class="pb list" id="saabs"><span class="nf">NOT_FOUND_YET</span></div></section>
-  <section class="panel" id="gapP"><div class="ph"><span class="pt">Gaps</span><span class="ps" id="gapS">SOURCE_GAP · HUMAN_FINAL</span></div><div class="pb list" id="gaps"><span class="nf">NOT_FOUND_YET</span></div></section>
   <section class="panel"><div class="ph"><span class="pt">Axiom Dictionary</span><span class="ps mono">internal/axiom</span></div><div class="pb ax" id="ax"></div></section>
   <section class="panel" id="realP" hidden><div class="ph"><span class="pt">Realizations</span><span class="ps">projection engine</span></div><div class="pb list" id="real"></div></section>
  </aside>
@@ -457,6 +457,22 @@ function heroSub(){const h=$('heroSub');if(!h)return;let t=HERO_SUB,on=false;
  if(selected){t='▸ '+shortID(selected.id)+' · '+String(nameOf(selected));on=true}
  else if(filter!=='ALL'){const k=filter==='UNASSIGNED'?nodes.filter(n=>n.kind==='accepted'&&!n.facets.length).length:nodes.filter(n=>n.kind==='accepted'&&n.facets.includes(filter)).length;t='▸ '+(filter==='UNASSIGNED'?'Unassigned':(FACET_LABEL[filter]||filter)).toUpperCase()+' · '+fmt(k)+(k===1?' accepted record':' accepted records');on=true}
  h.textContent=t;h.classList.toggle('on',on)}
+// <temporal-live> Temporal states and last update come from /projection.json "temporal", which
+// fieldd derives from the ledger events on every request. The recorded wave file
+// (/real_temporal_wave.json) is only a secondary label. No data: NOT_FOUND_YET.
+const tFmt=t=>{const d=new Date(t);return isNaN(d)?'':d.toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'})};
+function waveCount(w){return w&&Array.isArray(w.compressed_wave)?w.compressed_wave.length:null}
+function temporalView(t,w){const cw=waveCount(w),wl=cw!=null?'wave file '+fmt(cw):'';
+ if(t&&typeof t.states==='number'){const k=t.by_kind||{};
+  return {main:fmt(t.states),sub:[fmt(t.records||0)+' records',fmt(t.revisions||0)+' revisions',wl].filter(Boolean).join(' · '),badge:'live ledger',
+   detail:fmt(t.events||0)+' events · '+fmt(t.last_24h||0)+' in the last 24h · '+fmt(t.days||0)+' days'+(wl?' · '+wl:'')}}
+ if(cw!=null)return {main:fmt(cw),sub:'wave file · recorded (live ledger view unavailable)',badge:'recorded',detail:(w.state||'RECORDED')+(w.compression_ratio!=null?' · ratio '+w.compression_ratio:'')};
+ return {main:'NOT_FOUND_YET',sub:'',badge:'unavailable',detail:'temporal view unavailable'}}
+function lastUpdate(t,lastCap){const tip=t&&t.tip_at?tFmt(t.tip_at):'',cap=lastCap?tFmt(lastCap):'';
+ if(tip)return {main:tip,sub:(t.tip_kind?String(t.tip_kind).replace(/_/g,' ').toLowerCase():'ledger event')+(cap?' · latest capture '+cap:'')};
+ if(cap)return {main:cap,sub:'latest capture (ledger tip time unavailable)'};
+ return {main:'NOT_FOUND_YET',sub:''}}
+// </temporal-live>
 function renderPanels(){
  const acc=(field&&field.Accepted)||{},gov=(field&&field.AtGOV)||{},nA=Object.keys(acc).length,nG=Object.keys(gov).length;
  const rc=refCounts(relRefs(field));
@@ -468,8 +484,8 @@ function renderPanels(){
  setText('sLinked',lstats?fmt(lstats.linkedAcc)+' / '+fmt(lstats.accTotal):'—');setText('sGovT',lstats?fmt(lstats.govLinked)+' / '+fmt(lstats.govTotal):'—');
  setText('sSaab',proj?fmt((proj.assemblies||[]).length):'NOT_FOUND_YET');
  const tip=(proj&&proj.tip_hash)||(field&&field.TipHash)||'';setText('tipTop',tip?tip.slice(0,10):'—');setText('mTip',tip||'NOT_FOUND_YET');setText('mTipS',field?fmt(field.Events||0)+' events · projection rebuilt from the ledger':'—');
- const times=nodes.map(n=>n.t).filter(Boolean).sort();const last=times[times.length-1];
- setText('sLast',last?new Date(last).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'}):'NOT_FOUND_YET');
+ const times=nodes.map(n=>n.t).filter(Boolean).sort();const lastCap=times[times.length-1];
+ {const lu=lastUpdate(proj&&proj.temporal,lastCap);setText('sLast',lu.main);setText('sLastC',lu.sub)}
  const ld=$('sLive');ld.replaceChildren(el('span','dot'+(live?'':' off')),document.createTextNode(live?'LIVE':'OFFLINE'));
  $('liveDot').className='dot'+(live?'':' off');setText('liveTxt',live?'LIVE · FIELD LOADED':'FIELD UNAVAILABLE');
  // kin families
@@ -495,9 +511,8 @@ function renderPanels(){
   const lst=el('div','list');lst.id='hfList';lst.style.marginTop='6px';H.append(lst);
   if(nReal){const pg=el('div','pager');pg.innerHTML='<button id="hfPrev" aria-label="Previous page">‹ Prev</button><span class="ps mono" id="hfPage"></span><button id="hfNext" aria-label="Next page">Next ›</button>';H.append(pg);$('hfPrev').onclick=()=>{hfPage--;renderQueue()};$('hfNext').onclick=()=>{hfPage++;renderQueue()}}
   renderQueue()}
- // wave
- if(wave){const cw=Array.isArray(wave.compressed_wave)?wave.compressed_wave.length:0;setText('sWave',fmt(cw));setText('mWave',fmt(cw));setText('mWaveS',wave.locked?'locked':'recorded');setText('mWaveT',(wave.state||'RECORDED')+(wave.compression_ratio!=null?' · ratio '+wave.compression_ratio:''))}
- else{setText('sWave','NOT_FOUND_YET');setText('mWave','NOT_FOUND_YET');setText('mWaveT','temporal wave unavailable')}
+ // temporal: live from the ledger; the recorded wave file is a secondary label
+ {const tv=temporalView(proj&&proj.temporal,wave);setText('sWave',tv.main);setText('sWaveF',tv.sub);setText('mWave',tv.main);setText('mWaveS',tv.badge);setText('mWaveT',tv.detail)}
  renderNav();renderCode();renderSaabs();renderGaps();renderReal();renderTimeline();renderBatch();
 }
 let hfReal=[],hfGen=[],hfPage=0,showGen=false;const HF_PAGE=5;
@@ -545,9 +560,13 @@ function renderSaabs(){const as=proj&&Array.isArray(proj.assemblies)?proj.assemb
 // auto-accepted: each AtGOV gap uses the same HUMAN_FINAL Accept / Hold path as any AtGOV record
 // (decideAtGOV: reason prompt, then a confirm press, then POST /decide).
 function gapControls(id){const f=el('div','tok');if(!savedToken()){f.append(el('small','nf','fieldd token needed to decide'));return f}f.append(acceptButton(id),holdButton(id));return f}
+function gapSummaryLine(sm){if(!sm)return '';const p=[];if(sm.held)p.push(fmt(sm.held)+' held');if(sm.other)p.push(fmt(sm.other)+' other');
+ p.push(fmt(sm.sources||0)+' sources · '+fmt(sm.classes||0)+' classes');p.push(fmt(sm.insights_accepted||0)+' accepted insights read by the gap pass');return p.join(' · ')}
 function renderGaps(){const G=$('gaps');if(!G)return;G.replaceChildren();const gs=proj&&Array.isArray(proj.gaps)?proj.gaps:[];
  let gov=0,acc=0;for(const g of gs){gov+=g.at_gov||0;acc+=g.accepted||0}
- setText('gapS',gs.length?fmt(gov)+' AtGOV · '+fmt(acc)+' accepted':'SOURCE_GAP · HUMAN_FINAL');
+ const sm=proj&&proj.gap_summary;if(sm){gov=sm.at_gov||0;acc=sm.accepted||0}
+ setText('gapS',sm?fmt(sm.records||0)+' records · '+fmt(gov)+' AtGOV · '+fmt(acc)+' accepted':gs.length?fmt(gov)+' AtGOV · '+fmt(acc)+' accepted':'SOURCE_GAP · HUMAN_FINAL');
+ {const gx=$('gapSum');if(gx)gx.textContent=gapSummaryLine(sm)}
  if(!gs.length){G.append(el('span','nf','NOT_FOUND_YET'));return}
  for(const g of gs){const h=el('div','gapc');h.append(el('span',null,g.class),el('small',null,(g.pivot||'')+' · '+fmt(g.at_gov||0)+' AtGOV · '+fmt(g.accepted||0)+' accepted'+(g.held?' · '+fmt(g.held)+' held':'')));G.append(h);
   (g.items||[]).slice(0,5).forEach(it=>{const w=el('div','gapi'),r=el('div','row'),l=el('span','l');l.append(el('div',null,it.source_title||shortID(it.of||it.id)),el('small',null,it.summary||it.id));r.append(l,el('span','r',it.state==='AtGOV'?'AtGOV':'ACCEPTED'));w.append(r);if(it.state==='AtGOV')w.append(gapControls(it.id));G.append(w)});

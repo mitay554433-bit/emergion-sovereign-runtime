@@ -23,7 +23,7 @@ import (
 const (
 	pwaBackground = "#0a0a0a" // carbon black
 	pwaRoyal      = "#2f6bff" // royal blue (matches --royal in living-universe.html)
-	pwaCacheName  = "unifusion-shell-v2"
+	pwaCacheName  = "unifusion-shell-v3"
 )
 
 // pwaShellAssets is the complete list of URLs the service worker may cache.
