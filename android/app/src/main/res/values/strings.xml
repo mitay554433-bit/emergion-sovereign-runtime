@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">UNIFUSION</string>
+    <string name="notification_title">UNIFUSION is running</string>
+    <string name="notification_text">Local runtime on this phone. Ledger stays in the app.</string>
+    <string name="starting">Starting UNIFUSION…</string>
+</resources>
