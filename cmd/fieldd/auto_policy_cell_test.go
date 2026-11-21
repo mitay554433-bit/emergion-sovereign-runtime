@@ -60,7 +60,7 @@ func TestLivingNavPutsTopicTilesBeforeRegFacets(t *testing.T) {
 	if strings.Index(b, "sub:topicSub(g)") > strings.Index(b, "items.push(...regItems)") {
 		t.Fatal("topic tiles must be pushed before the REG facet tiles")
 	}
-	if !strings.Contains(src, "g.source_uploads||0") || !strings.Contains(src, "Temporal states · wave file") {
+	if !strings.Contains(src, "g.source_uploads||0") || !strings.Contains(src, "Temporal states · live ledger") || !strings.Contains(src, "'wave file '+fmt(cw)") {
 		t.Fatal("uploads count or temporal label missing")
 	}
 }

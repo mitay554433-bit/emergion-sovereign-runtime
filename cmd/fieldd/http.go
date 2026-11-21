@@ -230,6 +230,8 @@ func newHTTPMuxOn(rt *fieldapi.Runtime, token string, loopback bool, bindAddr st
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		path := filepath.Join("cmd", "fieldd", "living-universe.html")
 		if !canInjectLivingToken(loopback, bindAddr, token, req) {
+			// always revalidate, so a deploy shows up on the next load
+			w.Header().Set("Cache-Control", "no-cache")
 			http.ServeFile(w, req, path)
 			return
 		}
@@ -240,6 +242,7 @@ func newHTTPMuxOn(rt *fieldapi.Runtime, token string, loopback bool, bindAddr st
 		}
 		page, ok := applyLivingToken(string(body), token, w.Header())
 		if !ok {
+			w.Header().Set("Cache-Control", "no-cache")
 			http.ServeFile(w, req, path)
 			return
 		}

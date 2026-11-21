@@ -1,6 +1,7 @@
 package reason
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -44,6 +45,7 @@ type ServerInsighter struct {
 	Ctx       int           // context size for the server
 	LoadWait  time.Duration // how long to wait for the model to load
 	Cooldown  time.Duration // after a failed start, use Exec for this long
+	Stall     time.Duration // abandon a streamed answer after this long without a token
 	LogPath   string
 	Client    *http.Client
 
@@ -297,39 +299,155 @@ type completionReq struct {
 	Temperature float64  `json:"temperature"`
 	CachePrompt bool     `json:"cache_prompt"`
 	Stop        []string `json:"stop"`
+	Stream      bool     `json:"stream"`
+	// TMaxPredictMS asks llama-server itself to stop generating after this
+	// long, so an abandoned request cannot hold the single slot.
+	TMaxPredictMS int64 `json:"t_max_predict_ms,omitempty"`
 }
 
-// complete sends one prompt to POST /completion and returns .content.
-func (s *ServerInsighter) complete(ctx context.Context, prompt string) (string, error) {
+// DefaultStallSeconds is how long a streamed answer may go without a new
+// token once the first one arrived before the call is abandoned.
+const DefaultStallSeconds = 90
+
+// errStall marks a streamed answer that stopped producing tokens.
+var errStall = errors.New("llama-server stopped sending tokens")
+
+// complete sends one prompt to POST /completion with stream on and returns
+// the joined content. Streaming lets a stuck call be detected (no token for
+// Stall) and, because the connection is closed on timeout, makes
+// llama-server drop the task instead of finishing it for nobody and keeping
+// its only slot busy for the next record. got reports how many content
+// chunks arrived (0 means the server never started answering).
+func (s *ServerInsighter) complete(ctx context.Context, prompt string, budget time.Duration) (text string, got int, err error) {
 	n := s.Exec.MaxTokens
 	if n <= 0 {
 		n = 64
 	}
-	body, _ := json.Marshal(completionReq{Prompt: prompt, NPredict: n, Temperature: 0, CachePrompt: true, Stop: []string{"<end_of_turn>"}})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.BaseURL+"/completion", bytes.NewReader(body))
+	cr := completionReq{Prompt: prompt, NPredict: n, Temperature: 0, CachePrompt: true, Stop: []string{"<end_of_turn>"}, Stream: true}
+	if budget > 0 {
+		cr.TMaxPredictMS = budget.Milliseconds()
+	}
+	body, _ := json.Marshal(cr)
+	cctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	req, err := http.NewRequestWithContext(cctx, http.MethodPost, s.BaseURL+"/completion", bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := s.client().Do(req)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	defer resp.Body.Close()
-	b, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return "", err
-	}
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("llama-server HTTP %d: %s", resp.StatusCode, oneLineText(string(b), 160))
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return "", 0, fmt.Errorf("llama-server HTTP %d: %s", resp.StatusCode, oneLineText(string(b), 160))
 	}
-	var out struct {
-		Content string `json:"content"`
+	if !strings.Contains(resp.Header.Get("Content-Type"), "event-stream") {
+		// a server (or test double) that ignores stream: one JSON object
+		b, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		if err != nil {
+			return "", 0, err
+		}
+		var out struct {
+			Content string `json:"content"`
+		}
+		if err := json.Unmarshal(b, &out); err != nil {
+			return "", 0, fmt.Errorf("llama-server reply: %v", err)
+		}
+		return out.Content, 1, nil
 	}
-	if err := json.Unmarshal(b, &out); err != nil {
-		return "", fmt.Errorf("llama-server reply: %v", err)
+	stall := s.Stall
+	if stall <= 0 {
+		stall = DefaultStallSeconds * time.Second
 	}
-	return out.Content, nil
+	type line struct {
+		b   []byte
+		err error
+		end bool
+	}
+	lines := make(chan line, 16)
+	go func() {
+		defer close(lines)
+		send := func(l line) bool {
+			select {
+			case lines <- l:
+				return true
+			case <-cctx.Done():
+				return false
+			}
+		}
+		sc := bufio.NewScanner(resp.Body)
+		sc.Buffer(make([]byte, 64*1024), 1<<20)
+		for sc.Scan() {
+			if !send(line{b: append([]byte(nil), sc.Bytes()...)}) {
+				return
+			}
+		}
+		send(line{err: sc.Err(), end: true})
+	}()
+	var b strings.Builder
+	var idle *time.Timer
+	var idleC <-chan time.Time
+	defer func() {
+		if idle != nil {
+			idle.Stop()
+		}
+	}()
+	for {
+		select {
+		case <-ctx.Done():
+			return b.String(), got, ctx.Err()
+		case <-idleC:
+			return b.String(), got, errStall
+		case l, ok := <-lines:
+			if !ok {
+				return b.String(), got, nil
+			}
+			if l.end {
+				return b.String(), got, l.err
+			}
+			data, isData := bytes.CutPrefix(bytes.TrimSpace(l.b), []byte("data:"))
+			if !isData {
+				continue
+			}
+			data = bytes.TrimSpace(data)
+			if string(data) == "[DONE]" {
+				return b.String(), got, nil
+			}
+			var ch struct {
+				Content string `json:"content"`
+				Stop    bool   `json:"stop"`
+				Error   *struct {
+					Message string `json:"message"`
+				} `json:"error"`
+			}
+			if json.Unmarshal(data, &ch) != nil {
+				continue
+			}
+			if ch.Error != nil {
+				return b.String(), got, fmt.Errorf("llama-server: %s", oneLineText(ch.Error.Message, 160))
+			}
+			b.WriteString(ch.Content)
+			got++
+			if ch.Stop {
+				return b.String(), got, nil
+			}
+			if idle == nil {
+				idle = time.NewTimer(stall)
+				idleC = idle.C
+			} else {
+				if !idle.Stop() {
+					select {
+					case <-idle.C:
+					default:
+					}
+				}
+				idle.Reset(stall)
+			}
+		}
+	}
 }
 
 func (s *ServerInsighter) Insight(ctx context.Context, in InsightInput) (Insight, error) {
@@ -339,44 +457,85 @@ func (s *ServerInsighter) Insight(ctx context.Context, in InsightInput) (Insight
 	}
 	timeout := s.Exec.Timeout
 	if timeout <= 0 {
-		timeout = 20 * time.Minute
+		timeout = DefaultWorkerTimeoutSeconds * time.Second
+	}
+	// Health first, on the caller's context: waiting for a loading model
+	// does not eat the per-call budget, and a server that cannot come up is
+	// reported as unavailable (the worker pauses) instead of as a timeout.
+	if err := s.ensure(ctx); err != nil {
+		if ctx.Err() != nil {
+			return Insight{}, ctx.Err()
+		}
+		s.stopOwn()
+		if err2 := s.ensure(ctx); err2 != nil {
+			if ctx.Err() != nil {
+				return Insight{}, ctx.Err()
+			}
+			return s.fallback(ctx, in, err2)
+		}
 	}
 	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	prompt := localTurn(s.Exec.Model, LocalPrompt(in))
+	prompt := localTurn(s.Exec.Model, LocalPrompt(CapLocalInput(in, LocalPromptChars())))
+	t0 := time.Now()
 	var lastErr error
+	got := 0
 	for attempt := 0; attempt < 2; attempt++ {
 		if attempt == 1 {
-			// dead or unreachable: restart once
+			// the server failed the call (crashed slot, reset): restart our
+			// own server once and re-check health before the retry
 			s.stopOwn()
+			if err := s.ensure(cctx); err != nil {
+				lastErr = err
+				break
+			}
 		}
-		if err := s.ensure(cctx); err != nil {
-			lastErr = err
-		} else if reply, err := s.complete(cctx, prompt); err == nil {
-			s.setUsed(NameLocalServer)
+		var reply string
+		var err error
+		reply, got, err = s.complete(cctx, prompt, time.Until(deadlineOr(cctx, t0.Add(timeout))))
+		s.setUsed(NameLocalServer)
+		if err == nil {
 			if !strings.Contains(strings.ToUpper(reply), "SUMMARY") {
 				reply = "SUMMARY:" + strings.TrimLeft(reply, " \t")
 			}
 			return ParseInsight(reply, in)
-		} else {
-			lastErr = err
 		}
-		if errors.Is(cctx.Err(), context.DeadlineExceeded) {
-			s.setUsed(NameLocalServer)
-			return Insight{}, fmt.Errorf("%w: local model timed out after %s", ErrModelRun, timeout)
-		}
-		if ctx.Err() != nil {
-			return Insight{}, ctx.Err()
+		lastErr = err
+		if errors.Is(err, errStall) || cctx.Err() != nil {
+			break
 		}
 	}
-	// restart failed: one-shot run for this record, server skipped for a while
+	detail := fmt.Sprintf("llama-server %s, prompt %d chars, %d tokens received, %s", s.BaseURL, len(prompt), got, time.Since(t0).Round(time.Second))
+	if errors.Is(lastErr, errStall) {
+		return Insight{}, fmt.Errorf("%w: %w: %v (%s)", ErrModelRun, ErrModelTimeout, lastErr, detail)
+	}
+	if errors.Is(cctx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
+		return Insight{}, modelTimeout(timeout, detail)
+	}
+	if ctx.Err() != nil {
+		return Insight{}, ctx.Err()
+	}
+	return Insight{}, fmt.Errorf("%w: %v (%s)", ErrModelRun, lastErr, detail)
+}
+
+func deadlineOr(ctx context.Context, t time.Time) time.Time {
+	if d, ok := ctx.Deadline(); ok {
+		return d
+	}
+	return t
+}
+
+// fallback runs the one-shot llama-completion -no-cnv for this record when
+// llama-server could not be made ready, and skips the server for Cooldown.
+// LocalInsighter refuses to spawn llama-cli.
+func (s *ServerInsighter) fallback(ctx context.Context, in InsightInput, serverErr error) (Insight, error) {
 	s.mu.Lock()
 	s.downAt = time.Now()
 	s.mu.Unlock()
 	s.setUsed(NameLocalExec)
 	r, err := s.Exec.Insight(ctx, in)
 	if err != nil {
-		return r, fmt.Errorf("%w (llama-server: %s)", err, oneLineText(lastErr.Error(), 120))
+		return r, fmt.Errorf("%w (llama-server: %s)", err, oneLineText(serverErr.Error(), 120))
 	}
 	return r, nil
 }

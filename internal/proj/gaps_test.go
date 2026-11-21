@@ -86,6 +86,10 @@ func TestLinkedWireIsAdditiveOverF3fb0d5(t *testing.T) {
 		t.Fatalf("gaps = %v, want []", newM["gaps"])
 	}
 	delete(newM, "gaps")
+	delete(newM, "gap_summary") // additive object (counts only)
+	if _, ok := newM["temporal"]; ok {
+		t.Fatal("Linked(st) without events must not emit temporal")
+	}
 	for _, r := range newM["records"].([]any) {
 		delete(r.(map[string]any), "kin_family")
 	}
@@ -106,6 +110,7 @@ func TestLinkedWireIsAdditiveOverF3fb0d5(t *testing.T) {
 		t.Fatalf("decoded old JSON grew gaps: %v", backM["gaps"])
 	}
 	delete(backM, "gaps")
+	delete(backM, "gap_summary") // additive, zero counts
 	for _, g := range backM["derived_facet_groups"].([]any) {
 		delete(g.(map[string]any), "source_uploads") // additive, defaults to 0
 	}

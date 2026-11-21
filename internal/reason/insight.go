@@ -32,6 +32,68 @@ var ErrUnavailable = errors.New("reasoner unavailable")
 // with the model run, not with the source, so it is not counted against it.
 var ErrModelRun = errors.New("model run")
 
+// ErrModelTimeout marks a model run that hit its per-call time limit. It is
+// always wrapped together with ErrModelRun.
+var ErrModelTimeout = errors.New("model timeout")
+
+// DefaultWorkerTimeoutSeconds bounds one local model call (was 20 minutes,
+// which let one stuck call hold the worker for a third of an hour).
+const DefaultWorkerTimeoutSeconds = 300
+
+// DefaultLocalPromptChars caps the whole on-device prompt (instructions,
+// title, tags, peers and file text). Gemma on a phone CPU evaluates roughly
+// 3-4 characters per token, so this stays well inside the 2048-token
+// context with room for the 64-token answer.
+const DefaultLocalPromptChars = 2400
+
+// LocalPromptChars reads UNIFUSION_LLAMA_PROMPT_CHARS (default 2400, at
+// least 600).
+func LocalPromptChars() int {
+	n := envInt("UNIFUSION_LLAMA_PROMPT_CHARS", DefaultLocalPromptChars)
+	if n < 600 {
+		n = 600
+	}
+	return n
+}
+
+// CapLocalInput trims the file text, then peers, then the title until
+// LocalPrompt(in) is at most max characters. The source itself is never
+// changed; only what goes into this one prompt.
+func CapLocalInput(in InsightInput, max int) InsightInput {
+	if max <= 0 {
+		return in
+	}
+	if len(LocalPrompt(in)) <= max {
+		return in
+	}
+	if len(in.Text) > LocalTextChars {
+		in.Text = truncateUTF8(in.Text, LocalTextChars) // LocalPrompt never uses more
+	}
+	for i := 0; i < 4 && in.Text != "" && len(LocalPrompt(in)) > max; i++ {
+		keep := len(in.Text) - (len(LocalPrompt(in)) - max) - 16
+		if keep <= 0 {
+			in.Text = ""
+			break
+		}
+		in.Text = truncateUTF8(in.Text, keep)
+	}
+	for len(in.Peers) > 0 && len(LocalPrompt(in)) > max {
+		in.Peers = in.Peers[:len(in.Peers)-1]
+	}
+	if len(LocalPrompt(in)) > max && len(in.Related) > 0 {
+		in.Related = nil
+	}
+	return in
+}
+
+// modelTimeout wraps a per-call timeout as ErrModelRun + ErrModelTimeout.
+func modelTimeout(timeout time.Duration, detail string) error {
+	if detail != "" {
+		detail = " (" + detail + ")"
+	}
+	return fmt.Errorf("%w: %w: local model timed out after %s%s", ErrModelRun, ErrModelTimeout, timeout, detail)
+}
+
 // InsightPeer is one other REG-accepted SOURCE the model may link to.
 type InsightPeer struct {
 	N     int
@@ -293,7 +355,7 @@ func LocalInsighterFromEnv() LocalInsighter {
 		Model:     discoverModel(os.Getenv("GEMMA_MODEL")),
 		Threads:   envInt("GEMMA_THREADS", runtime.NumCPU()),
 		MaxTokens: envInt("UNIFUSION_WORKER_TOKENS", 64),
-		Timeout:   time.Duration(envInt("UNIFUSION_WORKER_TIMEOUT_SECONDS", 1200)) * time.Second,
+		Timeout:   time.Duration(envInt("UNIFUSION_WORKER_TIMEOUT_SECONDS", DefaultWorkerTimeoutSeconds)) * time.Second,
 	}
 }
 
@@ -319,9 +381,20 @@ func (l LocalInsighter) Args(prompt string) []string {
 	return args
 }
 
+// oneShotAllowed reports whether the one-shot binary may be spawned: only
+// llama-completion (always run with -no-cnv). llama-cli is never spawned:
+// in conversation mode it waits for input until the timeout and loads the
+// whole model again for every record.
+func (l LocalInsighter) oneShotAllowed() bool {
+	return filepath.Base(l.Binary) == "llama-completion"
+}
+
 func (l LocalInsighter) Insight(ctx context.Context, in InsightInput) (Insight, error) {
 	if strings.TrimSpace(l.Model) == "" {
 		return Insight{}, fmt.Errorf("%w: local model not found (set GEMMA_MODEL)", ErrUnavailable)
+	}
+	if !l.oneShotAllowed() {
+		return Insight{}, fmt.Errorf("%w: llama-server is not answering and the one-shot fallback needs llama-completion (llama-cli is never spawned; found %s)", ErrUnavailable, filepath.Base(l.Binary))
 	}
 	if _, err := exec.LookPath(l.Binary); err != nil {
 		if st, serr := os.Stat(l.Binary); serr != nil || st.IsDir() {
@@ -330,16 +403,17 @@ func (l LocalInsighter) Insight(ctx context.Context, in InsightInput) (Insight, 
 	}
 	timeout := l.Timeout
 	if timeout <= 0 {
-		timeout = 20 * time.Minute
+		timeout = DefaultWorkerTimeoutSeconds * time.Second
 	}
 	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	cmd := exec.CommandContext(cctx, l.Binary, l.Args(localTurn(l.Model, LocalPrompt(in)))...)
+	prompt := LocalPrompt(CapLocalInput(in, LocalPromptChars()))
+	cmd := exec.CommandContext(cctx, l.Binary, l.Args(localTurn(l.Model, prompt))...)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr, cmd.Stdin = &out, &errb, nil
 	if err := cmd.Run(); err != nil {
 		if errors.Is(cctx.Err(), context.DeadlineExceeded) {
-			return Insight{}, fmt.Errorf("%w: local model timed out after %s", ErrModelRun, timeout)
+			return Insight{}, modelTimeout(timeout, fmt.Sprintf("one-shot llama-completion, prompt %d chars", len(prompt)))
 		}
 		return Insight{}, fmt.Errorf("%w: local model failed: %v: %s", ErrModelRun, err, stderrTail(errb.String(), 240))
 	}

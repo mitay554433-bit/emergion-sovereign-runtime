@@ -110,3 +110,51 @@ func gapGroups(st core.State) []LinkedGapGroup {
 	})
 	return out
 }
+
+// LinkedGapSummary is the real SOURCE_GAP totals in every GOV state plus the
+// accepted worker insights the gap pass turns into SOURCE_GAP candidates.
+type LinkedGapSummary struct {
+	Records          int `json:"records"`
+	Accepted         int `json:"accepted"`
+	AtGOV            int `json:"at_gov"`
+	Held             int `json:"held"`
+	Other            int `json:"other"` // approved (not yet REG), rejected, returned
+	Classes          int `json:"classes"`
+	Sources          int `json:"sources"` // distinct sources with a gap record
+	InsightsAccepted int `json:"insights_accepted"`
+}
+
+func gapSummary(st core.State) LinkedGapSummary {
+	var s LinkedGapSummary
+	classes, sources := map[string]bool{}, map[string]bool{}
+	count := func(set map[string]core.EmergION, n *int) {
+		for _, em := range set {
+			switch strings.TrimSpace(em.REL["source_kind"]) {
+			case policy.KindGap:
+				s.Records++
+				*n++
+				c := strings.TrimSpace(em.REL["gap_class"])
+				if c == "" {
+					c = "unclassified"
+				}
+				classes[c] = true
+				if of := strings.TrimSpace(em.REL["gap_of"]); of != "" {
+					sources[of] = true
+				}
+			}
+		}
+	}
+	count(st.Accepted, &s.Accepted)
+	count(st.AtGOV, &s.AtGOV)
+	count(st.Held, &s.Held)
+	count(st.Approved, &s.Other)
+	count(st.Rejected, &s.Other)
+	count(st.Returned, &s.Other)
+	for _, em := range st.Accepted {
+		if strings.TrimSpace(em.REL["source_kind"]) == policy.KindInsight {
+			s.InsightsAccepted++
+		}
+	}
+	s.Classes, s.Sources = len(classes), len(sources)
+	return s
+}
