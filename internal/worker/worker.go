@@ -318,6 +318,15 @@ func (w *Worker) Step(ctx context.Context, batch int) (StepReport, error) {
 			rep.Reasoner = w.Insighter.Name()
 		}
 		cp.LastUsed = rep.Reasoner
+		if err != nil && ctx.Err() != nil {
+			// The step was cancelled (fieldd stopping or restarting) while the
+			// model was still working. The source is not to blame and was not
+			// processed: keep its failure count and the cursor, so it is the
+			// first record tried on the next start.
+			cp.LastError = "interrupted while reasoning on " + id + " (fieldd stopped); it is retried first on the next start"
+			_ = w.saveCheckpoint(cp)
+			break
+		}
 		if err != nil && errors.Is(err, reason.ErrUnavailable) {
 			// The reasoner cannot run at all: pause, do not blame the source.
 			cp.LastError = err.Error()

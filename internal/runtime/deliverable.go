@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"emergion-sovereign-runtime/internal/adapters"
+	"emergion-sovereign-runtime/internal/core"
 	livefield "emergion-sovereign-runtime/internal/field"
 )
 
@@ -89,7 +90,13 @@ func (r Runtime) MaterializeAcceptedExecutionResult(id string) (Deliverable, err
 	if err != nil {
 		return Deliverable{}, err
 	}
+	return r.materializeAcceptedExecutionResultFrom(st, id)
+}
 
+// materializeAcceptedExecutionResultFrom is MaterializeAcceptedExecutionResult
+// over an already-rebuilt state, so publishing many deliverables replays the
+// ledger once instead of once per deliverable.
+func (r Runtime) materializeAcceptedExecutionResultFrom(st core.State, id string) (Deliverable, error) {
 	em, ok := st.Accepted[id]
 	if !ok {
 		return Deliverable{}, fmt.Errorf("deliverable source is not REG-accepted: %s", id)
@@ -248,7 +255,7 @@ func (r Runtime) PublishAcceptedDeliverables(out string) ([]string, error) {
 	receipts := make([]DeliverableReceipt, 0, len(ids))
 
 	for _, id := range ids {
-		deliverable, err := r.MaterializeAcceptedExecutionResult(id)
+		deliverable, err := r.materializeAcceptedExecutionResultFrom(st, id)
 		if err != nil {
 			if errors.Is(err, ErrExecutionResultUnsuccessful) {
 				continue
