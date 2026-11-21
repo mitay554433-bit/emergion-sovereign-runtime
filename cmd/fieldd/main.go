@@ -110,9 +110,18 @@ func main() {
 
 	if *httpAddr != "" {
 		mux := newHTTPMuxOn(rt, token, loopback, *httpAddr)
+		// Bind before serving: when another process (for example an older
+		// fieldd) already holds the address, exit loudly instead of running
+		// on without HTTP while the other process answers for us.
+		httpLn, err := net.Listen("tcp", *httpAddr)
+		if err != nil {
+			os.Remove(*pidPath)
+			os.Remove(*socketPath)
+			log.Fatalf("HTTP listen on %s failed: %v (another process already holds this address; stop it and let the watchdog restart fieldd)", *httpAddr, err)
+		}
 		go func() {
 			log.Printf("Field Sovereign HTTP status listening on %s", *httpAddr)
-			if err := http.ListenAndServe(*httpAddr, mux); err != nil {
+			if err := http.Serve(httpLn, mux); err != nil {
 				log.Printf("HTTP status listener stopped: %v", err)
 			}
 		}()
