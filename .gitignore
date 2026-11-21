@@ -8,3 +8,16 @@ outputs/
 dist/
 
 .field-work/
+
+# Android app build outputs (never commit the APK, .so, or local SDK path)
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/app/src/main/jniLibs/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+android/gradle/wrapper/gradle-wrapper.jar

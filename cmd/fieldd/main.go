@@ -48,7 +48,7 @@ type AuthorizeParams struct {
 
 func main() {
 	stateDir := flag.String("state", ".field", "Path to sovereign state directory")
-	socketPath := flag.String("socket", filepath.Join(os.TempDir(), "fieldd.sock"), "Path to Unix domain socket")
+	socketPath := flag.String("socket", filepath.Join(os.TempDir(), "fieldd.sock"), "Path to Unix domain socket; empty or off disables it")
 	pidPath := flag.String("pid", filepath.Join(os.TempDir(), "fieldd.pid"), "Path to PID file")
 	httpAddr := flag.String("http", "", "HTTP listen address. Empty disables HTTP. Default operator bind is 127.0.0.1:8899 via field daemon start. Non-loopback requires FIELDD_TOKEN or a 0600 fieldd.token in the state directory.")
 	workDir := flag.String("work-dir", "", "Worker control and checkpoint directory (default <state>-work, outside the ledger)")
@@ -75,38 +75,48 @@ func main() {
 		log.Fatalf("%v", err)
 	}
 
-	if err := os.RemoveAll(*socketPath); err != nil {
-		log.Fatalf("Failed to clear socket path: %v", err)
+	// -socket off (or empty) skips the Unix listener. The Android app uses
+	// HTTP on loopback only and does not need the socket.
+	var listener net.Listener
+	if socketEnabled(*socketPath) {
+		if err := os.RemoveAll(*socketPath); err != nil {
+			log.Fatalf("Failed to clear socket path: %v", err)
+		}
+		var err error
+		listener, err = net.Listen("unix", *socketPath)
+		if err != nil {
+			log.Fatalf("Failed to listen on socket %s: %v", *socketPath, err)
+		}
+		defer os.Remove(*socketPath)
+		defer listener.Close()
+		log.Printf("Field Sovereign Daemon listening on %s (PID %d)", *socketPath, os.Getpid())
+	} else if *httpAddr == "" {
+		log.Fatalf("either -http or -socket is required")
+	} else {
+		log.Printf("Field Sovereign Daemon HTTP-only (PID %d)", os.Getpid())
 	}
-
-	listener, err := net.Listen("unix", *socketPath)
-	if err != nil {
-		log.Fatalf("Failed to listen on socket %s: %v", *socketPath, err)
-	}
-	defer os.Remove(*socketPath)
-	defer listener.Close()
-
-	log.Printf("Field Sovereign Daemon listening on %s (PID %d)", *socketPath, os.Getpid())
 	log.Printf("Mutating routes require a bearer token from %s or %s", tokenEnvVar, tokenFilePath(*stateDir))
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	go func() {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				select {
-				case <-ctx.Done():
-					return
-				default:
-					log.Printf("Accept error: %v", err)
-					continue
+	if listener != nil {
+		go func() {
+			for {
+				conn, err := listener.Accept()
+				if err != nil {
+					select {
+					case <-ctx.Done():
+						return
+					default:
+						log.Printf("Accept error: %v", err)
+						continue
+					}
 				}
+				go handleConn(rt, conn, token)
 			}
-			go handleConn(rt, conn, token)
-		}
-	}()
+		}()
+	}
 
 	if *httpAddr != "" {
 		warmFieldOnStart = true

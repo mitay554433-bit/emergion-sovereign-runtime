@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Unifusion" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:statusBarColor">@color/carbon</item>
+        <item name="android:navigationBarColor">@color/carbon</item>
+        <item name="android:windowBackground">@color/carbon</item>
+        <item name="android:colorBackground">@color/carbon</item>
+        <item name="colorPrimary">@color/royal</item>
+        <item name="colorAccent">@color/royal</item>
+        <item name="android:textColor">@color/ink</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
